@@ -1,0 +1,27 @@
+# Arquivos gerados, dependências e segredos que nunca vão para o git.
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+
+# Expo / React Native
+.expo/
+apps/mobile/android/
+apps/mobile/ios/
+*.jks
+*.keystore
+
+# Playwright
+test-results/
+playwright-report/
+
+# Sistema e IDEs
+.DS_Store
+.idea/
+.vscode/
+
+# Pesquisa interna com dados da organização parceira: fica só na máquina da equipe.
+documentacao/pesquisa-certificacao-organica.md

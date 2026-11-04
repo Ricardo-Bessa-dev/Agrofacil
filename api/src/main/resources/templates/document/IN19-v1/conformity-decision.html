@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!-- D7: documento de aprovação ou renovação; a decisão sai sempre em branco (IN 19, art. 84; ADR-15). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/><title th:text="${kind.title()}">Documento</title>
+<style th:replace="~{document/IN19-v1/_layout :: css}"></style></head>
+<body>
+<div th:replace="~{document/IN19-v1/_layout :: footer}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: header}"></div>
+<p th:if="${d.renewal}" th:text="|( ) Aprovação   (X) Renovação do certificado nº ${d.previousNumber}, válido até ${d.previousExpiresOn}|">renovação</p>
+<p th:unless="${d.renewal}">(X) Aprovação   ( ) Renovação</p>
+<table>
+  <tr><th>Fornecedor</th><td th:text="${d.farmer}">f</td><th>Grupo</th><td th:text="${d.group}">g</td></tr>
+</table>
+<div th:replace="~{document/IN19-v1/_layout :: property(${d.property})}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: plots(${d.plots})}"></div>
+<table>
+  <tr><th>Produtos</th><td th:text="${#strings.listJoin(d.products, &quot;, &quot;)}">produtos</td></tr>
+  <tr><th>Pessoas vinculadas</th><td th:text="${#strings.listJoin(d.workers, &quot;, &quot;)}">pessoas</td></tr>
+</table>
+<h2>Visitas deste ciclo</h2>
+<table>
+  <thead><tr><th>Data</th><th>Tipo</th><th>Visitadores</th><th>Pontos a melhorar</th></tr></thead>
+  <tbody><tr th:each="v : ${d.visits}"><td th:text="${v.date}">d</td><td th:text="${v.type}">t</td><td th:text="${v.visitors}">v</td><td th:text="${v.issues}">i</td></tr></tbody>
+</table>
+<p th:if="${#lists.isEmpty(d.visits)}" class="muted">Nenhuma visita concluída neste ciclo.</p>
+<h2>Decisão tomada na reunião de ___/___/______</h2>
+<p>( ) Conforme   ( ) Conforme com recomendações   ( ) Não conforme</p>
+<p>Observações: ____________________________________________________________</p>
+<p>____________________________________________________________________________</p>
+<h2>Membros do grupo (todos)</h2>
+<div th:replace="~{document/IN19-v1/_layout :: signatures(${d.members}, 0)}"></div>
+<h2>Comissão de Avaliação</h2>
+<div th:replace="~{document/IN19-v1/_layout :: signatures(${ {} }, 2)}"></div>
+</body>
+</html>

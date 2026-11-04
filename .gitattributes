@@ -1,0 +1,7 @@
+# Normaliza fins de linha no repositório (LF), exceto scripts do Windows.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.ttf binary

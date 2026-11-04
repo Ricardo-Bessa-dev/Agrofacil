@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- D2: solicitação de avaliação da conformidade pelo grupo (IN 19, art. 75). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/><title th:text="${kind.title()}">Documento</title>
+<style th:replace="~{document/IN19-v1/_layout :: css}"></style></head>
+<body>
+<div th:replace="~{document/IN19-v1/_layout :: footer}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: header}"></div>
+<p>O grupo <b th:text="${d.group}">Grupo</b> solicita ao OPAC a avaliação da conformidade orgânica das unidades de produção abaixo.</p>
+<table>
+  <thead><tr><th>Fornecedor</th><th>Unidade</th><th>Município</th><th>Área</th><th>Escopo</th></tr></thead>
+  <tbody><tr th:each="p : ${d.properties}"><td th:text="${p.farmer}">f</td><td th:text="${p.property}">u</td><td th:text="${p.municipality}">m</td><td th:text="${p.area}">a</td><td th:text="${p.scope}">e</td></tr></tbody>
+</table>
+<p>Anexos esperados: Plano de Manejo Orgânico, declaração do fornecedor e caderno de campo de cada unidade.</p>
+<p>Data: ___/___/______</p>
+<h2>Representantes do grupo</h2>
+<div th:replace="~{document/IN19-v1/_layout :: signatures(${ {} }, 3)}"></div>
+</body>
+</html>

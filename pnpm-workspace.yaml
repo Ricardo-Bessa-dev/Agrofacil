@@ -1,0 +1,44 @@
+# pnpm-workspace.yaml: pacotes JavaScript do monorepo (a API Maven fica fora).
+packages:
+  - "apps/*"
+  - "packages/*"
+# O pnpm bloqueia versões publicadas há pouco tempo (proteção contra pacote malicioso recém-publicado).
+# Estas exceções foram acrescentadas pelo próprio pnpm na primeira instalação, porque o template do Expo
+# fixa versões muito novas. Revise e remova as que não forem mais necessárias ao atualizar dependências.
+minimumReleaseAgeExclude:
+  - "@expo/cli@58.1.19"
+  - "@expo/config-plugins@58.0.12"
+  - "@expo/config@58.0.11"
+  - "@expo/env@2.5.4"
+  - "@expo/fingerprint@0.21.9"
+  - "@expo/inline-modules@0.2.9"
+  - "@expo/local-build-cache-provider@58.0.11"
+  - "@expo/log-box@58.0.15"
+  - "@expo/metro-config@58.0.21"
+  - "@expo/metro-runtime@58.0.17"
+  - "@expo/prebuild-config@58.0.19"
+  - "@expo/router-server@58.0.21"
+  - "@expo/ui@58.0.27"
+  - "@oxlint/binding-darwin-x64@1.91.0"
+  - "@oxlint/binding-freebsd-x64@1.91.0"
+  - "@oxlint/binding-linux-arm-gnueabihf@1.91.0"
+  - "@oxlint/binding-linux-arm-musleabihf@1.91.0"
+  - "@oxlint/binding-linux-ppc64-gnu@1.91.0"
+  - "@oxlint/binding-linux-riscv64-gnu@1.91.0"
+  - "@oxlint/binding-linux-riscv64-musl@1.91.0"
+  - "@oxlint/binding-linux-s390x-gnu@1.91.0"
+  - "@oxlint/binding-linux-x64-gnu@1.91.0"
+  - "@oxlint/binding-linux-x64-musl@1.91.0"
+  - "@oxlint/binding-win32-ia32-msvc@1.91.0"
+  - "@oxlint/binding-win32-x64-msvc@1.91.0"
+  - babel-preset-expo@58.0.24
+  - expo-asset@58.0.20
+  - expo-constants@58.0.15
+  - expo-linking@58.0.16
+  - expo-modules-autolinking@58.0.17
+  - expo-modules-core@58.0.30
+  - expo-modules-jsi@58.0.22
+  - expo-router@58.0.30
+  - expo-splash-screen@58.0.13
+  - expo@58.0.23
+  - oxlint@1.91.0

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!-- D8: modelo do certificado de conformidade orgânica para o OPAC assinar (IN 19, art. 90). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/><title th:text="${kind.title()}">Documento</title>
+<style th:replace="~{document/IN19-v1/_layout :: css}"></style></head>
+<body>
+<div th:replace="~{document/IN19-v1/_layout :: footer}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: header}"></div>
+<table>
+  <tr><th>Certificado nº</th><td th:text="${d.number}">nº</td><th>Validade</th><td th:text="|${d.issuedOn} a ${d.expiresOn}|">datas</td></tr>
+  <tr><th>Responsável</th><td colspan="3" th:text="${d.farmer}">f</td></tr>
+</table>
+<div th:replace="~{document/IN19-v1/_layout :: property(${d.property})}"></div>
+<table>
+  <tr><th>Produtos</th><td th:text="${#strings.listJoin(d.products, &quot;, &quot;)}">produtos</td></tr>
+  <tr><th>Pessoas vinculadas</th><td th:text="${#strings.listJoin(d.workers, &quot;, &quot;)}">pessoas</td></tr>
+  <tr><th>Escopo</th><td th:text="${d.scope}">escopo</td></tr>
+</table>
+<p>Certificamos que a unidade de produção acima atende aos regulamentos da produção orgânica, avaliada pelo Sistema Participativo de Garantia.</p>
+<h2>Representante do OPAC</h2>
+<div th:replace="~{document/IN19-v1/_layout :: signatures(${ {} }, 1)}"></div>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<!-- Caderno de campo da propriedade (doc 2 §1.14): cabeçalho, plantios com aplicações e colheitas, compras e saídas. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<title th:text="|Caderno de campo · ${data.propertyName()}|">Caderno de campo</title>
+<style th:replace="~{report/_style :: css}"></style>
+</head>
+<body th:with="d=${data}">
+<div class="footer" th:text="|Gerado pelo Agrofácil em ${d.generatedAt()}|">Gerado pelo Agrofácil</div>
+
+<h1>Caderno de campo</h1>
+<p class="muted" th:text="|${d.associationName()} · ${d.opacName()}|">Associação · OPAC</p>
+
+<table>
+  <tr><th>Agricultor(a)</th><td th:text="${d.farmerName()}">Nome</td><th>Período</th><td th:text="${d.period()}">período</td></tr>
+  <tr><th>Propriedade</th><td th:text="${d.propertyName()}">Sítio</td><th>Município</th><td th:text="${d.municipality()}">Município</td></tr>
+  <tr><th>Área total</th><td th:text="${d.totalArea()}">área</td><th>Certificação</th>
+    <td th:if="${d.certification() != null}"
+        th:text="|${d.certification().status()} · nº ${d.certification().number()} · ${d.certification().issuedOn()} a ${d.certification().expiresOn()}|">certificação</td>
+    <td th:if="${d.certification() == null}">Sem certificação</td></tr>
+</table>
+
+<h2>Áreas</h2>
+<table>
+  <thead><tr><th>Área</th><th>Situação</th><th>Tamanho</th></tr></thead>
+  <tbody><tr th:each="p : ${d.plots()}"><td th:text="${p.name()}">Área</td><td th:text="${p.status()}">status</td><td th:text="${p.area()}">tamanho</td></tr></tbody>
+</table>
+
+<h2>Plantios</h2>
+<p class="empty" th:if="${#lists.isEmpty(d.plantings())}">Nenhum plantio no período.</p>
+<div th:each="b : ${d.plantings()}">
+  <h3 th:text="|${b.planting().item()} · ${b.planting().plot()} · plantado em ${b.planting().date()} (nº ${b.planting().number()})|">Plantio</h3>
+  <table>
+    <thead><tr><th>Data</th><th>Nº</th><th>Registro</th><th>Item</th><th>Quantidade</th></tr></thead>
+    <tbody>
+      <tr><td th:text="${b.planting().date()}">data</td><td th:text="${b.planting().number()}">nº</td><td>Plantio</td><td th:text="${b.planting().item()}">item</td><td th:text="${b.planting().detail()}">qtd</td></tr>
+      <tr th:each="l : ${b.applications()}"><td th:text="${l.date()}">data</td><td th:text="${l.number()}">nº</td><td>Aplicação</td><td th:text="${l.item()}">item</td><td th:text="${l.detail()}">qtd</td></tr>
+      <tr th:each="l : ${b.harvests()}"><td th:text="${l.date()}">data</td><td th:text="${l.number()}">nº</td><td>Colheita</td><td th:text="${l.item()}">item</td><td th:text="${l.detail()}">qtd</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div th:replace="~{report/_lines :: lines(title='Outras aplicações de insumo', lines=${d.otherApplications()})}"></div>
+<div th:replace="~{report/_lines :: lines(title='Compras de insumo', lines=${d.purchases()})}"></div>
+<div th:replace="~{report/_lines :: lines(title='Saídas e vendas', lines=${d.outflows()})}"></div>
+
+
+</body>
+</html>

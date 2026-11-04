@@ -1,0 +1,19 @@
+{
+  "name": "agrofacil",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "gen:api": "pnpm --filter @agrofacil/api-types generate",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10"
+  }
+}

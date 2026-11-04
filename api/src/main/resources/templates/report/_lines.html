@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<!-- Bloco reaproveitável do caderno de campo: título e tabela de registros (ou "nenhum registro"). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="lines(title, lines)">
+  <h2 th:text="${title}">Título</h2>
+  <p class="empty" th:if="${#lists.isEmpty(lines)}">Nenhum registro no período.</p>
+  <table th:unless="${#lists.isEmpty(lines)}">
+    <thead><tr><th>Data</th><th>Nº</th><th>Área</th><th>Item</th><th>Quantidade</th></tr></thead>
+    <tbody><tr th:each="l : ${lines}"><td th:text="${l.date()}">data</td><td th:text="${l.number()}">nº</td><td th:text="${l.plot()}">área</td><td th:text="${l.item()}">item</td><td th:text="${l.detail()}">qtd</td></tr></tbody>
+  </table>
+</div>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!-- Partes comuns dos documentos IN19-v1: estilo, cabeçalho, avisos e rodapé (doc 1 §6.7). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<style th:fragment="css">
+  @page {
+    size: A4;
+    margin: 16mm 14mm 22mm 14mm;
+    @bottom-left { content: element(footer); }
+    @bottom-right { content: "Página " counter(page) " de " counter(pages); font-family: 'Noto Sans'; font-size: 8pt; color: #444; }
+  }
+  body { font-family: 'Noto Sans'; font-size: 11pt; color: #111; }
+  .org { font-size: 9.5pt; font-weight: bold; text-transform: uppercase; }
+  h1 { font-size: 14pt; margin: 2mm 0 1mm 0; }
+  h2 { font-size: 11.5pt; margin: 5mm 0 1.5mm 0; border-bottom: 1px solid #777; }
+  .muted { color: #444; font-size: 9pt; }
+  table { width: 100%; border-collapse: collapse; margin: 1mm 0 2mm 0; -fs-table-paginate: paginate; }
+  th, td { border: 1px solid #888; padding: 1.2mm 1.5mm; text-align: left; vertical-align: top; font-size: 10pt; }
+  th { background: #eee; }
+  .warn { border: 2px solid #b00; padding: 2mm; margin: 2mm 0; }
+  .warn b { color: #b00; }
+  .blank { border-bottom: 1px solid #333; display: inline-block; min-width: 60mm; }
+  .box { font-family: 'Noto Sans'; }
+  .footer { position: running(footer); font-size: 8pt; color: #444; }
+  .sig td { height: 11mm; }
+</style>
+</head>
+<body>
+<div th:fragment="header">
+  <div class="org" th:text="|${opacName} (OPAC) · ${associationName}|">OPAC · Núcleo</div>
+  <h1 th:text="${kind.title()}">Título</h1>
+  <div class="muted" th:text="|${kind.legalBasis()} · Modelo ${templateVersion}, baseado na IN MAPA 19/2009|">Base legal</div>
+  <div class="warn" th:unless="${#lists.isEmpty(warnings)}">
+    <b>Atenção:</b>
+    <span th:each="w, s : ${warnings}" th:text="${w} + (${s.last} ? '' : ' ')">aviso</span>
+  </div>
+</div>
+<div th:fragment="footer" class="footer"
+     th:text="|Gerado pelo Agrofácil em ${generatedAt} · Código ${code} · Só vale com as assinaturas.|">rodapé</div>
+<div th:fragment="property(p)">
+  <table>
+    <tr><th>Unidade de produção</th><td th:text="${p.name}">Sítio</td><th>Município</th><td th:text="${p.municipality}">Município/BA</td></tr>
+    <tr><th>Área</th><td th:text="${p.area}">área</td><th>Coordenadas</th><td th:text="${p.coordinates}">-11, -41</td></tr>
+    <tr><th>Roteiro de acesso</th><td colspan="3" th:text="${p.accessDirections}">acesso</td></tr>
+  </table>
+</div>
+<div th:fragment="plots(plots)">
+  <table>
+    <thead><tr><th>Área</th><th>Situação</th><th>Tamanho</th><th>Fim da conversão</th></tr></thead>
+    <tbody><tr th:each="x : ${plots}"><td th:text="${x.name}">área</td><td th:text="${x.status}">status</td><td th:text="${x.area}">tam</td><td th:text="${x.conversionEndsOn}">data</td></tr></tbody>
+  </table>
+</div>
+<div th:fragment="signatures(names, blanks)">
+  <table class="sig">
+    <thead><tr><th>Nome</th><th>Assinatura</th><th>Ou digital</th><th>Data</th></tr></thead>
+    <tbody>
+      <tr th:each="n : ${names}"><td th:text="${n}">Nome</td><td></td><td>[   ]</td><td>___/___/______</td></tr>
+      <tr th:each="i : ${blanks > 0 ? #numbers.sequence(1, blanks) : {}}"><td></td><td></td><td>[   ]</td><td>___/___/______</td></tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

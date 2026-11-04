@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<!-- Relatório em tabela simples (agricultores, certificações): título, cabeçalho e linhas. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<title th:text="${title}">Relatório</title>
+<style th:replace="~{report/_style :: css}"></style>
+</head>
+<body>
+<div class="footer" th:text="|Gerado pelo Agrofácil em ${generatedAt}|">Gerado pelo Agrofácil</div>
+<h1 th:text="${title}">Relatório</h1>
+<p class="muted" th:text="${subtitle}">Associação</p>
+<table>
+  <thead><tr><th th:each="h : ${headers}" th:text="${h}">Coluna</th></tr></thead>
+  <tbody>
+    <tr th:each="row : ${rows}"><td th:each="cell : ${row}" th:text="${cell}">valor</td></tr>
+  </tbody>
+</table>
+<p class="empty" th:if="${#lists.isEmpty(rows)}">Nada para mostrar.</p>
+</body>
+</html>

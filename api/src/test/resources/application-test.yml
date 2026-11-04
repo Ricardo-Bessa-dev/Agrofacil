@@ -1,0 +1,9 @@
+# Perfil dos testes: segredos falsos, o banco vem do Testcontainers e nada de Docker Compose.
+spring.docker.compose.enabled: false
+
+app:
+  jwt:
+    secret: dGVzdGUtc29tZW50ZS1uYW8tdXNlLWVtLXByb2R1Y2FvLTAxMjM0NTY3ODk=   # só para testes
+  storage.dir: ${java.io.tmpdir}/agrofacil-test-files
+  # Os testes não dependem do api/.env de quem está rodando.
+  bootstrap.coordinator-email: ""

@@ -1,0 +1,9 @@
+# Perfil de desenvolvimento: Swagger ligado e SQL no log quando precisar depurar.
+springdoc:
+  api-docs.enabled: true
+  swagger-ui.enabled: true
+
+logging.level:
+  org.hibernate.SQL: ${LOG_SQL:info}   # LOG_SQL=debug mostra as consultas
+
+app.log-mail-links: true   # o link do convite e da redefinição de senha também vai para o log

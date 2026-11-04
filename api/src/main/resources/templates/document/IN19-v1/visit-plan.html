@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- D3: agenda de visitas do grupo para a reunião (IN 19, arts. 73 e 81). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/><title th:text="${kind.title()}">Documento</title>
+<style th:replace="~{document/IN19-v1/_layout :: css}"></style></head>
+<body>
+<div th:replace="~{document/IN19-v1/_layout :: footer}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: header}"></div>
+<p>Grupo <b th:text="${d.group}">Grupo</b> · período <span th:text="${d.period}">período</span></p>
+<table>
+  <thead><tr><th>Data</th><th>Tipo</th><th>Unidade</th><th>Fornecedor</th><th>Visitadores</th></tr></thead>
+  <tbody><tr th:each="v : ${d.visits}"><td th:text="${v.date}">d</td><td th:text="${v.type}">t</td><td th:text="${v.property}">u</td><td th:text="${v.farmer}">f</td><td th:text="${v.visitors}">v</td></tr></tbody>
+</table>
+<p th:if="${#lists.isEmpty(d.visits)}" class="muted">Nenhuma visita marcada no período.</p>
+<p>Aprovada na reunião de ___/___/______.</p>
+<h2>Coordenador(a) do grupo</h2>
+<div th:replace="~{document/IN19-v1/_layout :: signatures(${ {} }, 1)}"></div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# Serviços de apoio para desenvolvimento: banco e caixa de e-mail de teste (doc 2 §3.2).
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: agrofacil
+      POSTGRES_USER: agrofacil
+      POSTGRES_PASSWORD: agrofacil # só desenvolvimento; a porta fica presa ao localhost
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata-dev:/var/lib/postgresql/data]
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"] # SMTP e interface web (http://localhost:8025)
+volumes:
+  pgdata-dev:

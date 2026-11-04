@@ -1,0 +1,13 @@
+# Arquivos gerados e locais da API (Maven, IDEs, segredos e anexos de desenvolvimento).
+target/
+.mvn/wrapper/maven-wrapper.jar
+.env
+data/
+
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath

@@ -1,0 +1,8 @@
+# Perfil de produção: sem Swagger e sem Docker Compose automático.
+spring.docker.compose.enabled: false
+
+springdoc:
+  api-docs.enabled: false
+  swagger-ui.enabled: false
+
+app.secure-cookies: true

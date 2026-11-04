@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!-- Estilo comum dos PDFs: A4, Noto Sans 11 pt, tabelas com borda e rodapé com a página. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<style th:fragment="css">
+  @page {
+    size: A4;
+    margin: 18mm 15mm 20mm 15mm;
+    @bottom-left { content: element(footer); }
+    @bottom-right { content: "Página " counter(page) " de " counter(pages); font-family: 'Noto Sans'; font-size: 8pt; color: #555; }
+  }
+  body { font-family: 'Noto Sans'; font-size: 11pt; color: #111; }
+  h1 { font-size: 16pt; margin: 0 0 2mm 0; }
+  h2 { font-size: 13pt; margin: 6mm 0 2mm 0; border-bottom: 1px solid #888; }
+  h3 { font-size: 11pt; margin: 4mm 0 1mm 0; }
+  .muted { color: #555; font-size: 9pt; }
+  table { width: 100%; border-collapse: collapse; margin: 1mm 0 3mm 0; -fs-table-paginate: paginate; }
+  th, td { border: 1px solid #999; padding: 1mm 1.5mm; text-align: left; vertical-align: top; font-size: 9.5pt; }
+  th { background: #eee; font-weight: bold; }
+  .footer { position: running(footer); font-size: 8pt; color: #555; }
+  .empty { font-style: italic; color: #555; font-size: 9.5pt; }
+</style>
+</head>
+</html>

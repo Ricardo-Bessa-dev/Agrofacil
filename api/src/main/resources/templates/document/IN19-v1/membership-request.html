@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!-- D1: requerimento de adesão ao SPG e termo de compromisso (IN 19, arts. 71, 72 e 75). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/><title th:text="${kind.title()}">Documento</title>
+<style th:replace="~{document/IN19-v1/_layout :: css}"></style></head>
+<body>
+<div th:replace="~{document/IN19-v1/_layout :: footer}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: header}"></div>
+<h2>Fornecedor</h2>
+<table>
+  <tr><th>Nome</th><td th:text="${d.farmer.name}">Nome</td><th>CPF</th><td th:text="${d.farmer.cpf}">CPF</td></tr>
+  <tr><th>CAF</th><td th:text="${d.farmer.caf}">CAF</td><th>Grupo</th><td th:text="${d.group}">Grupo</td></tr>
+  <tr><th>Endereço</th><td colspan="3" th:text="${d.farmer.address}">Endereço</td></tr>
+</table>
+<h2>Unidade de produção</h2>
+<div th:replace="~{document/IN19-v1/_layout :: property(${d.property})}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: plots(${d.plots})}"></div>
+<h2>Termo de compromisso</h2>
+<p>Declaro que conheço e cumpro as regras do Sistema Participativo de Garantia e da produção orgânica (Lei 10.831/2003, IN MAPA 19/2009 e Portaria MAPA 52/2021), que participo das atividades do grupo e que permito as visitas de pares e de verificação na minha unidade de produção.</p>
+<p>Aceite pelo grupo em ___/___/______.</p>
+<h2>Assinaturas</h2>
+<div th:replace="~{document/IN19-v1/_layout :: signatures(${ {d.farmer.name} }, 1)}"></div>
+<p class="muted">A linha em branco é do representante do grupo.</p>
+</body>
+</html>

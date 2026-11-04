@@ -1,0 +1,5 @@
+// Tipos gerados do OpenAPI da API; o schema.ts nunca é editado à mão.
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src"]
+}

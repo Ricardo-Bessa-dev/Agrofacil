@@ -1,0 +1,8 @@
+# Arquivos gerados ou de outras ferramentas que o Prettier não deve tocar.
+pnpm-lock.yaml
+packages/api-types/openapi.json
+packages/api-types/src/schema.ts
+documentacao/
+api/
+apps/mobile/android/
+apps/mobile/ios/

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!-- D6: relatório da visita de verificação da Comissão (IN 19, art. 79 §1º, III). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/><title th:text="${kind.title()}">Documento</title>
+<style th:replace="~{document/IN19-v1/_layout :: css}"></style></head>
+<body>
+<div th:replace="~{document/IN19-v1/_layout :: footer}"></div>
+<div th:replace="~{document/IN19-v1/_layout :: header}"></div>
+<table>
+  <tr><th>Tipo</th><td th:text="${d.visitType}">tipo</td><th>Data marcada</th><td th:text="${d.plannedOn}">data</td></tr>
+  <tr><th>Fornecedor</th><td th:text="${d.farmer}">f</td><th>Visitadores</th><td th:text="${d.visitors}">v</td></tr>
+  <tr th:if="${d.filled}"><th>Data da visita</th><td th:text="${d.doneOn}">d</td><th>Fotos registradas</th><td th:text="${d.photos}">0</td></tr>
+</table>
+<div th:replace="~{document/IN19-v1/_layout :: property(${d.property})}"></div>
+<h2>Resumo dos registros (últimos 12 meses)</h2>
+<table>
+  <tr><th>Plantios ativos</th><td><div th:each="x : ${d.brief.plantings}" th:text="${x}">p</div></td></tr>
+  <tr><th>Insumos usados</th><td><div th:each="x : ${d.brief.inputs}" th:text="${x}">i</div></td></tr>
+  <tr><th>Colheitas</th><td><div th:each="x : ${d.brief.harvests}" th:text="${x}">c</div></td></tr>
+  <tr><th>Registros incompletos</th><td th:text="|${d.brief.incompleteRecords} · último registro em ${d.brief.lastRecordOn}|">0</td></tr>
+  <tr><th>Recomendações da visita anterior</th><td th:text="${d.brief.previousRecommendations}">r</td></tr>
+</table>
+<h2>Roteiro</h2>
+<table>
+  <thead><tr><th>Item</th><th>Sim</th><th>Não</th><th>N.A.</th><th>Não deu para ver</th></tr></thead>
+  <tbody><tr th:each="q : ${d.questions}">
+    <td><span th:text="${q.text}">pergunta</span><br/><span class="muted" th:text="${q.reference}">base</span><br th:if="${q.note != null and q.note != ''}"/><i th:text="${q.note}">obs</i></td>
+    <td th:text="${q.answer == 'YES'} ? '[X]' : '[  ]'">[ ]</td>
+    <td th:text="${q.answer == 'NO'} ? '[X]' : '[  ]'">[ ]</td>
+    <td th:text="${q.answer == 'NOT_APPLICABLE'} ? '[X]' : '[  ]'">[ ]</td>
+    <td th:text="${q.answer == 'NOT_CHECKED'} ? '[X]' : '[  ]'">[ ]</td>
+  </tr></tbody>
+</table>
+<h2>Resultado</h2>
+<table>
+  <tr><th>Encontraram algo que precisa melhorar?</th><td th:text="${d.filled} ? ${d.issuesFound} : '( ) Sim   ( ) Não'">-</td></tr>
+  <tr><th>O que precisa melhorar</th><td th:text="${d.filled} ? ${d.improvementPoints} : ''">-</td></tr>
+  <tr><th>Recomendações</th><td th:text="${d.filled} ? ${d.recommendations} : ''">-</td></tr>
+  <tr><th>Observações</th><td th:text="${d.filled} ? ${d.notes} : ''">-</td></tr>
+</table>
+<p>Visita sem aviso prévio: <b th:text="${d.unannounced}">não</b></p>
+<h2>Parecer da Comissão de Avaliação</h2>
+<p>____________________________________________________________________________</p>
+<p>____________________________________________________________________________</p>
+<h2>Assinaturas</h2>
+<div th:replace="~{document/IN19-v1/_layout :: signatures(${d.signers}, 0)}"></div>
+</body>
+</html>

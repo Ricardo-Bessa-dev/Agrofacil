@@ -1,0 +1,5 @@
+// Pacote de regras puras compartilhadas pelo app e pelo painel.
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src"]
+}
