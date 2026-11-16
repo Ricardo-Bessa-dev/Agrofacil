@@ -8,11 +8,19 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@agrofacil/api-types": "workspace:*",
+    "@agrofacil/domain": "workspace:*",
+    "@tanstack/react-query": "^5.62.0",
+    "leaflet": "^1.9.4",
+    "openapi-fetch": "^0.13.4",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "react-leaflet": "^5.0.0",
+    "react-router": "^7.1.1"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
@@ -21,6 +29,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "oxlint": "^1.89.0",
     "typescript": "~7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
   }
 }

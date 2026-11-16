@@ -1,109 +1,876 @@
+/* Identidade Visual AgroFácil extraída do protótipo do Figma (seção 3:50 e telas principais). */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
-  --heading: system-ui, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --af-green-primary: #2e7d4a;
+  --af-green-dark: #27663d;
+  --af-green-soft: #6faf7b;
+  --af-green-muted: #74b27f;
+  --af-olive: #92ab7d;
+  --af-olive-button: #8ea77a;
+  --af-sun-yellow: #e8b345;
+  --af-terracotta: #c97a43;
+  --af-earth-brown: #815e3e;
+  --af-cream-bg: #fcf8f0;
+  --af-surface: #ffffff;
+  --af-nav-bg: rgba(111, 175, 123, 0.2);
+  --af-badge-valid-bg: rgba(46, 125, 74, 0.2);
+  --af-badge-invalid-bg: rgba(255, 0, 0, 0.15);
+  --af-badge-invalid-text: rgba(255, 0, 0, 0.97);
+  --af-badge-warning-bg: rgba(232, 179, 69, 0.25);
+  --af-badge-warning-text: #8a5a00;
+  --af-border-subtle: rgba(0, 0, 0, 0.1);
+  --af-text-primary: #1b1b1b;
+  --af-text-green: #2e7d4a;
+  --af-text-muted: rgba(0, 0, 0, 0.55);
+  --af-inactive-icon: #9c9c9c;
+  --af-font: "Poppins", system-ui, -apple-system, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  padding: 0;
+  font-family: var(--af-font);
+  background-color: var(--af-cream-bg);
+  color: var(--af-text-primary);
+  -webkit-font-smoothing: antialiased;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+a {
+  color: var(--af-green-primary);
+  text-decoration: none;
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--af-font);
+}
+
+/* ===== Layout de Autenticação (Fiel à Tela de Login 54:1667 e Timer 3:169 do Figma) ===== */
+.af-auth-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #ffffff 0%, var(--af-cream-bg) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.af-auth-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 420px;
+  min-height: 760px;
+  border-radius: 24px;
+  box-shadow: 0 12px 36px rgba(46, 125, 74, 0.12);
+  border: 1px solid var(--af-border-subtle);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  position: relative;
+}
+
+.af-auth-body {
+  padding: 44px 36px 24px;
+  display: flex;
+  flex-direction: column;
+  z-index: 2;
+}
+
+.af-auth-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 36px;
+}
+
+.af-auth-title {
+  color: var(--af-green-primary);
+  font-size: 22px;
+  font-weight: 600;
   margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
 }
-p {
+
+.af-auth-subtitle {
+  color: var(--af-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+.af-auth-illustration {
+  width: 100%;
+  height: 185px;
+  object-fit: cover;
+  display: block;
+  margin-top: auto;
+  pointer-events: none;
+}
+
+.af-auth-corner-leaves {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* ===== Formulários e Botões no Padrão do Figma ===== */
+.af-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.af-label {
+  color: var(--af-green-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.af-input,
+.af-select,
+.af-textarea {
+  width: 100%;
+  min-height: 45px;
+  padding: 8px 12px;
+  background-color: #ffffff;
+  border: 2px solid var(--af-green-primary);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--af-text-primary);
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.af-input::placeholder,
+.af-textarea::placeholder {
+  color: rgba(0, 0, 0, 0.45);
+  font-weight: 500;
+}
+
+.af-input:focus,
+.af-select:focus,
+.af-textarea:focus {
+  border-color: var(--af-green-dark);
+  box-shadow: 0 0 0 3px rgba(46, 125, 74, 0.18);
+}
+
+.af-field-error {
+  color: #b3261e;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.af-link-italic {
+  color: var(--af-green-primary);
+  font-size: 15px;
+  font-weight: 600;
+  font-style: italic;
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.af-btn-pill-primary,
+.af-btn-pill-secondary {
+  width: 100%;
+  min-height: 58px;
+  border-radius: 50px;
+  border: none;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: transform 0.1s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+.af-btn-pill-primary {
+  background-color: var(--af-green-primary);
+}
+
+.af-btn-pill-secondary {
+  background-color: var(--af-olive-button);
+}
+
+.af-btn-pill-primary:hover:not(:disabled),
+.af-btn-pill-secondary:hover:not(:disabled),
+.af-btn-cta:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+.af-btn-pill-primary:disabled,
+.af-btn-pill-secondary:disabled,
+.af-btn-cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Botão CTA "Registrar manejo" (3:445 do Figma) */
+.af-btn-cta {
+  background-color: var(--af-green-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 20px;
+  min-height: 54px;
+  padding: 8px 20px 8px 12px;
+  font-size: 17px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.af-btn-cta img {
+  width: 36px;
+  height: 36px;
+}
+
+.af-btn-outline {
+  background-color: #ffffff;
+  color: var(--af-green-primary);
+  border: 2px solid var(--af-green-primary);
+  border-radius: 12px;
+  min-height: 42px;
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.af-btn-soft {
+  background-color: var(--af-badge-valid-bg);
+  color: var(--af-green-primary);
+  border: none;
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.af-btn-danger {
+  background-color: var(--af-badge-invalid-bg);
+  color: #b3261e;
+  border: 1px solid rgba(179, 38, 30, 0.3);
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Caixas de código de 6 dígitos (2FA) */
+.af-otp-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 16px 0 24px;
+}
+
+.af-otp-input {
+  width: 100%;
+  height: 54px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--af-green-primary);
+  border: 2px solid var(--af-green-primary);
+  border-radius: 10px;
+  background: #ffffff;
+  outline: none;
+}
+
+.af-otp-input:focus {
+  box-shadow: 0 0 0 3px rgba(46, 125, 74, 0.22);
+}
+
+/* ===== AppShell do Coordenador (Desktop + Mobile Responsivo) ===== */
+.af-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 268px 1fr;
+  background-color: var(--af-cream-bg);
+}
+
+.af-sidebar {
+  background-color: #ffffff;
+  border-right: 1px solid var(--af-border-subtle);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.af-sidebar-header {
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--af-border-subtle);
+}
+
+.af-sidebar-nav {
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  background-color: rgba(111, 175, 123, 0.08);
+}
+
+.af-nav-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--af-earth-brown);
+  padding: 12px 12px 4px;
+}
+
+.af-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #5f5f5f;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  position: relative;
+}
+
+.af-nav-item:hover {
+  background-color: rgba(111, 175, 123, 0.18);
+  color: var(--af-green-dark);
+}
+
+.af-nav-item.active {
+  background-color: var(--af-nav-bg);
+  color: var(--af-green-dark);
+}
+
+.af-nav-item.active::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 4px;
+  height: 2.5px;
+  border-radius: 2px;
+  background-color: var(--af-green-dark);
+}
+
+.af-sidebar-footer {
+  padding: 14px 16px;
+  border-top: 1px solid var(--af-border-subtle);
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Conteúdo Principal e Banner de Cabeçalho (3:188 do Figma) */
+.af-main-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.af-hero-banner {
+  position: relative;
+  background: #ffffff;
+  padding: 22px 32px 42px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--af-border-subtle);
+}
+
+.af-hero-hills {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.af-hero-sun {
+  position: absolute;
+  right: 96px;
+  top: 22px;
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+}
+
+.af-hero-top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.af-hero-greeting h1 {
+  color: var(--af-green-primary);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.af-hero-greeting p {
+  color: var(--af-green-primary);
+  font-size: 14px;
+  font-weight: 600;
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+.af-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+.af-bell-btn {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--af-border-subtle);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.af-bell-btn img {
+  width: 28px;
+  height: 28px;
+}
+
+.af-bell-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #e53935;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.af-page-sheet {
+  margin-top: -18px;
+  position: relative;
+  z-index: 3;
+  background: #ffffff;
+  border-radius: 20px 20px 0 0;
+  padding: 28px 32px 48px;
+  flex: 1;
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.03);
+}
+
+/* ===== Cartões, Selos e Listas no Padrão do Figma ===== */
+.af-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.af-section-title {
+  color: var(--af-green-primary);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.af-card {
+  background: #ffffff;
+  border: 1px solid var(--af-border-subtle);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+/* Cartão de Propriedade idêntico ao 75:2742 do Figma */
+.af-property-card {
+  background: #ffffff;
+  border: 1px solid var(--af-border-subtle);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.af-property-card:hover {
+  border-color: var(--af-green-soft);
+  box-shadow: 0 4px 14px rgba(46, 125, 74, 0.08);
+}
+
+.af-property-thumb {
+  width: 98px;
+  height: 94px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.af-property-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.af-property-name {
+  color: var(--af-green-primary);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.af-property-meta {
+  color: var(--af-green-muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Selo de Certificação (75:2751 Regular / 75:2893 Irregular do Figma) */
+.af-cert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.af-cert-badge img {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.af-cert-badge.success {
+  background-color: var(--af-badge-valid-bg);
+  color: var(--af-green-primary);
+}
+
+.af-cert-badge.warning {
+  background-color: var(--af-badge-warning-bg);
+  color: var(--af-badge-warning-text);
+}
+
+.af-cert-badge.danger {
+  background-color: var(--af-badge-invalid-bg);
+  color: var(--af-badge-invalid-text);
+}
+
+.af-cert-badge.neutral {
+  background-color: rgba(0, 0, 0, 0.07);
+  color: #555555;
+}
+
+/* Item de Registro de Manejo (274:468 do Figma) */
+.af-record-list {
+  border: 1px solid var(--af-border-subtle);
+  border-radius: 10px;
+  background: #ffffff;
+  divide-y: 1px solid var(--af-border-subtle);
+}
+
+.af-record-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--af-border-subtle);
+  transition: background-color 0.12s ease;
+}
+
+.af-record-row:last-child {
+  border-bottom: none;
+}
+
+.af-record-row:hover {
+  background-color: rgba(111, 175, 123, 0.06);
+}
+
+/* Indicadores KPI */
+.af-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.af-kpi-card {
+  background: #ffffff;
+  border: 1px solid var(--af-border-subtle);
+  border-left: 5px solid var(--af-green-primary);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.af-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(46, 125, 74, 0.08);
+}
+
+.af-kpi-card.warning {
+  border-left-color: var(--af-sun-yellow);
+}
+
+.af-kpi-card.danger {
+  border-left-color: var(--af-terracotta);
+}
+
+.af-kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--af-green-primary);
+  line-height: 1.1;
+}
+
+.af-kpi-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--af-text-muted);
+}
+
+/* Tabelas e Filtros */
+.af-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  background: var(--af-cream-bg);
+  border-radius: 12px;
+  border: 1px solid var(--af-border-subtle);
+}
+
+.af-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--af-border-subtle);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.af-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.af-table th {
+  text-align: left;
+  padding: 12px 16px;
+  background-color: rgba(111, 175, 123, 0.12);
+  color: var(--af-green-dark);
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid var(--af-border-subtle);
+  white-space: nowrap;
+}
+
+.af-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--af-border-subtle);
+  vertical-align: middle;
+}
+
+.af-table tr:last-child td {
+  border-bottom: none;
+}
+
+.af-table tbody tr:hover {
+  background-color: rgba(111, 175, 123, 0.05);
+}
+
+/* Modal */
+.af-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+
+.af-modal {
+  background: #ffffff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
+}
+
+.af-access-code-box {
+  background: var(--af-cream-bg);
+  border: 2px dashed var(--af-green-primary);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--af-green-primary);
+  margin: 16px 0;
+}
+
+.af-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--af-border-subtle);
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.af-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--af-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.af-tab-btn.active {
+  color: var(--af-green-primary);
+  border-bottom-color: var(--af-green-primary);
+}
+
+.af-alert-banner {
+  background: rgba(179, 38, 30, 0.1);
+  border: 1px solid rgba(179, 38, 30, 0.35);
+  color: #8c1d18;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.af-success-banner {
+  background: var(--af-badge-valid-bg);
+  border: 1px solid rgba(46, 125, 74, 0.35);
+  color: var(--af-green-dark);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.af-mobile-menu-btn {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .af-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .af-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 90;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.15);
+  }
+
+  .af-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .af-mobile-menu-btn {
+    display: inline-flex;
+  }
+
+  .af-hero-banner {
+    padding: 18px 18px 36px;
+  }
+
+  .af-page-sheet {
+    padding: 20px 16px 36px;
+  }
 }
