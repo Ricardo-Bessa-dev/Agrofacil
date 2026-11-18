@@ -1,12 +1,5 @@
 // Contexto de autenticação do coordenador (login + 2FA + sessão por cookie HttpOnly, doc 3 §D.3).
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LoginChallengeResponse, Me } from "@agrofacil/api-types";
 import {
   api,
@@ -16,18 +9,7 @@ import {
   setOnUnauthorized,
   unwrap,
 } from "../api/client";
-
-export type AuthContextValue = {
-  user: Me | null;
-  isLoading: boolean;
-  loginStep1: (email: string, password: string) => Promise<LoginChallengeResponse>;
-  verifyStep2: (challengeId: string, code: string) => Promise<Me>;
-  resendCode: (challengeId: string) => Promise<void>;
-  logout: () => Promise<void>;
-  reloadMe: () => Promise<void>;
-};
-
-export const AuthContext = createContext<AuthContextValue | null>(null);
+import { AuthContext, type AuthContextValue } from "./useAuth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Me | null>(null);
@@ -130,5 +112,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
-

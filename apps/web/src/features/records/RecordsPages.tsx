@@ -105,9 +105,7 @@ export function RecordsListPage() {
           <button
             key={val}
             type="button"
-            className={`af-btn af-btn--sm ${
-              type === val ? "af-btn--primary" : "af-btn--outline"
-            }`}
+            className={`af-btn af-btn--sm ${type === val ? "af-btn--primary" : "af-btn--outline"}`}
             onClick={() => {
               setType(val);
               setPage(0);
@@ -224,7 +222,14 @@ export function RecordsListPage() {
                     {rec.area ? ` • Área: ${formatArea(rec.area)}` : ""}
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: 4,
+                  }}
+                >
                   <span
                     className={`af-badge ${
                       rec.completeness === "COMPLETE" ? "af-badge--valid" : "af-badge--warning"
@@ -751,7 +756,9 @@ export function RecordCreatePage() {
                       {u.namePlural} ({u.code})
                     </option>
                   ))}
-                  {(unitsQuery.data ?? []).length === 0 && <option value="KG">Quilogramas (KG)</option>}
+                  {(unitsQuery.data ?? []).length === 0 && (
+                    <option value="KG">Quilogramas (KG)</option>
+                  )}
                 </select>
               </div>
             </div>

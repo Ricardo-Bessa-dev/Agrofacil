@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
+  ApiError,
   clearSession,
+  getOfflineQueue,
   getStoredAccessToken,
   getStoredDeviceId,
   getStoredRefreshToken,
@@ -77,5 +79,15 @@ describe("Mobile API Client & Storage", () => {
     expect(getStoredAccessToken()).toBeNull();
     expect(getStoredRefreshToken()).toBeNull();
     expect(getStoredUser()).toBeNull();
+  });
+
+  it("inicia a fila offline vazia e formata erros de validação detalhados", () => {
+    expect(getOfflineQueue()).toEqual([]);
+    const err = new ApiError(422, {
+      detail: "Alguns campos precisam ser corrigidos.",
+      code: "VALIDATION_ERROR",
+      errors: [{ field: "plantingId", message: "Escolha o plantio." }],
+    });
+    expect(err.message).toContain("plantingId: Escolha o plantio.");
   });
 });

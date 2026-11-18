@@ -16,7 +16,7 @@ import {
   VISIT_TYPE_LABELS,
 } from "@agrofacil/domain";
 import type { GenerateDocumentRequest, ParticipantWrite } from "@agrofacil/api-types";
-import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
+import { api, ApiProblemError, downloadFile, normalizePhoneE164, unwrap } from "../../api/client";
 
 export function VisitsPage() {
   const [searchParams] = useSearchParams();
@@ -220,10 +220,7 @@ export function VisitsPage() {
                       <td>
                         {v.type ? VISIT_TYPE_LABELS[v.type] : "—"}
                         {v.unannounced && (
-                          <span
-                            className="af-badge af-badge--warning"
-                            style={{ marginLeft: 6 }}
-                          >
+                          <span className="af-badge af-badge--warning" style={{ marginLeft: 6 }}>
                             Sem aviso prévio
                           </span>
                         )}
@@ -281,10 +278,7 @@ export function VisitsPage() {
       )}
 
       {resultVisitId && (
-        <RecordVisitResultModal
-          visitId={resultVisitId}
-          onClose={() => setResultVisitId(null)}
-        />
+        <RecordVisitResultModal visitId={resultVisitId} onClose={() => setResultVisitId(null)} />
       )}
     </div>
   );
@@ -545,13 +539,7 @@ function ScheduleVisitModal({
   );
 }
 
-function RecordVisitResultModal({
-  visitId,
-  onClose,
-}: {
-  visitId: string;
-  onClose: () => void;
-}) {
+function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [doneOn, setDoneOn] = useState(todayIso());
   const [issuesFound, setIssuesFound] = useState(false);
@@ -1169,7 +1157,7 @@ export function SpgPeoplePage() {
             name: collabName.trim(),
             kind: collabKind,
             organization: collabOrg.trim() || undefined,
-            phone: collabPhone.trim() || undefined,
+            phone: normalizePhoneE164(collabPhone),
             active: true,
           } as unknown as import("@agrofacil/api-types").Schemas["Write"],
         }),
@@ -1212,8 +1200,8 @@ export function SpgPeoplePage() {
         <div>
           <h1 className="af-page-title">Pessoas do SPG</h1>
           <p className="af-page-subtitle">
-            Comissão de Avaliação, técnicos/consumidores colaboradores e impedimentos entre
-            membros (RN32).
+            Comissão de Avaliação, técnicos/consumidores colaboradores e impedimentos entre membros
+            (RN32).
           </p>
         </div>
       </div>

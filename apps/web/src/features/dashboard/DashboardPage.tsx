@@ -1,11 +1,7 @@
 // Tela Inicial / Painel do Coordenador (RF19, doc 3 §D.6) com cartões fiéis ao Figma (3:188).
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  formatArea,
-  formatDatePtBr,
-  RECORD_TYPE_LABELS,
-} from "@agrofacil/domain";
+import { formatArea, formatDatePtBr, RECORD_TYPE_LABELS } from "@agrofacil/domain";
 import { api, unwrap } from "../../api/client";
 import { CertificationStatusBadge, RecordTypeAvatar } from "../../components/StatusBadge";
 import propPlaceholder1 from "../../assets/figma/property-placeholder-1.png";
@@ -59,8 +55,7 @@ export function DashboardPage() {
   const certValid = summary?.certifications?.["VALID"] ?? 0;
   const certExpiring = summary?.certifications?.["EXPIRING"] ?? 0;
   const certExpired =
-    (summary?.certifications?.["EXPIRED"] ?? 0) +
-    (summary?.certifications?.["SUSPENDED"] ?? 0);
+    (summary?.certifications?.["EXPIRED"] ?? 0) + (summary?.certifications?.["SUSPENDED"] ?? 0);
 
   return (
     <div>
@@ -302,25 +297,33 @@ export function DashboardPage() {
 
           <div className="af-card" style={{ marginBottom: 18 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
                 <span>Agricultores sem registrar há 30 dias</span>
                 <Link to="/agricultores" className="af-btn-soft">
                   {summary?.farmers?.withoutRecordsLast30Days ?? 0} ver
                 </Link>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
                 <span>Agricultores sem aparelho ativo</span>
                 <Link to="/agricultores" className="af-btn-soft">
                   {summary?.farmers?.withoutActiveDevice ?? 0} ver
                 </Link>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
                 <span>Propriedades sem localização GPS</span>
                 <Link to="/propriedades" className="af-btn-soft">
                   {summary?.properties?.withoutLocation ?? 0} ver
                 </Link>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
                 <span>Itens digitados como &ldquo;Outro&rdquo; sem catálogo</span>
                 <Link to="/catalogo?aba=sem-catalogo" className="af-btn-soft">
                   {summary?.unmappedCatalogItems ?? 0} associar
@@ -344,7 +347,9 @@ export function DashboardPage() {
               {(summary?.upcomingExpirations ?? []).map((item) => (
                 <div key={item.certificationId} className="af-record-row">
                   <div>
-                    <div style={{ fontWeight: 600, color: "var(--af-green-primary)", fontSize: 14 }}>
+                    <div
+                      style={{ fontWeight: 600, color: "var(--af-green-primary)", fontSize: 14 }}
+                    >
                       {item.propertyName}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--af-text-muted)" }}>
@@ -353,7 +358,7 @@ export function DashboardPage() {
                     </div>
                   </div>
                   <Link
-                    to={`/certificacoes/nova?propertyId=${item.propertyId}&renewFrom=${item.certificationId}`}
+                    to={`/certificacoes?propertyId=${item.propertyId}&renewFrom=${item.certificationId}`}
                     className="af-btn-soft"
                   >
                     Renovar

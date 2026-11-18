@@ -2,6 +2,7 @@
 :root {
   --af-green-primary: #2e7d4a;
   --af-green-dark: #27663d;
+  --af-green-darker: #1e5230;
   --af-green-soft: #6faf7b;
   --af-green-muted: #74b27f;
   --af-olive: #92ab7d;
@@ -10,16 +11,23 @@
   --af-terracotta: #c97a43;
   --af-earth-brown: #815e3e;
   --af-cream-bg: #fcf8f0;
+  --af-bg-cream: #fcf8f0;
   --af-surface: #ffffff;
+  --af-bg-surface: #ffffff;
+  --af-bg-surface-soft: #f5f9f6;
   --af-nav-bg: rgba(111, 175, 123, 0.2);
   --af-badge-valid-bg: rgba(46, 125, 74, 0.2);
   --af-badge-invalid-bg: rgba(255, 0, 0, 0.15);
   --af-badge-invalid-text: rgba(255, 0, 0, 0.97);
   --af-badge-warning-bg: rgba(232, 179, 69, 0.25);
+  --af-warning-bg: rgba(232, 179, 69, 0.18);
   --af-badge-warning-text: #8a5a00;
   --af-border-subtle: rgba(0, 0, 0, 0.1);
+  --af-border: rgba(0, 0, 0, 0.12);
+  --af-radius-md: 10px;
   --af-text-primary: #1b1b1b;
   --af-text-green: #2e7d4a;
+  --af-text-secondary: rgba(0, 0, 0, 0.68);
   --af-text-muted: rgba(0, 0, 0, 0.55);
   --af-inactive-icon: #9c9c9c;
   --af-font: "Poppins", system-ui, -apple-system, sans-serif;
@@ -159,7 +167,9 @@ textarea {
   font-weight: 500;
   color: var(--af-text-primary);
   outline: none;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .af-input::placeholder,
@@ -208,7 +218,10 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  transition: transform 0.1s ease, filter 0.15s ease, opacity 0.15s ease;
+  transition:
+    transform 0.1s ease,
+    filter 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .af-btn-pill-primary {
@@ -373,7 +386,9 @@ textarea {
   font-size: 14px;
   font-weight: 600;
   color: #5f5f5f;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
   position: relative;
 }
 
@@ -553,7 +568,9 @@ textarea {
   display: flex;
   align-items: center;
   gap: 14px;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .af-property-card:hover {
@@ -561,7 +578,8 @@ textarea {
   box-shadow: 0 4px 14px rgba(46, 125, 74, 0.08);
 }
 
-.af-property-thumb {
+.af-property-thumb,
+.af-property-card-thumb {
   width: 98px;
   height: 94px;
   border-radius: 8px;
@@ -569,19 +587,26 @@ textarea {
   flex-shrink: 0;
 }
 
-.af-property-info {
+.af-property-info,
+.af-property-card-body {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.af-property-name {
+.af-property-name,
+.af-property-card-title {
   color: var(--af-green-primary);
   font-size: 16px;
   font-weight: 600;
   margin: 0 0 6px;
 }
 
-.af-property-meta {
+.af-property-meta,
+.af-property-card-meta {
   color: var(--af-green-muted);
   font-size: 12px;
   font-weight: 600;
@@ -672,7 +697,9 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .af-kpi-card:hover {
@@ -702,7 +729,8 @@ textarea {
 }
 
 /* Tabelas e Filtros */
-.af-filter-bar {
+.af-filter-bar,
+.af-filters-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -815,7 +843,8 @@ textarea {
   border-bottom-color: var(--af-green-primary);
 }
 
-.af-alert-banner {
+.af-alert-banner,
+.af-alert {
   background: rgba(179, 38, 30, 0.1);
   border: 1px solid rgba(179, 38, 30, 0.35);
   color: #8c1d18;
@@ -826,7 +855,14 @@ textarea {
   margin-bottom: 16px;
 }
 
-.af-success-banner {
+.af-alert--danger {
+  background: rgba(179, 38, 30, 0.1);
+  border: 1px solid rgba(179, 38, 30, 0.35);
+  color: #8c1d18;
+}
+
+.af-success-banner,
+.af-alert--success {
   background: var(--af-badge-valid-bg);
   border: 1px solid rgba(46, 125, 74, 0.35);
   color: var(--af-green-dark);
@@ -835,6 +871,239 @@ textarea {
   font-size: 14px;
   font-weight: 500;
   margin-bottom: 16px;
+}
+
+.af-alert--warning {
+  background: var(--af-badge-warning-bg);
+  border: 1px solid rgba(232, 179, 69, 0.5);
+  color: var(--af-badge-warning-text);
+}
+
+.af-alert--info {
+  background: rgba(46, 125, 74, 0.08);
+  border: 1px solid rgba(46, 125, 74, 0.25);
+  color: var(--af-green-dark);
+}
+
+.af-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.af-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.af-page-title {
+  color: var(--af-green-primary);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.af-page-subtitle {
+  color: var(--af-text-muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.af-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.af-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.af-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  min-height: 40px;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  transition:
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.af-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.af-btn--primary {
+  background-color: var(--af-green-primary);
+  color: #ffffff;
+}
+
+.af-btn--secondary {
+  background-color: var(--af-badge-valid-bg);
+  color: var(--af-green-primary);
+}
+
+.af-btn--outline {
+  background-color: #ffffff;
+  color: var(--af-green-primary);
+  border: 1.5px solid var(--af-green-primary);
+}
+
+.af-btn--danger {
+  background-color: var(--af-badge-invalid-bg);
+  color: #b3261e;
+  border: 1px solid rgba(179, 38, 30, 0.3);
+}
+
+.af-btn--ghost {
+  background: transparent;
+  color: var(--af-text-muted);
+}
+
+.af-btn--sm {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.af-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.af-badge--valid {
+  background-color: var(--af-badge-valid-bg);
+  color: var(--af-green-primary);
+}
+
+.af-badge--warning {
+  background-color: var(--af-badge-warning-bg);
+  color: var(--af-badge-warning-text);
+}
+
+.af-badge--danger {
+  background-color: var(--af-badge-invalid-bg);
+  color: #b3261e;
+}
+
+.af-badge--neutral {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: #555555;
+}
+
+.af-tab {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--af-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.af-tab--active {
+  color: var(--af-green-primary);
+  border-bottom-color: var(--af-green-primary);
+}
+
+.af-empty-state {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--af-text-muted);
+  font-size: 14px;
+}
+
+.af-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--af-text-muted);
+}
+
+.af-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.af-card-title {
+  color: var(--af-green-primary);
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+
+.af-card-subtitle {
+  color: var(--af-text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.af-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.af-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.af-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.af-record-row-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--af-green-primary);
+}
+
+.af-record-row-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--af-text-muted);
+}
+
+.af-kpi-hint {
+  font-size: 11px;
+  color: var(--af-text-muted);
 }
 
 .af-mobile-menu-btn {

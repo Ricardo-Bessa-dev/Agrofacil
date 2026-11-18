@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Me } from "@agrofacil/api-types";
 import { onlyDigits } from "@agrofacil/domain";
 import {
@@ -62,40 +56,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [refreshProfile]);
 
-  const activate = useCallback(async (cpf: string, code: string) => {
-    const cleanCpf = onlyDigits(cpf);
-    const cleanCode = code.trim();
-    const deviceId = getStoredDeviceId();
+  const activate = useCallback(
+    async (cpf: string, code: string) => {
+      const cleanCpf = onlyDigits(cpf);
+      const cleanCode = code.trim();
+      const deviceId = getStoredDeviceId();
+      const isIos =
+        typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    const { data, error, response } = await api.POST("/auth/farmer/activate", {
-      body: {
-        cpf: cleanCpf,
-        code: cleanCode,
-        device: {
-          id: deviceId,
-          name: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 50) : "Navegador Mobile",
-          platform: "web",
-          appVersion: "1.0.0",
+      const { data, error, response } = await api.POST("/auth/farmer/activate", {
+        body: {
+          cpf: cleanCpf,
+          code: cleanCode,
+          device: {
+            id: deviceId,
+            name:
+              typeof navigator !== "undefined"
+                ? navigator.userAgent.slice(0, 50)
+                : "Celular do Agricultor",
+            platform: isIos ? "IOS" : "ANDROID",
+            appVersion: "1.0.0",
+          },
         },
-      },
-    });
+      });
 
-    if (error || !data || !response.ok) {
-      const errObj = (typeof error === "object" && error !== null ? error : {}) as Record<string, unknown>;
-      const detail =
-        typeof errObj.detail === "string"
-          ? errObj.detail
-          : "Código de acesso ou CPF incorreto. Verifique os dados com a coordenação.";
-      throw new Error(detail);
-    }
+      if (error || !data || !response.ok) {
+        const errObj = (typeof error === "object" && error !== null ? error : {}) as Record<
+          string,
+          unknown
+        >;
+        const detail =
+          typeof errObj.detail === "string"
+            ? errObj.detail
+            : "Código de acesso ou CPF incorreto. Verifique os dados com a coordenação.";
+        throw new Error(detail);
+      }
 
-    saveSession(data);
-    if (data.user) {
-      setUser(data.user);
-    } else {
-      await refreshProfile();
-    }
-  }, [refreshProfile]);
+      saveSession(data);
+      if (data.user) {
+        setUser(data.user);
+      } else {
+        await refreshProfile();
+      }
+    },
+    [refreshProfile],
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -126,5 +131,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-

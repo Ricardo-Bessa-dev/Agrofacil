@@ -112,7 +112,8 @@ export function PropertiesPage() {
                         marginBottom: "12px",
                       }}
                     >
-                      📍 {prop.address?.municipalityName ?? "Município"} - {prop.address?.uf ?? "BA"}
+                      📍 {prop.address?.municipalityName ?? "Município"} -{" "}
+                      {prop.address?.uf ?? "BA"}
                       {prop.address?.locality ? ` · ${prop.address.locality}` : ""}
                     </div>
 

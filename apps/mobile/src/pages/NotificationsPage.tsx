@@ -84,7 +84,9 @@ export function NotificationsPage() {
                   style={{
                     marginBottom: 0,
                     padding: "14px",
-                    backgroundColor: isUnread ? "var(--color-primary-surface)" : "var(--color-surface)",
+                    backgroundColor: isUnread
+                      ? "var(--color-primary-surface)"
+                      : "var(--color-surface)",
                     borderColor: isUnread ? "var(--color-primary)" : "var(--color-border)",
                   }}
                 >

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "../../api/client";
+import { fetchMunicipalities } from "../../api/municipalities";
 import { CertificationStatusBadge } from "../../components/StatusBadge";
 
 export function GroupsPage() {
@@ -21,14 +22,12 @@ export function GroupsPage() {
   const groupDetailQuery = useQuery({
     queryKey: ["groups", selectedGroupId],
     enabled: Boolean(selectedGroupId),
-    queryFn: () =>
-      unwrap(api.GET("/groups/{id}", { params: { path: { id: selectedGroupId! } } })),
+    queryFn: () => unwrap(api.GET("/groups/{id}", { params: { path: { id: selectedGroupId! } } })),
   });
 
   const municipalitiesQuery = useQuery({
     queryKey: ["municipalities", uf],
-    queryFn: () =>
-      unwrap(api.GET("/municipalities", { params: { query: { uf } } })),
+    queryFn: () => fetchMunicipalities(uf),
   });
 
   const createGroupMutation = useMutation({
@@ -237,9 +236,7 @@ export function GroupsPage() {
         <div className="af-card" style={{ marginTop: 20 }}>
           <div className="af-card-header">
             <div>
-              <h2 className="af-card-title">
-                Membros do grupo: {groupDetailQuery.data.name}
-              </h2>
+              <h2 className="af-card-title">Membros do grupo: {groupDetailQuery.data.name}</h2>
               <p className="af-card-subtitle">
                 {groupDetailQuery.data.municipalityName ?? "Sem município"} •{" "}
                 {groupDetailQuery.data.farmersCount ?? 0} agricultor(es)

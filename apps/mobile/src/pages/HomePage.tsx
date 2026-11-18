@@ -1,10 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
-import {
-  formatArea,
-  formatDatePtBr,
-  RECORD_TYPE_FARMER_LABELS,
-} from "@agrofacil/domain";
+import { formatArea, formatDatePtBr, RECORD_TYPE_FARMER_LABELS } from "@agrofacil/domain";
 import { api } from "../api/client";
 import { useAuth } from "../auth/useAuth";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
@@ -94,15 +90,9 @@ export function HomePage() {
             </p>
           </div>
 
-          <Link
-            to="/notificacoes"
-            className="mobile-header-action-btn"
-            aria-label="Notificações"
-          >
+          <Link to="/notificacoes" className="mobile-header-action-btn" aria-label="Notificações">
             <img src={bellIcon} alt="" width={20} height={20} />
-            {unreadNotifs > 0 && (
-              <span className="mobile-header-badge-count">{unreadNotifs}</span>
-            )}
+            {unreadNotifs > 0 && <span className="mobile-header-badge-count">{unreadNotifs}</span>}
           </Link>
         </div>
 
@@ -135,9 +125,7 @@ export function HomePage() {
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <img src={plusIcon} alt="" width={28} height={28} />
             <div>
-              <div style={{ fontSize: "16px", fontWeight: 700 }}>
-                Registrar Manejo
-              </div>
+              <div style={{ fontSize: "16px", fontWeight: 700 }}>Registrar Manejo</div>
               <div style={{ fontSize: "12px", opacity: 0.9 }}>
                 Anote plantio, insumo, colheita ou venda
               </div>
@@ -289,9 +277,7 @@ export function HomePage() {
           ) : recentRecords.length === 0 ? (
             <div className="mobile-card" style={{ textAlign: "center", padding: "24px 16px" }}>
               <div style={{ fontSize: "32px", marginBottom: "8px" }}>📝</div>
-              <div style={{ fontWeight: 600, marginBottom: "4px" }}>
-                Nenhum manejo recente
-              </div>
+              <div style={{ fontWeight: 600, marginBottom: "4px" }}>Nenhum manejo recente</div>
               <p
                 style={{
                   fontSize: "13px",
@@ -308,10 +294,7 @@ export function HomePage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {recentRecords.map((rec) => {
-                const typeLabel =
-                  RECORD_TYPE_FARMER_LABELS[rec.type ?? ""] ??
-                  rec.type ??
-                  "Manejo";
+                const typeLabel = RECORD_TYPE_FARMER_LABELS[rec.type ?? ""] ?? rec.type ?? "Manejo";
                 return (
                   <div
                     key={rec.id}
@@ -365,7 +348,8 @@ export function HomePage() {
                           marginTop: "2px",
                         }}
                       >
-                        {rec.subject || (rec.plot?.name ? `Talhão: ${rec.plot.name}` : "Manejo realizado")}
+                        {rec.subject ||
+                          (rec.plot?.name ? `Talhão: ${rec.plot.name}` : "Manejo realizado")}
                       </div>
                     </div>
                   </div>

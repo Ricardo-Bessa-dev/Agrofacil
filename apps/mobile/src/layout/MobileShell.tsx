@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { api, flushOfflineQueue, getOfflineQueue } from "../api/client";
+import { useAuth } from "../auth/useAuth";
 import navHome from "../assets/figma/nav-home.svg";
 import navHomeActive from "../assets/figma/nav-home-active.svg";
 import navProperties from "../assets/figma/nav-properties.svg";
@@ -9,6 +13,67 @@ import navProfile from "../assets/figma/nav-profile.svg";
 
 export function MobileShell() {
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const { user, refreshProfile } = useAuth();
+
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true,
+  );
+  const [pendingCount, setPendingCount] = useState<number>(() => getOfflineQueue().length);
+  const [syncing, setSyncing] = useState(false);
+  const [acceptingTerms, setAcceptingTerms] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateStatus = () => {
+      setIsOnline(navigator.onLine);
+      setPendingCount(getOfflineQueue().length);
+    };
+
+    window.addEventListener("online", updateStatus);
+    window.addEventListener("offline", updateStatus);
+    window.addEventListener("af-offline-queue-changed", updateStatus);
+    return () => {
+      window.removeEventListener("online", updateStatus);
+      window.removeEventListener("offline", updateStatus);
+      window.removeEventListener("af-offline-queue-changed", updateStatus);
+    };
+  }, []);
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    try {
+      await flushOfflineQueue();
+      setPendingCount(getOfflineQueue().length);
+      await queryClient.invalidateQueries({ queryKey: ["records"] });
+      await queryClient.invalidateQueries({ queryKey: ["recent-records"] });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const needsTermsConsent = Boolean(
+    user?.currentTermsVersion && user.termsAcceptedVersion !== user.currentTermsVersion,
+  );
+
+  const handleAcceptTerms = async () => {
+    if (!user?.currentTermsVersion) return;
+    setTermsError(null);
+    setAcceptingTerms(true);
+    try {
+      const { error, response } = await api.POST("/me/terms/accept", {
+        body: { version: user.currentTermsVersion },
+      });
+      if (error || !response.ok) {
+        throw new Error("Não foi possível registrar o aceite dos termos.");
+      }
+      await refreshProfile();
+    } catch (err) {
+      setTermsError(err instanceof Error ? err.message : "Erro ao aceitar os termos.");
+    } finally {
+      setAcceptingTerms(false);
+    }
+  };
 
   const isHomeActive = location.pathname === "/";
   const isPropertiesActive = location.pathname.startsWith("/propriedades");
@@ -17,22 +82,56 @@ export function MobileShell() {
 
   return (
     <div className="mobile-app-container">
+      {/* Banner Offline / Sincronização Pendente (Item 5 - ADR-02) */}
+      {(!isOnline || pendingCount > 0) && (
+        <div
+          style={{
+            backgroundColor: !isOnline ? "#78350f" : "#1e40af",
+            color: "#ffffff",
+            padding: "8px 14px",
+            fontSize: "12px",
+            fontWeight: 500,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+          }}
+        >
+          <span>
+            {!isOnline
+              ? `📡 Modo sem internet (${pendingCount} manejo(s) salvo(s) no celular)`
+              : `🔄 ${pendingCount} manejo(s) aguardando sincronização`}
+          </span>
+          {isOnline && pendingCount > 0 && (
+            <button
+              type="button"
+              onClick={() => void handleManualSync()}
+              disabled={syncing}
+              style={{
+                background: "#ffffff",
+                color: "#1e40af",
+                border: "none",
+                borderRadius: "6px",
+                padding: "4px 8px",
+                fontSize: "11px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {syncing ? "Enviando..." : "Sincronizar"}
+            </button>
+          )}
+        </div>
+      )}
+
       <main className="mobile-shell-content">
         <Outlet />
       </main>
 
       <nav className="bottom-nav" aria-label="Navegação inferior">
-        <NavLink
-          to="/"
-          className={({ isActive }) => `bottom-nav-item ${isActive ? "active" : ""}`}
-        >
+        <NavLink to="/" className={({ isActive }) => `bottom-nav-item ${isActive ? "active" : ""}`}>
           <span className="bottom-nav-icon">
-            <img
-              src={isHomeActive ? navHomeActive : navHome}
-              alt=""
-              width={22}
-              height={22}
-            />
+            <img src={isHomeActive ? navHomeActive : navHome} alt="" width={22} height={22} />
           </span>
           <span>Início</span>
         </NavLink>
@@ -87,6 +186,83 @@ export function MobileShell() {
           <span>Perfil</span>
         </NavLink>
       </nav>
+
+      {/* Modal de Aceite de Termos de Uso / LGPD (Item 4 do Backlog) */}
+      {needsTermsConsent && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="lgpd-terms-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            zIndex: 300,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              borderRadius: "16px",
+              maxWidth: "390px",
+              width: "100%",
+              padding: "22px",
+              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.25)",
+            }}
+          >
+            <h2
+              id="lgpd-terms-title"
+              style={{
+                fontSize: "17px",
+                fontWeight: 700,
+                color: "var(--color-primary-dark)",
+                marginBottom: "8px",
+              }}
+            >
+              Termo de Uso e Privacidade (LGPD)
+            </h2>
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--color-text-secondary)",
+                lineHeight: 1.5,
+                marginBottom: "12px",
+              }}
+            >
+              Para utilizar o Caderno de Campo Digital Agrofácil (versão{" "}
+              <strong>{user?.currentTermsVersion}</strong>), seus registros de manejo, áreas e
+              documentos de conformidade orgânica são compartilhados com a coordenação e a Comissão
+              de Avaliação da sua associação no âmbito do Sistema Participativo de Garantia (SPG).
+            </p>
+            {termsError && (
+              <div
+                style={{
+                  backgroundColor: "var(--color-error-bg)",
+                  color: "var(--color-error)",
+                  padding: "8px 10px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  marginBottom: "12px",
+                }}
+              >
+                {termsError}
+              </div>
+            )}
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={acceptingTerms}
+              onClick={() => void handleAcceptTerms()}
+            >
+              {acceptingTerms ? "Confirmando..." : "Li e concordo com os Termos"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

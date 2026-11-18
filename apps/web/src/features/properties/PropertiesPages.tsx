@@ -11,6 +11,7 @@ import {
   WORKER_RELATIONSHIP_LABELS,
 } from "@agrofacil/domain";
 import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
+import { fetchMunicipalities } from "../../api/municipalities";
 import { CertificationStatusBadge } from "../../components/StatusBadge";
 import propertyImg1 from "../../assets/figma/property-placeholder-1.png";
 import propertyImg2 from "../../assets/figma/property-placeholder-2.png";
@@ -174,7 +175,9 @@ export function PropertiesListPage() {
           {mapQuery.isLoading ? (
             <div className="af-empty-state">Carregando coordenadas...</div>
           ) : (mapQuery.data ?? []).length === 0 ? (
-            <div className="af-empty-state">Nenhuma propriedade com localização GPS cadastrada.</div>
+            <div className="af-empty-state">
+              Nenhuma propriedade com localização GPS cadastrada.
+            </div>
           ) : (
             <div className="af-table-wrap">
               <table className="af-table">
@@ -260,7 +263,7 @@ export function PropertiesListPage() {
                     <span>
                       {prop.address?.locality
                         ? `${prop.address.locality} — ${prop.address.municipalityName ?? ""}`
-                        : prop.address?.municipalityName ?? prop.farmerName ?? "Sem endereço"}
+                        : (prop.address?.municipalityName ?? prop.farmerName ?? "Sem endereço")}
                     </span>
                   </div>
                   <div className="af-property-card-meta">
@@ -270,7 +273,9 @@ export function PropertiesListPage() {
                     </span>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                >
                   <CertificationStatusBadge
                     status={prop.currentCertification?.status}
                     daysToExpire={prop.currentCertification?.daysToExpire}
@@ -367,10 +372,7 @@ export function PropertiesListPage() {
       )}
 
       {showCreateModal && (
-        <CreatePropertyModal
-          defaultFarmerId={farmerId}
-          onClose={() => setShowCreateModal(false)}
-        />
+        <CreatePropertyModal defaultFarmerId={farmerId} onClose={() => setShowCreateModal(false)} />
       )}
     </div>
   );
@@ -415,12 +417,7 @@ function CreatePropertyModal({
 
   const municipalitiesQuery = useQuery({
     queryKey: ["municipalities", uf],
-    queryFn: () =>
-      unwrap(
-        api.GET("/municipalities", {
-          params: { query: { uf } },
-        }),
-      ),
+    queryFn: () => fetchMunicipalities(uf),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -437,9 +434,7 @@ function CreatePropertyModal({
           body: {
             farmerId,
             name: name.trim(),
-            totalArea: areaValue
-              ? { value: Number(areaValue), unit: areaUnit }
-              : undefined,
+            totalArea: areaValue ? { value: Number(areaValue), unit: areaUnit } : undefined,
             productionDescription: productionDescription.trim() || undefined,
             accessDirections: accessDirections.trim() || undefined,
             address: {
@@ -447,10 +442,7 @@ function CreatePropertyModal({
               municipalityId: municipalityId ? Number(municipalityId) : undefined,
               locality: locality.trim() || undefined,
             },
-            location:
-              lat && lng
-                ? { lat: Number(lat), lng: Number(lng) }
-                : undefined,
+            location: lat && lng ? { lat: Number(lat), lng: Number(lng) } : undefined,
           },
         }),
       );
@@ -994,9 +986,7 @@ export function PropertyDetailPage() {
                     {(prop.workers ?? []).map((w) => (
                       <tr key={w.id}>
                         <td style={{ fontWeight: 600 }}>{w.name}</td>
-                        <td>
-                          {w.relationship ? WORKER_RELATIONSHIP_LABELS[w.relationship] : "—"}
-                        </td>
+                        <td>{w.relationship ? WORKER_RELATIONSHIP_LABELS[w.relationship] : "—"}</td>
                         <td style={{ textAlign: "right" }}>
                           {w.id && (
                             <button
@@ -1079,7 +1069,9 @@ export function PropertyDetailPage() {
           </div>
 
           {(prop.certifications ?? []).length === 0 ? (
-            <div className="af-empty-state">Nenhuma certificação emitida para esta propriedade.</div>
+            <div className="af-empty-state">
+              Nenhuma certificação emitida para esta propriedade.
+            </div>
           ) : (
             <div className="af-table-wrap">
               <table className="af-table">
@@ -1100,10 +1092,7 @@ export function PropertyDetailPage() {
                       <td>{formatDatePtBr(c.expiresOn)}</td>
                       <td>{c.scope ?? "Produção primária vegetal"}</td>
                       <td>
-                        <CertificationStatusBadge
-                          status={c.status}
-                          daysToExpire={c.daysToExpire}
-                        />
+                        <CertificationStatusBadge status={c.status} daysToExpire={c.daysToExpire} />
                       </td>
                     </tr>
                   ))}

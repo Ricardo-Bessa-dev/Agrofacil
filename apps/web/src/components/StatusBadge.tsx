@@ -61,19 +61,11 @@ export function RecordTypeAvatar({ type }: { type?: string | null }) {
 
   if (type === "HARVEST") {
     return (
-      <img
-        src={recordHarvestSvg}
-        alt="Colheita"
-        style={{ width: 36, height: 36, flexShrink: 0 }}
-      />
+      <img src={recordHarvestSvg} alt="Colheita" style={{ width: 36, height: 36, flexShrink: 0 }} />
     );
   }
 
   return (
-    <img
-      src={recordInputSvg}
-      alt="Registro"
-      style={{ width: 36, height: 36, flexShrink: 0 }}
-    />
+    <img src={recordInputSvg} alt="Registro" style={{ width: 36, height: 36, flexShrink: 0 }} />
   );
 }
