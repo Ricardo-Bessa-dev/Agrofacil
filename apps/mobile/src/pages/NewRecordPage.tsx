@@ -1,17 +1,17 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import type { RecordWrite } from "@agrofacil/api-types";
-import { todayIso, type AreaUnitCode } from "@agrofacil/domain";
-import { api } from "../api/client";
+import {
+  formatDatePtBr,
+  MISSING_FIELD_LABELS,
+  todayIso,
+  type AreaUnitCode,
+} from "@agrofacil/domain";
+import { api, fetchMobileRecordDetail, uploadRecordPhoto } from "../api/client";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 
-type RecordType =
-  | "PLANTING"
-  | "INPUT_APPLICATION"
-  | "HARVEST"
-  | "INPUT_PURCHASE"
-  | "OUTFLOW";
+type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
 
 const RECORD_TYPES: { type: RecordType; title: string; subtitle: string }[] = [
   {
@@ -44,12 +44,17 @@ const RECORD_TYPES: { type: RecordType; title: string; subtitle: string }[] = [
 export function NewRecordPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { id: routeRecordId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const editingRecordId = routeRecordId || searchParams.get("editId") || "";
+  const isEditMode = Boolean(editingRecordId);
 
   const [selectedType, setSelectedType] = useState<RecordType>("PLANTING");
   const [performedOn, setPerformedOn] = useState<string>(todayIso());
-  const [propertyId, setPropertyId] = useState<string>("");
+  const [propertyId, setPropertyId] = useState<string>(searchParams.get("propertyId") ?? "");
   const [plotId, setPlotId] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [plantingId, setPlantingId] = useState<string>("");
 
   // Específicos para Plantio
   const [cropId, setCropId] = useState<string>("");
@@ -57,6 +62,13 @@ export function NewRecordPage() {
   const [variety, setVariety] = useState<string>("");
   const [plantedAreaVal, setPlantedAreaVal] = useState<string>("");
   const [plantedAreaUnit, setPlantedAreaUnit] = useState<AreaUnitCode>("SQUARE_METER");
+  const [propagationType, setPropagationType] = useState<
+    "" | "SEED" | "SEEDLING" | "CUTTING" | "OTHER"
+  >("");
+  const [seedOrigin, setSeedOrigin] = useState<
+    "" | "OWN" | "SEED_BANK" | "ORGANIC_PURCHASED" | "CONVENTIONAL_PURCHASED"
+  >("");
+  const [seedSupplier, setSeedSupplier] = useState<string>("");
   const [expectedHarvestOn, setExpectedHarvestOn] = useState<string>("");
 
   // Específicos para Aplicação
@@ -75,12 +87,14 @@ export function NewRecordPage() {
   const [isFinal, setIsFinal] = useState<boolean>(false);
 
   // Específicos para Compra de Insumo
+  const [purchaseInputId, setPurchaseInputId] = useState<string>("");
   const [purchaseInputName, setPurchaseInputName] = useState<string>("");
   const [purchaseQtyVal, setPurchaseQtyVal] = useState<string>("");
   const [purchaseQtyUnit, setPurchaseQtyUnit] = useState<string>("KG");
   const [supplier, setSupplier] = useState<string>("");
 
   // Específicos para Saída
+  const [outflowCropId, setOutflowCropId] = useState<string>("");
   const [outflowProductName, setOutflowProductName] = useState<string>("");
   const [outflowQtyVal, setOutflowQtyVal] = useState<string>("");
   const [outflowQtyUnit, setOutflowQtyUnit] = useState<string>("KG");
@@ -97,8 +111,84 @@ export function NewRecordPage() {
   >("FAIR");
   const [buyerName, setBuyerName] = useState<string>("");
 
+  // Foto / Anexo (Item 2 do Backlog)
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [prefilled, setPrefilled] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Detalhe do registro existente quando em modo de edição (Item 1 do Backlog)
+  const editDetailQuery = useQuery({
+    queryKey: ["mobile-record-detail", editingRecordId],
+    queryFn: () => fetchMobileRecordDetail(editingRecordId),
+    enabled: isEditMode,
+  });
+
+  useEffect(() => {
+    const detail = editDetailQuery.data;
+    if (!detail || prefilled) return;
+    const raw = detail.raw;
+    setSelectedType((detail.type as RecordType) || "PLANTING");
+    if (detail.performedOn) setPerformedOn(detail.performedOn);
+    if (detail.propertyId) setPropertyId(detail.propertyId);
+    if (detail.plotId) setPlotId(detail.plotId);
+    if (detail.notes) setNotes(detail.notes);
+    if (typeof raw.plantingId === "string") setPlantingId(raw.plantingId);
+
+    if (detail.type === "PLANTING") {
+      if (typeof raw.cropId === "string") setCropId(raw.cropId);
+      else if (typeof raw.cropOtherName === "string") {
+        setCropId("OTHER");
+        setCropOtherName(raw.cropOtherName);
+      }
+      if (typeof raw.variety === "string") setVariety(raw.variety);
+      const area = raw.plantedArea as { value?: number; unit?: AreaUnitCode } | undefined;
+      if (area?.value !== undefined) setPlantedAreaVal(String(area.value));
+      if (area?.unit) setPlantedAreaUnit(area.unit);
+      if (typeof raw.propagationType === "string") {
+        setPropagationType(raw.propagationType as typeof propagationType);
+      }
+      if (typeof raw.seedOrigin === "string") {
+        setSeedOrigin(raw.seedOrigin as typeof seedOrigin);
+      }
+      if (typeof raw.seedSupplier === "string") setSeedSupplier(raw.seedSupplier);
+      if (typeof raw.expectedHarvestOn === "string") setExpectedHarvestOn(raw.expectedHarvestOn);
+    } else if (detail.type === "INPUT_APPLICATION") {
+      if (typeof raw.inputId === "string") setInputId(raw.inputId);
+      else if (typeof raw.inputOtherName === "string") {
+        setInputId("OTHER");
+        setInputOtherName(raw.inputOtherName);
+      }
+      if (typeof raw.purpose === "string") setPurpose(raw.purpose as typeof purpose);
+      const qty = raw.quantity as { value?: number; unit?: string } | undefined;
+      if (qty?.value !== undefined) setApplicationQtyVal(String(qty.value));
+      if (qty?.unit) setApplicationQtyUnit(qty.unit);
+    } else if (detail.type === "HARVEST") {
+      const qty = raw.quantity as { value?: number; unit?: string } | undefined;
+      if (qty?.value !== undefined) setHarvestQtyVal(String(qty.value));
+      if (qty?.unit) setHarvestQtyUnit(qty.unit);
+      if (typeof raw.isFinal === "boolean") setIsFinal(raw.isFinal);
+    } else if (detail.type === "INPUT_PURCHASE") {
+      if (typeof raw.inputId === "string") setPurchaseInputId(raw.inputId);
+      if (typeof raw.inputOtherName === "string") setPurchaseInputName(raw.inputOtherName);
+      const qty = raw.quantity as { value?: number; unit?: string } | undefined;
+      if (qty?.value !== undefined) setPurchaseQtyVal(String(qty.value));
+      if (qty?.unit) setPurchaseQtyUnit(qty.unit);
+      if (typeof raw.supplier === "string") setSupplier(raw.supplier);
+    } else if (detail.type === "OUTFLOW") {
+      if (typeof raw.cropId === "string") setOutflowCropId(raw.cropId);
+      if (typeof raw.productOtherName === "string") setOutflowProductName(raw.productOtherName);
+      const qty = raw.quantity as { value?: number; unit?: string } | undefined;
+      if (qty?.value !== undefined) setOutflowQtyVal(String(qty.value));
+      if (qty?.unit) setOutflowQtyUnit(qty.unit);
+      if (typeof raw.destination === "string")
+        setDestination(raw.destination as typeof destination);
+      if (typeof raw.buyerName === "string") setBuyerName(raw.buyerName);
+    }
+    setPrefilled(true);
+  }, [editDetailQuery.data, prefilled]);
 
   // Busca propriedades do agricultor
   const propertiesQuery = useQuery({
@@ -111,7 +201,6 @@ export function NewRecordPage() {
     },
   });
 
-  // Atualiza a primeira propriedade automaticamente se ainda não selecionada
   const properties = propertiesQuery.data ?? [];
   const currentPropertyId = propertyId || (properties[0]?.id ?? "");
 
@@ -126,6 +215,32 @@ export function NewRecordPage() {
       return data ?? [];
     },
     enabled: Boolean(currentPropertyId),
+  });
+
+  // Busca plantios ativos da propriedade para vínculo (Item 3 do Backlog)
+  const activePlantingsQuery = useQuery({
+    queryKey: ["active-plantings", currentPropertyId],
+    queryFn: async () => {
+      if (!currentPropertyId) return [];
+      const { data } = await api.GET("/records", {
+        params: {
+          query: {
+            filter: {
+              propertyId: currentPropertyId,
+              type: "PLANTING",
+              cycleStatus: "ACTIVE",
+            },
+            pageable: { size: 50, sort: ["performedOn,desc"] },
+          },
+        },
+      });
+      return data?.content ?? [];
+    },
+    enabled:
+      Boolean(currentPropertyId) &&
+      (selectedType === "INPUT_APPLICATION" ||
+        selectedType === "HARVEST" ||
+        selectedType === "OUTFLOW"),
   });
 
   // Catálogo de Culturas
@@ -151,6 +266,27 @@ export function NewRecordPage() {
   const plots = plotsQuery.data ?? [];
   const crops = cropsQuery.data ?? [];
   const farmInputs = farmInputsQuery.data ?? [];
+  const activePlantings = activePlantingsQuery.data ?? [];
+
+  // Auto-seleciona o primeiro plantio ativo para Colheita caso ainda não selecionado
+  useEffect(() => {
+    if (selectedType === "HARVEST" && !plantingId && activePlantings[0]?.id) {
+      setPlantingId(activePlantings[0].id);
+    }
+  }, [selectedType, plantingId, activePlantings]);
+
+  const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setPhotoFile(file);
+    if (photoPreviewUrl) {
+      URL.revokeObjectURL(photoPreviewUrl);
+    }
+    if (file) {
+      setPhotoPreviewUrl(URL.createObjectURL(file));
+    } else {
+      setPhotoPreviewUrl(null);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -162,34 +298,46 @@ export function NewRecordPage() {
       return;
     }
 
+    if (selectedType === "HARVEST" && !plantingId && activePlantings.length === 0) {
+      setErrorMsg(
+        "Para registrar uma colheita, é necessário ter um Plantio ativo cadastrado nesta propriedade.",
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       let bodyPayload: RecordWrite;
+      const targetPlotId = plotId || plots[0]?.id || undefined;
 
       if (selectedType === "PLANTING") {
         bodyPayload = {
           type: "PLANTING",
           propertyId: targetPropertyId,
-          plotId: plotId || undefined,
+          plotId: targetPlotId,
           performedOn,
           notes: notes || undefined,
-          cropId: cropId || undefined,
-          cropOtherName: cropOtherName || undefined,
+          cropId: cropId && cropId !== "OTHER" ? cropId : undefined,
+          cropOtherName: !cropId || cropId === "OTHER" ? cropOtherName || undefined : undefined,
           variety: variety || undefined,
           plantedArea: plantedAreaVal
             ? { value: Number(plantedAreaVal), unit: plantedAreaUnit }
             : undefined,
+          propagationType: propagationType || undefined,
+          seedOrigin: seedOrigin || undefined,
+          seedSupplier: seedSupplier.trim() || undefined,
           expectedHarvestOn: expectedHarvestOn || undefined,
         };
       } else if (selectedType === "INPUT_APPLICATION") {
         bodyPayload = {
           type: "INPUT_APPLICATION",
           propertyId: targetPropertyId,
-          plotId: plotId || undefined,
+          plotId: targetPlotId,
           performedOn,
           notes: notes || undefined,
-          inputId: inputId || undefined,
-          inputOtherName: inputOtherName || undefined,
+          plantingId: plantingId || undefined,
+          inputId: inputId && inputId !== "OTHER" ? inputId : undefined,
+          inputOtherName: !inputId || inputId === "OTHER" ? inputOtherName || undefined : undefined,
           purpose,
           quantity: applicationQtyVal
             ? { value: Number(applicationQtyVal), unit: applicationQtyUnit }
@@ -199,9 +347,13 @@ export function NewRecordPage() {
         bodyPayload = {
           type: "HARVEST",
           propertyId: targetPropertyId,
-          plotId: plotId || undefined,
+          plotId: targetPlotId,
           performedOn,
-          notes: notes || undefined,
+          notes:
+            harvestCropName && !notes.includes(harvestCropName)
+              ? `${harvestCropName}${notes ? ` — ${notes}` : ""}`
+              : notes || undefined,
+          plantingId: plantingId || activePlantings[0]?.id || "",
           quantity: harvestQtyVal
             ? { value: Number(harvestQtyVal), unit: harvestQtyUnit }
             : undefined,
@@ -211,24 +363,32 @@ export function NewRecordPage() {
         bodyPayload = {
           type: "INPUT_PURCHASE",
           propertyId: targetPropertyId,
-          plotId: plotId || undefined,
+          plotId: targetPlotId,
           performedOn,
           notes: notes || undefined,
-          inputOtherName: purchaseInputName || undefined,
+          inputId: purchaseInputId && purchaseInputId !== "OTHER" ? purchaseInputId : undefined,
+          inputOtherName:
+            !purchaseInputId || purchaseInputId === "OTHER"
+              ? purchaseInputName || undefined
+              : undefined,
           quantity: purchaseQtyVal
             ? { value: Number(purchaseQtyVal), unit: purchaseQtyUnit }
             : undefined,
           supplier: supplier || undefined,
         };
       } else {
-        // OUTFLOW
         bodyPayload = {
           type: "OUTFLOW",
           propertyId: targetPropertyId,
-          plotId: plotId || undefined,
+          plotId: targetPlotId,
           performedOn,
           notes: notes || undefined,
-          productOtherName: outflowProductName || undefined,
+          plantingId: plantingId || undefined,
+          cropId: outflowCropId && outflowCropId !== "OTHER" ? outflowCropId : undefined,
+          productOtherName:
+            !outflowCropId || outflowCropId === "OTHER"
+              ? outflowProductName || undefined
+              : undefined,
           quantity: outflowQtyVal
             ? { value: Number(outflowQtyVal), unit: outflowQtyUnit }
             : undefined,
@@ -237,22 +397,49 @@ export function NewRecordPage() {
         };
       }
 
-      const { error, response } = await api.POST("/records", {
-        body: bodyPayload,
-      });
+      const resultCall = isEditMode
+        ? await api.PUT("/records/{id}", {
+            params: { path: { id: editingRecordId } },
+            body: bodyPayload,
+          })
+        : await api.POST("/records", {
+            body: bodyPayload,
+          });
+
+      const { data: savedData, error, response } = resultCall;
 
       if (error || !response.ok) {
-        const errObj = (typeof error === "object" && error !== null ? error : {}) as Record<string, unknown>;
+        const errObj = (typeof error === "object" && error !== null ? error : {}) as Record<
+          string,
+          unknown
+        >;
+        const errs = Array.isArray(errObj.errors)
+          ? (errObj.errors as { field?: string; message?: string }[])
+          : [];
+        const extra =
+          errs.length > 0
+            ? ` (${errs.map((it) => `${it.field ?? "campo"}: ${it.message ?? ""}`).join("; ")})`
+            : "";
         throw new Error(
           typeof errObj.detail === "string"
-            ? errObj.detail
-            : "Não foi possível registrar o manejo. Verifique os dados e tente novamente."
+            ? `${errObj.detail}${extra}`
+            : "Não foi possível salvar o manejo. Verifique os dados e tente novamente.",
         );
       }
 
-      // Sucesso: invalida cache e volta para a lista
+      const targetRecordId =
+        editingRecordId || ((savedData as { id?: string } | undefined)?.id ?? "");
+
+      if (photoFile && targetRecordId) {
+        await uploadRecordPhoto(targetRecordId, photoFile);
+      }
+
       await queryClient.invalidateQueries({ queryKey: ["records"] });
       await queryClient.invalidateQueries({ queryKey: ["recent-records"] });
+      await queryClient.invalidateQueries({ queryKey: ["active-plantings"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["mobile-record-detail", editingRecordId],
+      });
       navigate("/registros", { replace: true });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Erro ao salvar registro.");
@@ -261,84 +448,131 @@ export function NewRecordPage() {
     }
   };
 
+  const openCorrections = (editDetailQuery.data?.correctionRequests ?? []).filter(
+    (c) => c.status === "OPEN",
+  );
+  const missingFields = editDetailQuery.data?.missingFields ?? [];
+
   return (
     <div style={{ paddingBottom: "32px" }}>
       {/* Top Bar */}
       <div className="page-top-bar">
-        <button
-          type="button"
-          className="page-top-bar-back"
-          onClick={() => navigate(-1)}
-        >
+        <button type="button" className="page-top-bar-back" onClick={() => navigate(-1)}>
           <span>←</span>
           <span>Voltar</span>
         </button>
-        <h1 className="page-top-bar-title">Novo Manejo</h1>
+        <h1 className="page-top-bar-title">{isEditMode ? "Editar Manejo" : "Novo Manejo"}</h1>
         <div style={{ width: "48px" }} />
       </div>
 
       <div style={{ padding: "16px" }}>
-        {/* Escolha do Tipo de Manejo */}
-        <div style={{ marginBottom: "20px" }}>
-          <label className="form-label" style={{ marginBottom: "10px" }}>
-            Tipo de Atividade / Manejo
-          </label>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {RECORD_TYPES.map((t) => {
-              const isSelected = selectedType === t.type;
-              return (
-                <div
-                  key={t.type}
-                  onClick={() => setSelectedType(t.type)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "12px 14px",
-                    borderRadius: "var(--radius-md)",
-                    backgroundColor: isSelected
-                      ? "var(--color-primary-surface)"
-                      : "var(--color-surface)",
-                    border: `1.5px solid ${
-                      isSelected ? "var(--color-primary)" : "var(--color-border)"
-                    }`,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <RecordTypeIcon type={t.type} size={38} />
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 600,
-                        color: isSelected
-                          ? "var(--color-primary-dark)"
-                          : "var(--color-text)",
-                      }}
-                    >
-                      {t.title}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-                      {t.subtitle}
-                    </div>
-                  </div>
+        {/* Alerta de Pedido de Correção da Coordenação (Item 1) */}
+        {openCorrections.length > 0 && (
+          <div
+            style={{
+              backgroundColor: "#fff8e1",
+              border: "1.5px solid #f59e0b",
+              borderRadius: "var(--radius-md)",
+              padding: "14px",
+              marginBottom: "16px",
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: "14px", color: "#92400e", marginBottom: 6 }}>
+              🔔 Pedido de correção da coordenação
+            </div>
+            {openCorrections.map((c) => (
+              <div
+                key={c.id}
+                style={{ fontSize: "13px", color: "#78350f", marginBottom: 4, lineHeight: 1.4 }}
+              >
+                “{c.message}”
+              </div>
+            ))}
+            <div style={{ fontSize: "11px", color: "#92400e", marginTop: 6 }}>
+              Ao salvar as alterações abaixo, este pedido de correção será marcado como atendido.
+            </div>
+          </div>
+        )}
+
+        {/* Alerta de Campos Pendentes para Completude */}
+        {isEditMode && missingFields.length > 0 && (
+          <div
+            style={{
+              backgroundColor: "var(--color-primary-surface)",
+              border: "1px dashed var(--color-primary)",
+              borderRadius: "var(--radius-sm)",
+              padding: "12px",
+              marginBottom: "16px",
+              fontSize: "12px",
+              color: "var(--color-primary-dark)",
+            }}
+          >
+            <strong>Campos pendentes para completude (RN09):</strong>{" "}
+            {missingFields.map((f) => MISSING_FIELD_LABELS[f] ?? f).join(", ")}.
+          </div>
+        )}
+
+        {/* Escolha do Tipo de Manejo (bloqueado na edição pois a API não permite trocar o subtipo) */}
+        {!isEditMode && (
+          <div style={{ marginBottom: "20px" }}>
+            <label className="form-label" style={{ marginBottom: "10px" }}>
+              Tipo de Atividade / Manejo
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {RECORD_TYPES.map((t) => {
+                const isSelected = selectedType === t.type;
+                return (
                   <div
+                    key={t.type}
+                    onClick={() => setSelectedType(t.type)}
                     style={{
-                      width: "18px",
-                      height: "18px",
-                      borderRadius: "50%",
-                      border: `2px solid ${
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "12px 14px",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: isSelected
+                        ? "var(--color-primary-surface)"
+                        : "var(--color-surface)",
+                      border: `1.5px solid ${
                         isSelected ? "var(--color-primary)" : "var(--color-border)"
                       }`,
-                      backgroundColor: isSelected ? "var(--color-primary)" : "transparent",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
                     }}
-                  />
-                </div>
-              );
-            })}
+                  >
+                    <RecordTypeIcon type={t.type} size={38} />
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          color: isSelected ? "var(--color-primary-dark)" : "var(--color-text)",
+                        }}
+                      >
+                        {t.title}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                        {t.subtitle}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        width: "18px",
+                        height: "18px",
+                        borderRadius: "50%",
+                        border: `2px solid ${
+                          isSelected ? "var(--color-primary)" : "var(--color-border)"
+                        }`,
+                        backgroundColor: isSelected ? "var(--color-primary)" : "transparent",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {errorMsg && (
           <div
@@ -396,6 +630,7 @@ export function NewRecordPage() {
                 onChange={(e) => {
                   setPropertyId(e.target.value);
                   setPlotId("");
+                  setPlantingId("");
                 }}
                 className="form-select"
                 required
@@ -410,7 +645,7 @@ export function NewRecordPage() {
 
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label htmlFor="plot-select" className="form-label">
-                Talhão (opcional)
+                Talhão / Área
               </label>
               <select
                 id="plot-select"
@@ -418,7 +653,7 @@ export function NewRecordPage() {
                 onChange={(e) => setPlotId(e.target.value)}
                 className="form-select"
               >
-                <option value="">Selecione o talhão (opcional)</option>
+                <option value="">Área principal (automático)</option>
                 {plots.map((plot) => (
                   <option key={plot.id} value={plot.id}>
                     {plot.name} {plot.area?.value ? `(${plot.area.value} ${plot.area.unit})` : ""}
@@ -427,6 +662,54 @@ export function NewRecordPage() {
               </select>
             </div>
           </div>
+
+          {/* Vínculo com Plantio Ativo para Aplicação, Colheita e Saída (Item 3 do Backlog) */}
+          {(selectedType === "INPUT_APPLICATION" ||
+            selectedType === "HARVEST" ||
+            selectedType === "OUTFLOW") && (
+            <div className="mobile-card">
+              <h2 style={{ fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
+                Vínculo com Plantio Ativo
+              </h2>
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--color-text-secondary)",
+                  marginBottom: "10px",
+                }}
+              >
+                {selectedType === "HARVEST"
+                  ? "Selecione de qual plantio em andamento esta colheita está sendo realizada (obrigatório):"
+                  : "Vincule opcionalmente a um plantio em andamento para rastreabilidade do lote:"}
+              </p>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label htmlFor="planting-select" className="form-label">
+                  Plantio {selectedType === "HARVEST" ? "*" : "(opcional)"}
+                </label>
+                <select
+                  id="planting-select"
+                  value={plantingId}
+                  onChange={(e) => setPlantingId(e.target.value)}
+                  className="form-select"
+                  required={selectedType === "HARVEST"}
+                >
+                  <option value="">
+                    {selectedType === "HARVEST"
+                      ? "Selecione o plantio..."
+                      : "Sem vínculo com plantio específico"}
+                  </option>
+                  {activePlantings.map((pl) => (
+                    <option key={pl.id} value={pl.id}>
+                      {pl.subject || "Plantio"} —{" "}
+                      {pl.performedOn ? formatDatePtBr(pl.performedOn) : ""}
+                      {pl.plot?.name ? ` (${pl.plot.name})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Campos específicos: PLANTIO */}
           {selectedType === "PLANTING" && (
@@ -444,7 +727,7 @@ export function NewRecordPage() {
                   value={cropId}
                   onChange={(e) => {
                     setCropId(e.target.value);
-                    if (e.target.value) setCropOtherName("");
+                    if (e.target.value && e.target.value !== "OTHER") setCropOtherName("");
                   }}
                   className="form-select"
                 >
@@ -502,9 +785,7 @@ export function NewRecordPage() {
                   />
                   <select
                     value={plantedAreaUnit}
-                    onChange={(e) =>
-                      setPlantedAreaUnit(e.target.value as AreaUnitCode)
-                    }
+                    onChange={(e) => setPlantedAreaUnit(e.target.value as AreaUnitCode)}
                     className="form-select"
                     style={{ flex: 1 }}
                   >
@@ -514,6 +795,60 @@ export function NewRecordPage() {
                   </select>
                 </div>
               </div>
+
+              <div className="form-group">
+                <label htmlFor="propagation-select" className="form-label">
+                  Forma de Propagação
+                </label>
+                <select
+                  id="propagation-select"
+                  value={propagationType}
+                  onChange={(e) => setPropagationType(e.target.value as typeof propagationType)}
+                  className="form-select"
+                >
+                  <option value="">Selecione (Semente, Muda, Maniva...)</option>
+                  <option value="SEED">Semente</option>
+                  <option value="SEEDLING">Muda</option>
+                  <option value="CUTTING">Estaca / Maniva</option>
+                  <option value="OTHER">Outra</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="seed-origin-select" className="form-label">
+                  Origem da Semente / Muda
+                </label>
+                <select
+                  id="seed-origin-select"
+                  value={seedOrigin}
+                  onChange={(e) => setSeedOrigin(e.target.value as typeof seedOrigin)}
+                  className="form-select"
+                >
+                  <option value="">Selecione a procedência</option>
+                  <option value="OWN">Produção própria / Crioula</option>
+                  <option value="SEED_BANK">Banco de sementes / Troca</option>
+                  <option value="ORGANIC_PURCHASED">Comprada (Orgânica)</option>
+                  <option value="CONVENTIONAL_PURCHASED">
+                    Comprada (Convencional autorizada pelo SPG)
+                  </option>
+                </select>
+              </div>
+
+              {(seedOrigin === "ORGANIC_PURCHASED" || seedOrigin === "CONVENTIONAL_PURCHASED") && (
+                <div className="form-group">
+                  <label htmlFor="seed-supplier" className="form-label">
+                    Fornecedor da Semente / Muda
+                  </label>
+                  <input
+                    id="seed-supplier"
+                    type="text"
+                    placeholder="Ex: Casa do Agricultor / Viveiro Cooperativa"
+                    value={seedSupplier}
+                    onChange={(e) => setSeedSupplier(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+              )}
 
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label htmlFor="expected-harvest" className="form-label">
@@ -546,7 +881,7 @@ export function NewRecordPage() {
                   value={inputId}
                   onChange={(e) => {
                     setInputId(e.target.value);
-                    if (e.target.value) setInputOtherName("");
+                    if (e.target.value && e.target.value !== "OTHER") setInputOtherName("");
                   }}
                   className="form-select"
                 >
@@ -586,10 +921,7 @@ export function NewRecordPage() {
                   onChange={(e) =>
                     setPurpose(
                       e.target.value as
-                        | "FERTILIZATION"
-                        | "PEST_DISEASE_CONTROL"
-                        | "SOIL_CORRECTION"
-                        | "OTHER"
+                        "FERTILIZATION" | "PEST_DISEASE_CONTROL" | "SOIL_CORRECTION" | "OTHER",
                     )
                   }
                   className="form-select"
@@ -638,12 +970,12 @@ export function NewRecordPage() {
 
               <div className="form-group">
                 <label htmlFor="harvest-crop" className="form-label">
-                  Cultura / Produto Colhido
+                  Complemento / Lote Colhido (opcional)
                 </label>
                 <input
                   id="harvest-crop"
                   type="text"
-                  placeholder="Ex: Mandioca, Maracujá da Caatinga, Feijão de Corda"
+                  placeholder="Ex: Primeira apanha, Lote Feira de Sábado"
                   value={harvestCropName}
                   onChange={(e) => setHarvestCropName(e.target.value)}
                   className="form-input"
@@ -677,7 +1009,9 @@ export function NewRecordPage() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}
+              >
                 <input
                   id="is-final-check"
                   type="checkbox"
@@ -686,7 +1020,7 @@ export function NewRecordPage() {
                   style={{ width: "20px", height: "20px", accentColor: "var(--color-primary)" }}
                 />
                 <label htmlFor="is-final-check" style={{ fontSize: "14px", cursor: "pointer" }}>
-                  Colheita final (encerra o ciclo do talhão)
+                  Colheita final (encerra o ciclo do plantio)
                 </label>
               </div>
             </div>
@@ -700,18 +1034,43 @@ export function NewRecordPage() {
               </h2>
 
               <div className="form-group">
-                <label htmlFor="purchase-name" className="form-label">
-                  Nome do Insumo Comprado
+                <label htmlFor="purchase-input-select" className="form-label">
+                  Insumo do Catálogo
                 </label>
-                <input
-                  id="purchase-name"
-                  type="text"
-                  placeholder="Ex: Sementes de Milho Crioulo, Termofosfato"
-                  value={purchaseInputName}
-                  onChange={(e) => setPurchaseInputName(e.target.value)}
-                  className="form-input"
-                />
+                <select
+                  id="purchase-input-select"
+                  value={purchaseInputId}
+                  onChange={(e) => {
+                    setPurchaseInputId(e.target.value);
+                    if (e.target.value && e.target.value !== "OTHER") setPurchaseInputName("");
+                  }}
+                  className="form-select"
+                >
+                  <option value="">Outro / Digitar manualmente</option>
+                  {farmInputs.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
+                    </option>
+                  ))}
+                  <option value="OTHER">Digitar nome manualmente</option>
+                </select>
               </div>
+
+              {(!purchaseInputId || purchaseInputId === "OTHER") && (
+                <div className="form-group">
+                  <label htmlFor="purchase-name" className="form-label">
+                    Nome do Insumo Comprado
+                  </label>
+                  <input
+                    id="purchase-name"
+                    type="text"
+                    placeholder="Ex: Sementes de Milho Crioulo, Termofosfato"
+                    value={purchaseInputName}
+                    onChange={(e) => setPurchaseInputName(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Quantidade Comprada</label>
@@ -763,18 +1122,43 @@ export function NewRecordPage() {
               </h2>
 
               <div className="form-group">
-                <label htmlFor="outflow-product" className="form-label">
-                  Produto Vendido / Destinado
+                <label htmlFor="outflow-crop-select" className="form-label">
+                  Cultura do Catálogo
                 </label>
-                <input
-                  id="outflow-product"
-                  type="text"
-                  placeholder="Ex: Polpa de Fruta, Mandioca embalada, Hortaliças"
-                  value={outflowProductName}
-                  onChange={(e) => setOutflowProductName(e.target.value)}
-                  className="form-input"
-                />
+                <select
+                  id="outflow-crop-select"
+                  value={outflowCropId}
+                  onChange={(e) => {
+                    setOutflowCropId(e.target.value);
+                    if (e.target.value && e.target.value !== "OTHER") setOutflowProductName("");
+                  }}
+                  className="form-select"
+                >
+                  <option value="">Outro produto / Digitar manualmente</option>
+                  {crops.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value="OTHER">Digitar nome do produto</option>
+                </select>
               </div>
+
+              {(!outflowCropId || outflowCropId === "OTHER") && (
+                <div className="form-group">
+                  <label htmlFor="outflow-product" className="form-label">
+                    Produto Vendido / Destinado
+                  </label>
+                  <input
+                    id="outflow-product"
+                    type="text"
+                    placeholder="Ex: Polpa de Fruta, Mandioca embalada, Hortaliças"
+                    value={outflowProductName}
+                    onChange={(e) => setOutflowProductName(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Quantidade</label>
@@ -820,7 +1204,7 @@ export function NewRecordPage() {
                         | "DIRECT_SALE"
                         | "OWN_CONSUMPTION"
                         | "DONATION"
-                        | "OTHER"
+                        | "OTHER",
                     )
                   }
                   className="form-select"
@@ -852,6 +1236,58 @@ export function NewRecordPage() {
             </div>
           )}
 
+          {/* Upload de Foto / Anexo da Câmera (Item 2 do Backlog) */}
+          <div className="mobile-card">
+            <h2 style={{ fontSize: "14px", fontWeight: 600, marginBottom: "6px" }}>
+              📷 Foto / Comprovante (opcional)
+            </h2>
+            <p
+              style={{
+                fontSize: "12px",
+                color: "var(--color-text-secondary)",
+                marginBottom: "12px",
+              }}
+            >
+              {selectedType === "INPUT_PURCHASE"
+                ? "Fotografe a nota fiscal, rótulo ou embalagem do insumo adquirido (necessário para completude RN09)."
+                : "Tire uma foto do talhão, sementes ou atividade realizada."}
+            </p>
+
+            <input
+              id="record-photo-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              capture="environment"
+              onChange={handlePhotoChange}
+              style={{ fontSize: "13px", width: "100%" }}
+            />
+
+            {photoPreviewUrl && (
+              <div style={{ marginTop: "12px" }}>
+                <img
+                  src={photoPreviewUrl}
+                  alt="Pré-visualização da foto"
+                  style={{
+                    width: "100%",
+                    maxHeight: "180px",
+                    objectFit: "cover",
+                    borderRadius: "8px",
+                    border: "1px solid var(--color-border)",
+                  }}
+                />
+              </div>
+            )}
+
+            {isEditMode && (editDetailQuery.data?.attachments ?? []).length > 0 && (
+              <div
+                style={{ marginTop: "10px", fontSize: "12px", color: "var(--color-primary-dark)" }}
+              >
+                ✓ Este registro já possui {(editDetailQuery.data?.attachments ?? []).length} foto(s)
+                anexada(s).
+              </div>
+            )}
+          </div>
+
           {/* Observações Livres */}
           <div className="mobile-card">
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -876,7 +1312,11 @@ export function NewRecordPage() {
             disabled={isSubmitting}
             style={{ marginTop: "12px" }}
           >
-            {isSubmitting ? "Gravando no Caderno..." : "Salvar Manejo"}
+            {isSubmitting
+              ? "Gravando no Caderno..."
+              : isEditMode
+                ? "Salvar Alterações"
+                : "Salvar Manejo"}
           </button>
         </form>
       </div>

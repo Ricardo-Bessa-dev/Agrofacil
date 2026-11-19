@@ -68,7 +68,14 @@ export function ProfilePage() {
             {initials}
           </div>
 
-          <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text)", textAlign: "center" }}>
+          <h2
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "var(--color-text)",
+              textAlign: "center",
+            }}
+          >
             {user?.name || "Agricultor Familiar"}
           </h2>
           <span
@@ -102,14 +109,14 @@ export function ProfilePage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>CPF</span>
-              <span style={{ fontWeight: 600 }}>{user?.cpf ? maskCpf(user.cpf) : "Não informado"}</span>
+              <span style={{ fontWeight: 600 }}>
+                {user?.cpf ? maskCpf(user.cpf) : "Não informado"}
+              </span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>CAF</span>
-              <span style={{ fontWeight: 600 }}>
-                {user?.farmer?.cafNumber || "Não cadastrado"}
-              </span>
+              <span style={{ fontWeight: 600 }}>{user?.farmer?.cafNumber || "Não cadastrado"}</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
@@ -141,8 +148,8 @@ export function ProfilePage() {
               marginBottom: "14px",
             }}
           >
-            Dúvidas sobre o preenchimento do caderno, visitas de pares ou certificação orgânica? Fale
-            diretamente com a coordenação.
+            Dúvidas sobre o preenchimento do caderno, visitas de pares ou certificação orgânica?
+            Fale diretamente com a coordenação.
           </p>
 
           {associationWhatsapp ? (
@@ -233,7 +240,10 @@ export function ProfilePage() {
               boxShadow: "var(--shadow-lg)",
             }}
           >
-            <h3 id="logout-title" style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}>
+            <h3
+              id="logout-title"
+              style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}
+            >
               Desconectar da conta?
             </h3>
             <p
@@ -244,7 +254,8 @@ export function ProfilePage() {
                 marginBottom: "20px",
               }}
             >
-              Para entrar novamente neste aparelho, você precisará informar seu CPF e o código de acesso.
+              Para entrar novamente neste aparelho, você precisará informar seu CPF e o código de
+              acesso.
             </p>
 
             <div style={{ display: "flex", gap: "10px" }}>

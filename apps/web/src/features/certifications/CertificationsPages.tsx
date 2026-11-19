@@ -116,9 +116,7 @@ export function CertificationsPage() {
           <button
             type="button"
             className="af-btn af-btn--outline af-btn--sm"
-            onClick={() =>
-              downloadFile("/reports/certifications?format=csv", "certificacoes.csv")
-            }
+            onClick={() => downloadFile("/reports/certifications?format=csv", "certificacoes.csv")}
           >
             Exportar CSV
           </button>
@@ -212,10 +210,7 @@ export function CertificationsPage() {
                     <td>{formatDatePtBr(c.issuedOn)}</td>
                     <td>{formatDatePtBr(c.expiresOn)}</td>
                     <td>
-                      <CertificationStatusBadge
-                        status={c.status}
-                        daysToExpire={c.daysToExpire}
-                      />
+                      <CertificationStatusBadge status={c.status} daysToExpire={c.daysToExpire} />
                       {c.statusReason && (
                         <div style={{ fontSize: "0.75rem", color: "var(--af-text-muted)" }}>
                           Motivo: {c.statusReason}

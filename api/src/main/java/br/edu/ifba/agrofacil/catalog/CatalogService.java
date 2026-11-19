@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CatalogService {
 
-  private static final int MAX_MUNICIPALITIES = 50;
+  private static final int MAX_MUNICIPALITIES = 1000;
 
   private final CropRepository crops;
   private final CropCategoryRepository categories;

@@ -1,14 +1,16 @@
 // Telas de Gestão da Associação: Comunicados (RN23), Catálogo e Itens sem catálogo (RN22), Relatórios (RF17–RF18) e Configurações / Coordenadores (RN24).
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ANNOUNCEMENT_TYPE_LABELS,
   FARM_INPUT_TYPE_LABELS,
   formatDatePtBr,
   formatDateTimePtBr,
+  onlyDigits,
   USER_STATUS_LABELS,
 } from "@agrofacil/domain";
-import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
+import { api, ApiProblemError, downloadFile, normalizePhoneE164, unwrap } from "../../api/client";
 
 export function AnnouncementsPage() {
   const queryClient = useQueryClient();
@@ -214,7 +216,10 @@ export function AnnouncementsPage() {
 
 export function CatalogPage() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"crops" | "inputs" | "unmapped" | "units">("crops");
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<"crops" | "inputs" | "unmapped" | "units">(() =>
+    searchParams.get("aba") === "sem-catalogo" ? "unmapped" : "crops",
+  );
 
   // Nova cultura
   const [cropName, setCropName] = useState("");
@@ -238,7 +243,8 @@ export function CatalogPage() {
 
   const cropsQuery = useQuery({
     queryKey: ["catalog", "crops"],
-    queryFn: () => unwrap(api.GET("/catalog/crops", { params: { query: { includeInactive: true } } })),
+    queryFn: () =>
+      unwrap(api.GET("/catalog/crops", { params: { query: { includeInactive: true } } })),
   });
 
   const categoriesQuery = useQuery({
@@ -667,8 +673,8 @@ export function ReportsPage() {
         <div>
           <h1 className="af-page-title">Relatórios e Exportações (RF17–RF18)</h1>
           <p className="af-page-subtitle">
-            Exporte o Caderno de Campo em PDF ou planilhas CSV compatíveis com Excel (UTF-8 com BOM e
-            separador ponto e vírgula).
+            Exporte o Caderno de Campo em PDF ou planilhas CSV compatíveis com Excel (UTF-8 com BOM
+            e separador ponto e vírgula).
           </p>
         </div>
       </div>
@@ -901,8 +907,8 @@ export function SettingsPage() {
           body: {
             name: name.trim(),
             opacName: opacName.trim() || undefined,
-            cnpj: cnpj.trim() || undefined,
-            whatsapp: whatsapp.trim() || undefined,
+            cnpj: onlyDigits(cnpj) || undefined,
+            whatsapp: normalizePhoneE164(whatsapp),
             tarefaM2: Number(tarefaM2) || 4356,
             alertDays: assocQuery.data?.alertDays ?? [60, 30, 15],
             peerVisitsPerYear: Number(peerVisitsPerYear) || 2,
@@ -983,7 +989,9 @@ export function SettingsPage() {
               />
             </div>
             <div className="af-field">
-              <label className="af-label">Nome do OPAC (Organismo de Avaliação da Conformidade)</label>
+              <label className="af-label">
+                Nome do OPAC (Organismo de Avaliação da Conformidade)
+              </label>
               <input
                 className="af-input"
                 value={opacName}
@@ -993,7 +1001,11 @@ export function SettingsPage() {
             <div className="af-form-row">
               <div className="af-field">
                 <label className="af-label">CNPJ</label>
-                <input className="af-input" value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
+                <input
+                  className="af-input"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(e.target.value)}
+                />
               </div>
               <div className="af-field">
                 <label className="af-label">WhatsApp de suporte</label>

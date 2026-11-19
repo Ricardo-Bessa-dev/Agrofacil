@@ -1,17 +1,28 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   formatArea,
   PLOT_STATUS_LABELS,
   WORKER_RELATIONSHIP_LABELS,
+  type AreaUnitCode,
 } from "@agrofacil/domain";
-import { api } from "../api/client";
+import { api, upsertFarmerProperty } from "../api/client";
 import propertyImg1 from "../assets/figma/property-placeholder-1.png";
 import statusOkIcon from "../assets/figma/status-ok.svg";
 
 export function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const [editing, setEditing] = useState(false);
+  const [prodDesc, setProdDesc] = useState("");
+  const [accessDir, setAccessDir] = useState("");
+  const [areaVal, setAreaVal] = useState("");
+  const [areaUnit, setAreaUnit] = useState<AreaUnitCode>("TAREFA");
+  const [saving, setSaving] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
 
   const propertyQuery = useQuery({
     queryKey: ["property-detail", id],
@@ -41,6 +52,43 @@ export function PropertyDetailPage() {
   const property = propertyQuery.data;
   const plots = plotsQuery.data ?? property?.plots ?? [];
   const workers = property?.workers ?? [];
+
+  const openEditForm = () => {
+    if (!property) return;
+    setProdDesc(property.productionDescription ?? "");
+    setAccessDir(property.accessDirections ?? "");
+    setAreaVal(property.totalArea?.value !== undefined ? String(property.totalArea.value) : "");
+    setAreaUnit((property.totalArea?.unit as AreaUnitCode) ?? "TAREFA");
+    setSaveFeedback(null);
+    setEditing(true);
+  };
+
+  const handleSaveProperty = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!property?.id || !property.name) return;
+    setSaving(true);
+    setSaveFeedback(null);
+    try {
+      await upsertFarmerProperty(property.id, {
+        id: property.id,
+        name: property.name,
+        totalArea: areaVal ? { value: Number(areaVal), unit: areaUnit } : property.totalArea,
+        productionDescription: prodDesc.trim() || undefined,
+        accessDirections: accessDir.trim() || undefined,
+        address: property.address,
+        location: property.location,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["property-detail", id] });
+      await queryClient.invalidateQueries({ queryKey: ["farmer-properties"] });
+      await queryClient.invalidateQueries({ queryKey: ["farmer-properties-list"] });
+      setEditing(false);
+      setSaveFeedback("Dados da propriedade atualizados com sucesso!");
+    } catch (err) {
+      setSaveFeedback(err instanceof Error ? err.message : "Não foi possível atualizar os dados.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (propertyQuery.isLoading) {
     return (
@@ -129,17 +177,83 @@ export function PropertyDetailPage() {
       </div>
 
       <div style={{ padding: "16px" }}>
+        {saveFeedback && (
+          <div
+            style={{
+              backgroundColor: "var(--color-primary-surface)",
+              color: "var(--color-primary-dark)",
+              border: "1px solid var(--color-primary)",
+              borderRadius: "8px",
+              padding: "10px 12px",
+              fontSize: "13px",
+              fontWeight: 600,
+              marginBottom: "14px",
+            }}
+          >
+            {saveFeedback}
+          </div>
+        )}
+
         {/* Card de Informações Gerais */}
         <div className="mobile-card">
-          <h2 style={{ fontSize: "17px", fontWeight: 700, marginBottom: "4px" }}>
-            {property.name}
-          </h2>
-          <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
-            📍 {property.address?.municipalityName} - {property.address?.uf ?? "BA"}
-            {property.address?.locality ? ` (${property.address.locality})` : ""}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "8px",
+            }}
+          >
+            <div>
+              <h2 style={{ fontSize: "17px", fontWeight: 700, marginBottom: "4px" }}>
+                {property.name}
+              </h2>
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "var(--color-text-secondary)",
+                  marginBottom: "12px",
+                }}
+              >
+                📍 {property.address?.municipalityName} - {property.address?.uf ?? "BA"}
+                {property.address?.locality ? ` (${property.address.locality})` : ""}
+              </div>
+            </div>
+
+            {!editing && (
+              <button
+                type="button"
+                onClick={openEditForm}
+                style={{
+                  background: "var(--color-primary-surface)",
+                  color: "var(--color-primary-dark)",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "6px 10px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                ✏️ Editar
+              </button>
+            )}
           </div>
 
-          {property.accessDirections && (
+          {property.productionDescription && !editing && (
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--color-text-secondary)",
+                marginBottom: "10px",
+              }}
+            >
+              <strong>Produção / Observações:</strong> {property.productionDescription}
+            </div>
+          )}
+
+          {property.accessDirections && !editing && (
             <div
               style={{
                 fontSize: "12px",
@@ -154,21 +268,105 @@ export function PropertyDetailPage() {
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-            <div style={{ backgroundColor: "var(--color-primary-surface)", padding: "10px", borderRadius: "8px" }}>
-              <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Área Total</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-primary-dark)" }}>
-                {property.totalArea ? formatArea(property.totalArea) : "Não informada"}
+          {editing ? (
+            <form onSubmit={handleSaveProperty} style={{ marginTop: "8px" }}>
+              <div className="form-group">
+                <label className="form-label">Área Total da Propriedade</label>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="number"
+                    step="any"
+                    value={areaVal}
+                    onChange={(e) => setAreaVal(e.target.value)}
+                    className="form-input"
+                    style={{ flex: 2 }}
+                  />
+                  <select
+                    value={areaUnit}
+                    onChange={(e) => setAreaUnit(e.target.value as AreaUnitCode)}
+                    className="form-select"
+                    style={{ flex: 1 }}
+                  >
+                    <option value="TAREFA">tarefas</option>
+                    <option value="HECTARE">ha</option>
+                    <option value="SQUARE_METER">m²</option>
+                  </select>
+                </div>
               </div>
-            </div>
 
-            <div style={{ backgroundColor: "var(--color-bg)", padding: "10px", borderRadius: "8px" }}>
-              <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Total de Talhões</div>
-              <div style={{ fontSize: "15px", fontWeight: 700 }}>
-                {plots.length} talh{plots.length === 1 ? "ão" : "ões"}
+              <div className="form-group">
+                <label className="form-label">Descrição da Produção e Talhões</label>
+                <input
+                  type="text"
+                  value={prodDesc}
+                  onChange={(e) => setProdDesc(e.target.value)}
+                  placeholder="Ex: Hortaliças orgânicas, mandioca e fruticultura"
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Roteiro de Acesso (para visitas do SPG)</label>
+                <textarea
+                  rows={2}
+                  value={accessDir}
+                  onChange={(e) => setAccessDir(e.target.value)}
+                  placeholder="Ex: Estrada vicinal após a ponte, portão verde à direita"
+                  className="form-textarea"
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setEditing(false)}
+                  style={{ flex: 1 }}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-primary" disabled={saving} style={{ flex: 1 }}>
+                  {saving ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+              <div
+                style={{
+                  backgroundColor: "var(--color-primary-surface)",
+                  padding: "10px",
+                  borderRadius: "8px",
+                }}
+              >
+                <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Área Total</div>
+                <div
+                  style={{
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    color: "var(--color-primary-dark)",
+                  }}
+                >
+                  {property.totalArea ? formatArea(property.totalArea) : "Não informada"}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: "var(--color-bg)",
+                  padding: "10px",
+                  borderRadius: "8px",
+                }}
+              >
+                <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                  Total de Talhões
+                </div>
+                <div style={{ fontSize: "15px", fontWeight: 700 }}>
+                  {plots.length} talh{plots.length === 1 ? "ão" : "ões"}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Lista de Talhões */}
@@ -201,11 +399,23 @@ export function PropertyDetailPage() {
                 const isOrganic = plot.status === "ORGANIC";
 
                 return (
-                  <div key={plot.id} className="mobile-card" style={{ marginBottom: 0, padding: "12px 14px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <div
+                    key={plot.id}
+                    className="mobile-card"
+                    style={{ marginBottom: 0, padding: "12px 14px" }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                      }}
+                    >
                       <span style={{ fontSize: "14px", fontWeight: 600 }}>{plot.name}</span>
                       <span
-                        className={`badge-status ${isOrganic ? "badge-complete" : "badge-incomplete"}`}
+                        className={`badge-status ${
+                          isOrganic ? "badge-complete" : "badge-incomplete"
+                        }`}
                       >
                         {statusLabel}
                       </span>
@@ -277,7 +487,7 @@ export function PropertyDetailPage() {
 
         {/* Botão de Ação Rápida */}
         <div style={{ marginTop: "24px" }}>
-          <Link to="/registros/novo" className="btn-primary">
+          <Link to={`/registros/novo?propertyId=${property.id}`} className="btn-primary">
             + Registrar Manejo Nesta Propriedade
           </Link>
         </div>

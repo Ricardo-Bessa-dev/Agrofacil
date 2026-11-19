@@ -218,9 +218,8 @@ export function ActivatePage() {
           }}
         >
           <strong>Não possui seu código de 6 dígitos?</strong>
-          <br />
-          O código é gerado pelo coordenador da sua associação para a sua segurança. Entre em contato
-          com a sua coordenação para recebê-lo.
+          <br />O código é gerado pelo coordenador da sua associação para a sua segurança. Entre em
+          contato com a sua coordenação para recebê-lo.
         </p>
       </div>
     </div>

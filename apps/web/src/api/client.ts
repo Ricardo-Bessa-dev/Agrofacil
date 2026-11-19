@@ -11,24 +11,48 @@ export class ApiError extends Error {
 
   constructor(status: number, body: unknown) {
     const obj = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
-    const detail =
+    const errs = Array.isArray(obj.errors) ? (obj.errors as FieldErrorItem[]) : [];
+    const baseDetail =
       typeof obj.detail === "string"
         ? obj.detail
         : typeof obj.message === "string"
           ? obj.message
           : "Não foi possível concluir a operação. Tente novamente.";
+    const fieldSummary =
+      errs.length > 0
+        ? ` (${errs.map((e) => `${e.field ?? "campo"}: ${e.message ?? "inválido"}`).join("; ")})`
+        : "";
+    const detail = `${baseDetail}${fieldSummary}`;
     super(detail);
     this.name = "ApiError";
     this.status = status;
     this.code = typeof obj.code === "string" ? obj.code : "UNKNOWN_ERROR";
     this.detail = detail;
-    const errs = Array.isArray(obj.errors) ? (obj.errors as FieldErrorItem[]) : [];
     this.errors = errs;
     this.fieldErrors = errs;
   }
 }
 
 export { ApiError as ApiProblemError };
+
+/**
+ * Normaliza telefone digitado pelo usuário (ex.: "(74) 99999-0000" ou "74999990000")
+ * para o formato E.164 exigido pela API (\+\d{10,15}, ex.: "+5574999990000").
+ */
+export function normalizePhoneE164(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return undefined;
+  if (trimmed.startsWith("+")) {
+    return `+${digits}`;
+  }
+  if (digits.length === 10 || digits.length === 11) {
+    return `+55${digits}`;
+  }
+  return `+${digits}`;
+}
 
 let accessToken: string | null = null;
 let refreshingPromise: Promise<SessionResponse | null> | null = null;

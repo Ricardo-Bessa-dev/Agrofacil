@@ -1,6 +1,6 @@
 // Telas de Agricultores do painel do coordenador: listagem, cadastro, detalhe, aparelhos e código de acesso (RN03, RN25).
 import React, { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   formatCpf,
@@ -12,7 +12,8 @@ import {
   USER_STATUS_LABELS,
 } from "@agrofacil/domain";
 import type { AccessCodeResponse } from "@agrofacil/api-types";
-import { api, ApiProblemError, unwrap } from "../../api/client";
+import { api, ApiProblemError, normalizePhoneE164, unwrap } from "../../api/client";
+import { fetchMunicipalities } from "../../api/municipalities";
 import { CertificationStatusBadge, RecordTypeAvatar } from "../../components/StatusBadge";
 
 function AccessCodeModal({
@@ -41,8 +42,10 @@ function AccessCodeModal({
   };
 
   const phoneDigits = onlyDigits(farmerPhone ?? "");
+  const whatsappPhone =
+    phoneDigits.startsWith("55") && phoneDigits.length >= 12 ? phoneDigits : `55${phoneDigits}`;
   const whatsappUrl = phoneDigits
-    ? `https://wa.me/55${phoneDigits}?text=${encodeURIComponent(
+    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
         `Olá, ${farmerName}! Seu código de acesso ao aplicativo AgroFácil é: *${code}* (válido até ${formatDateTimePtBr(codeData.expiresAt)}).`,
       )}`
     : null;
@@ -87,7 +90,11 @@ function AccessCodeModal({
           </div>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <button type="button" className="af-btn af-btn--primary af-btn--sm" onClick={handleCopy}>
+            <button
+              type="button"
+              className="af-btn af-btn--primary af-btn--sm"
+              onClick={handleCopy}
+            >
               {copied ? "✓ Código copiado!" : "Copiar código"}
             </button>
             {whatsappUrl && (
@@ -115,9 +122,12 @@ function AccessCodeModal({
 }
 
 export function FarmersListPage() {
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [status, setStatus] = useState<"" | "ACTIVE" | "INACTIVE">("");
+  const [status, setStatus] = useState<"" | "ACTIVE" | "INACTIVE">(
+    (searchParams.get("status") as "" | "ACTIVE" | "INACTIVE") ?? "",
+  );
   const [page, setPage] = useState(0);
   const [activeCodeModal, setActiveCodeModal] = useState<{
     name: string;
@@ -351,7 +361,8 @@ export function FarmersListPage() {
         {meta && (meta.totalPages ?? 1) > 1 && (
           <div className="af-pagination">
             <span>
-              Página {(meta.number ?? 0) + 1} de {meta.totalPages} ({meta.totalElements} agricultores)
+              Página {(meta.number ?? 0) + 1} de {meta.totalPages} ({meta.totalElements}{" "}
+              agricultores)
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -404,6 +415,7 @@ export function FarmerFormPage() {
   const [postalCode, setPostalCode] = useState("");
   const [notes, setNotes] = useState("");
   const [generateCodeAfterCreate, setGenerateCodeAfterCreate] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdResult, setCreatedResult] = useState<{
     farmerId: string;
@@ -419,17 +431,17 @@ export function FarmerFormPage() {
 
   const municipalitiesQuery = useQuery({
     queryKey: ["municipalities", uf],
-    queryFn: () =>
-      unwrap(
-        api.GET("/municipalities", {
-          params: { query: { uf: uf || undefined } },
-        }),
-      ),
+    queryFn: () => fetchMunicipalities(uf),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!name.trim()) {
+      setError("Informe o nome completo do agricultor.");
+      return;
+    }
 
     const cpfDigits = onlyDigits(cpf);
     if (!isValidCpf(cpfDigits)) {
@@ -437,13 +449,20 @@ export function FarmerFormPage() {
       return;
     }
 
+    const cepDigits = onlyDigits(postalCode);
+    if (cepDigits && cepDigits.length !== 8) {
+      setError("O CEP deve ter 8 dígitos (ou deixe em branco).");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       const created = await unwrap(
         api.POST("/farmers", {
           body: {
             name: name.trim(),
             cpf: cpfDigits,
-            phone: phone.trim() || undefined,
+            phone: normalizePhoneE164(phone),
             email: email.trim() || undefined,
             groupId: groupId || undefined,
             groupJoinedYear: groupJoinedYear ? Number(groupJoinedYear) : undefined,
@@ -452,7 +471,7 @@ export function FarmerFormPage() {
               uf: uf || undefined,
               municipalityId: municipalityId ? Number(municipalityId) : undefined,
               locality: locality.trim() || undefined,
-              postalCode: onlyDigits(postalCode) || undefined,
+              postalCode: cepDigits || undefined,
             },
             notes: notes.trim() || undefined,
           },
@@ -482,6 +501,8 @@ export function FarmerFormPage() {
       } else {
         setError("Não foi possível cadastrar o agricultor.");
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -716,12 +737,22 @@ export function FarmerFormPage() {
             </span>
           </label>
 
+          {error && (
+            <div className="af-alert af-alert--danger" style={{ marginTop: 8 }}>
+              {error}
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <Link to="/agricultores" className="af-btn af-btn--outline af-btn--sm">
               Cancelar
             </Link>
-            <button type="submit" className="af-btn af-btn--primary af-btn--sm">
-              Salvar agricultor
+            <button
+              type="submit"
+              className="af-btn af-btn--primary af-btn--sm"
+              disabled={submitting}
+            >
+              {submitting ? "Salvando..." : "Salvar agricultor"}
             </button>
           </div>
         </form>
@@ -918,7 +949,9 @@ export function FarmerDetailPage() {
             </Link>
           </div>
           {(farmer.properties ?? []).length === 0 ? (
-            <div className="af-empty-state">Nenhuma propriedade cadastrada para este agricultor.</div>
+            <div className="af-empty-state">
+              Nenhuma propriedade cadastrada para este agricultor.
+            </div>
           ) : (
             <div className="af-table-wrap">
               <table className="af-table">
@@ -1121,7 +1154,7 @@ function FarmerEditCard({
           body: {
             name: name.trim(),
             cpf: onlyDigits(cpf),
-            phone: phone.trim() || undefined,
+            phone: normalizePhoneE164(phone),
             email: email.trim() || undefined,
             groupId: groupId || undefined,
             cafNumber: cafNumber.trim() || undefined,

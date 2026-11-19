@@ -14,5 +14,5 @@ import java.util.UUID;
 public record DeviceInfo(
     @NotNull UUID id,
     @Size(max = 80) String name,
-    @NotBlank @Pattern(regexp = "ANDROID|IOS") String platform,
+    @NotBlank @Pattern(regexp = "ANDROID|IOS|WEB") String platform,
     @NotBlank @Size(max = 20) String appVersion) {}

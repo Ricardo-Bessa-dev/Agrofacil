@@ -111,11 +111,7 @@ export function LoginPage() {
                 {submitting ? "Verificando..." : "Entrar"}
               </button>
 
-              <Link
-                to="/convite"
-                className="af-btn-pill-secondary"
-                data-node-id="54:1671"
-              >
+              <Link to="/convite" className="af-btn-pill-secondary" data-node-id="54:1671">
                 Aceitar convite
               </Link>
             </div>
@@ -310,7 +306,12 @@ export function Verify2faPage() {
             )}
             <Link
               to="/entrar"
-              style={{ marginTop: 12, fontSize: 13, fontWeight: 600, color: "var(--af-earth-brown)" }}
+              style={{
+                marginTop: 12,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--af-earth-brown)",
+              }}
             >
               ← Voltar para o login
             </Link>

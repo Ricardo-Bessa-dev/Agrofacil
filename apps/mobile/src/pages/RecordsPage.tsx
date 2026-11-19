@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { RecordListItem } from "@agrofacil/api-types";
 import {
   formatArea,
   formatDatePtBr,
   formatQuantity,
+  MISSING_FIELD_LABELS,
   RECORD_TYPE_FARMER_LABELS,
 } from "@agrofacil/domain";
-import { api } from "../api/client";
+import { api, fetchMobileRecordDetail } from "../api/client";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 import plusIcon from "../assets/figma/plus-circle.svg";
 
@@ -22,6 +23,7 @@ const FILTER_OPTIONS = [
 ] as const;
 
 export function RecordsPage() {
+  const navigate = useNavigate();
   const [selectedType, setSelectedType] = useState<string>("");
   const [selectedRecord, setSelectedRecord] = useState<RecordListItem | null>(null);
 
@@ -34,11 +36,7 @@ export function RecordsPage() {
             filter: selectedType
               ? {
                   type: selectedType as
-                    | "PLANTING"
-                    | "INPUT_APPLICATION"
-                    | "HARVEST"
-                    | "INPUT_PURCHASE"
-                    | "OUTFLOW",
+                    "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW",
                 }
               : {},
             pageable: {
@@ -52,7 +50,15 @@ export function RecordsPage() {
     },
   });
 
+  const detailQuery = useQuery({
+    queryKey: ["mobile-record-detail", selectedRecord?.id],
+    queryFn: () => fetchMobileRecordDetail(selectedRecord!.id!),
+    enabled: Boolean(selectedRecord?.id),
+  });
+
   const records = recordsQuery.data ?? [];
+  const detail = detailQuery.data;
+  const openCorrections = (detail?.correctionRequests ?? []).filter((c) => c.status === "OPEN");
 
   return (
     <div>
@@ -111,9 +117,9 @@ export function RecordsPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {records.map((rec) => {
-              const typeName =
-                RECORD_TYPE_FARMER_LABELS[rec.type ?? ""] ?? rec.type ?? "Manejo";
+              const typeName = RECORD_TYPE_FARMER_LABELS[rec.type ?? ""] ?? rec.type ?? "Manejo";
               const isComplete = rec.completeness === "COMPLETE";
+              const hasCorrection = (rec.openCorrectionRequests ?? 0) > 0;
 
               return (
                 <div
@@ -128,6 +134,7 @@ export function RecordsPage() {
                     alignItems: "flex-start",
                     gap: "12px",
                     transition: "background-color 0.15s ease",
+                    borderColor: hasCorrection ? "#f59e0b" : undefined,
                   }}
                 >
                   <RecordTypeIcon type={rec.type ?? ""} size={44} />
@@ -194,10 +201,12 @@ export function RecordsPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        📍 {rec.plot?.name ? `Talhão: ${rec.plot.name}` : rec.property?.name ?? "Propriedade"}
+                        📍{" "}
+                        {rec.plot?.name
+                          ? `Talhão: ${rec.plot.name}`
+                          : (rec.property?.name ?? "Propriedade")}
                       </div>
 
-                      {/* Informações de quantidade ou área */}
                       {rec.area?.value ? (
                         <span style={{ fontWeight: 600, color: "var(--color-text)" }}>
                           {formatArea(rec.area)}
@@ -209,8 +218,10 @@ export function RecordsPage() {
                       ) : null}
                     </div>
 
-                    {/* Status badge */}
-                    <div style={{ marginTop: "6px" }}>
+                    {/* Status badges */}
+                    <div
+                      style={{ marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" }}
+                    >
                       <span
                         className={`badge-status ${
                           isComplete ? "badge-complete" : "badge-incomplete"
@@ -218,6 +229,14 @@ export function RecordsPage() {
                       >
                         {isComplete ? "✓ Completo" : "⚠️ Pendente de dados"}
                       </span>
+                      {hasCorrection && (
+                        <span
+                          className="badge-status badge-incomplete"
+                          style={{ backgroundColor: "#fef3c7", color: "#92400e" }}
+                        >
+                          🔔 Correção solicitada
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -230,7 +249,13 @@ export function RecordsPage() {
       {/* Floating Action Button (FAB) */}
       <div className="fab-container">
         <Link to="/registros/novo" className="fab-btn">
-          <img src={plusIcon} alt="" width={20} height={20} style={{ filter: "brightness(0) invert(1)" }} />
+          <img
+            src={plusIcon}
+            alt=""
+            width={20}
+            height={20}
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
           <span>Novo Manejo</span>
         </Link>
       </div>
@@ -298,15 +323,53 @@ export function RecordsPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
-              <div style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}>
-                <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Data de Execução</div>
+            {openCorrections.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: "#fff8e1",
+                  border: "1.5px solid #f59e0b",
+                  borderRadius: "10px",
+                  padding: "12px",
+                  marginBottom: "14px",
+                }}
+              >
+                <div
+                  style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: 4 }}
+                >
+                  🔔 Pedido de Correção da Coordenação:
+                </div>
+                {openCorrections.map((c) => (
+                  <div key={c.id} style={{ fontSize: "13px", color: "#78350f" }}>
+                    “{c.message}”
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                marginBottom: "20px",
+              }}
+            >
+              <div
+                style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}
+              >
+                <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                  Data de Execução
+                </div>
                 <div style={{ fontSize: "14px", fontWeight: 600 }}>
-                  {selectedRecord.performedOn ? formatDatePtBr(selectedRecord.performedOn) : "Não informada"}
+                  {selectedRecord.performedOn
+                    ? formatDatePtBr(selectedRecord.performedOn)
+                    : "Não informada"}
                 </div>
               </div>
 
-              <div style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}>
+              <div
+                style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}
+              >
                 <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Local</div>
                 <div style={{ fontSize: "14px", fontWeight: 600 }}>
                   {selectedRecord.property?.name ?? "Propriedade principal"}
@@ -315,21 +378,58 @@ export function RecordsPage() {
               </div>
 
               {selectedRecord.area?.value && (
-                <div style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}>
+                <div
+                  style={{
+                    backgroundColor: "var(--color-bg)",
+                    padding: "12px",
+                    borderRadius: "8px",
+                  }}
+                >
                   <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Área</div>
-                  <div style={{ fontSize: "14px", fontWeight: 600 }}>{formatArea(selectedRecord.area)}</div>
+                  <div style={{ fontSize: "14px", fontWeight: 600 }}>
+                    {formatArea(selectedRecord.area)}
+                  </div>
                 </div>
               )}
 
               {selectedRecord.quantity?.value && (
-                <div style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}>
-                  <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Quantidade</div>
-                  <div style={{ fontSize: "14px", fontWeight: 600 }}>{formatQuantity(selectedRecord.quantity)}</div>
+                <div
+                  style={{
+                    backgroundColor: "var(--color-bg)",
+                    padding: "12px",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                    Quantidade
+                  </div>
+                  <div style={{ fontSize: "14px", fontWeight: 600 }}>
+                    {formatQuantity(selectedRecord.quantity)}
+                  </div>
                 </div>
               )}
 
-              <div style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}>
-                <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Status do Registro</div>
+              {detail?.notes && (
+                <div
+                  style={{
+                    backgroundColor: "var(--color-bg)",
+                    padding: "12px",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                    Observações
+                  </div>
+                  <div style={{ fontSize: "13px", marginTop: 2 }}>{detail.notes}</div>
+                </div>
+              )}
+
+              <div
+                style={{ backgroundColor: "var(--color-bg)", padding: "12px", borderRadius: "8px" }}
+              >
+                <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                  Status do Registro
+                </div>
                 <div style={{ marginTop: "4px" }}>
                   <span
                     className={`badge-status ${
@@ -343,16 +443,68 @@ export function RecordsPage() {
                       : "⚠️ Contém pendências ou dados incompletos"}
                   </span>
                 </div>
+                {(detail?.missingFields ?? []).length > 0 && (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--color-text-secondary)",
+                      marginTop: "6px",
+                    }}
+                  >
+                    Falta informar:{" "}
+                    {(detail?.missingFields ?? [])
+                      .map((f: string) => MISSING_FIELD_LABELS[f] ?? f)
+                      .join(", ")}
+                    .
+                  </div>
+                )}
               </div>
+
+              {(detail?.attachments ?? []).length > 0 && (
+                <div
+                  style={{
+                    backgroundColor: "var(--color-bg)",
+                    padding: "12px",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                    Anexos / Fotos
+                  </div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, marginTop: 2 }}>
+                    📷 {(detail?.attachments ?? []).length} foto(s) anexada(s)
+                  </div>
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setSelectedRecord(null)}
-            >
-              Fechar
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {selectedRecord.id && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    const id = selectedRecord.id;
+                    setSelectedRecord(null);
+                    navigate(`/registros/${id}/editar`);
+                  }}
+                >
+                  {openCorrections.length > 0
+                    ? "✏️ Atender Pedido de Correção"
+                    : selectedRecord.completeness === "INCOMPLETE"
+                      ? "✏️ Completar Dados do Registro"
+                      : "✏️ Editar Registro"}
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setSelectedRecord(null)}
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
