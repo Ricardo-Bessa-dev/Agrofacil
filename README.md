@@ -2,22 +2,22 @@
 
 Caderno de campo digital para agricultores orgânicos de uma cooperativa certificada pelo Sistema Participativo de Garantia (SPG). Projeto acadêmico do IFBA.
 
-- **App do agricultor** (`apps/mobile`): Expo / React Native, funciona sem internet.
-- **Painel do coordenador** (`apps/web`): React + Vite.
+- **App do agricultor** (`apps/mobile`): React 19 + Vite (PWA Offline-First), funciona mesmo sem internet no campo.
+- **Painel do coordenador** (`apps/web`): React 19 + Vite + TanStack Query.
 - **API** (`api/`): Spring Boot 4 + PostgreSQL.
 
-A documentação completa está em [`documentacao/`](documentacao/). Comece pelo [doc 1](documentacao/1-arquitetura-e-contrato.md).
+A documentação completa está em [`docs/`](docs/). Comece pelo [doc 1](docs/1-arquitetura-e-contrato.md) e veja o resumo de implementação em [`docs/CONTINUIDADE-DO-PROJETO.md`](docs/CONTINUIDADE-DO-PROJETO.md).
 
 ## Estrutura
 
 ```text
 api/                  # API Spring Boot (Maven), fora do workspace pnpm
-apps/mobile/          # @agrofacil/mobile
-apps/web/             # @agrofacil/web
+apps/mobile/          # @agrofacil/mobile (App Web/PWA do agricultor na porta 5174)
+apps/web/             # @agrofacil/web (Painel da coordenação na porta 5173)
 packages/api-types/   # tipos gerados do OpenAPI da API (pnpm gen:api)
 packages/domain/      # regras puras compartilhadas pelo app e pelo painel
 infra/                # Docker Compose de desenvolvimento
-documentacao/         # arquitetura, contrato API-front, guias da API e do front
+docs/                 # arquitetura, contrato API-front, guias da API e do front
 ```
 
 ## Pré-requisitos
@@ -59,7 +59,12 @@ Ainda falta no M11: a anonimização dos agricultores desligados (precisa da dat
 
 ## Estado do front
 
-O painel (`apps/web`) e o app (`apps/mobile`) ainda são o esqueleto inicial, sem telas. Por enquanto, a API se testa pelo Swagger ou pelos testes automáticos. A ordem de implementação está no [doc 3, Parte E](documentacao/3-guia-front-end.md#parte-e-ordem-de-implementação-do-front).
+O painel (`apps/web`) e o app mobile-first do agricultor (`apps/mobile`) estão completos e integrados à API:
+
+- **Painel da Coordenação (`apps/web`)**: Login em duas etapas (2FA), Dashboard com KPIs, gestão de agricultores e geração de códigos de 6 dígitos, propriedades e talhões, caderno de campo e pedidos de correção, certificações, grupos, visitas do SPG, documentos D1–D8, comunicados, catálogos, relatórios PDF/CSV e configurações.
+- **App do Agricultor (`apps/mobile`)**: Ativação por CPF + código de 6 dígitos, tela inicial, propriedades e edição de dados de produção/acesso, listagem e filtro do caderno de campo, criação e edição de manejos com vínculo de plantio ativo, atendimento a pedidos de correção, captura/upload de fotos da câmera (`SHA-256`), aceite de termos LGPD e suporte PWA offline-first.
+
+Consulte o detalhamento em [`docs/CONTINUIDADE-DO-PROJETO.md`](docs/CONTINUIDADE-DO-PROJETO.md) e no [doc 3, Parte E](docs/3-guia-front-end.md#parte-e-ordem-de-implementação-do-front).
 
 ### Primeiro teste manual
 
@@ -67,7 +72,7 @@ O painel (`apps/web`) e o app (`apps/mobile`) ainda são o esqueleto inicial, se
 2. Aceite o convite: `POST /api/v1/auth/invite/accept` com `{ "token", "name", "password" }` (senha com 10+ caracteres).
 3. Entre: `POST /auth/coordinator/login` com `{ "email", "password" }` e depois `POST /auth/coordinator/verify` com o `challengeId` e o código do e-mail. Use o `accessToken` no botão **Authorize** do Swagger.
 4. Cadastre um agricultor (`POST /farmers`), gere o código (`POST /farmers/{id}/access-codes`) e ative um "aparelho" com `POST /auth/farmer/activate`.
-5. Com o token do agricultor, crie uma propriedade e um plantio por `POST /sync/push` e confira o resultado em `GET /sync/pull?cursor=0` (exemplo completo no [doc 1 §3.19](documentacao/1-arquitetura-e-contrato.md#319-exemplo-completo-colheita-registrada-no-campo)).
+5. Com o token do agricultor, crie uma propriedade e um plantio por `POST /sync/push` e confira o resultado em `GET /sync/pull?cursor=0` (exemplo completo no [doc 1 §3.19](docs/1-arquitetura-e-contrato.md#319-exemplo-completo-colheita-registrada-no-campo)).
 6. Com o token do coordenador, experimente os outros marcos (os campos de cada rota estão no Swagger):
    - **M7:** `POST /certifications`, depois `/renew`, `/suspend` e `/reactivate`.
    - **M8:** `POST /announcements` (aparece no pull do agricultor); um registro com `cropOtherName` aparece em `GET /catalog/unmapped?kind=CROP` e se resolve com `POST /catalog/unmapped/resolve`.
@@ -89,6 +94,6 @@ Para rodar só uma classe de teste: `./mvnw test -Dtest=CertificationTest` (acei
 
 ## Como trabalhar
 
-- Siga a ordem de implementação: API no [doc 2 §1.18](documentacao/2-guia-api.md#118-ordem-de-implementação-sugerida), front no [doc 3, Parte E](documentacao/3-guia-front-end.md#parte-e-ordem-de-implementação-do-front).
-- Mudou um campo, uma rota ou uma regra? Atualize o [doc 1](documentacao/1-arquitetura-e-contrato.md) **no mesmo pull request**.
+- Siga a ordem de implementação: API no [doc 2 §1.18](docs/2-guia-api.md#118-ordem-de-implementação-sugerida), front no [doc 3, Parte E](docs/3-guia-front-end.md#parte-e-ordem-de-implementação-do-front).
+- Mudou um campo, uma rota ou uma regra? Atualize o [doc 1](docs/1-arquitetura-e-contrato.md) **no mesmo pull request**.
 - Nunca versione `.env`. Os modelos estão em `api/.env.example` e `apps/mobile/.env.example`.
