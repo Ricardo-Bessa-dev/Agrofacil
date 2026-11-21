@@ -7,6 +7,7 @@ import type { CertificationView, CropView } from "@agrofacil/api-types";
 import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
 import { fetchAllPages } from "../../api/pagination";
 import { CertificationStatusBadge } from "../../components/StatusBadge";
+import { Pagination } from "../../components/Pagination";
 
 export function CertificationsPage() {
   const [searchParams] = useSearchParams();
@@ -130,8 +131,11 @@ export function CertificationsPage() {
       <div className="af-card">
         <div className="af-filters-bar" style={{ marginBottom: 16 }}>
           <div className="af-field" style={{ minWidth: 220 }}>
-            <label className="af-label">Situação (RN19)</label>
+            <label htmlFor="cert-situacao-rn19" className="af-label">
+              Situação (RN19)
+            </label>
             <select
+              id="cert-situacao-rn19"
               className="af-select"
               value={status}
               onChange={(e) => {
@@ -291,31 +295,7 @@ export function CertificationsPage() {
           </div>
         )}
 
-        {meta && (meta.totalPages ?? 1) > 1 && (
-          <div className="af-pagination">
-            <span>
-              Página {(meta.number ?? 0) + 1} de {meta.totalPages}
-            </span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                className="af-btn af-btn--outline af-btn--sm"
-                disabled={page <= 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                className="af-btn af-btn--outline af-btn--sm"
-                disabled={page + 1 >= (meta.totalPages ?? 1)}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Próxima
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination meta={meta} onPageChange={setPage} itemsLabel="certificações" />
       </div>
 
       {formModal && (
@@ -353,10 +333,11 @@ export function CertificationsPage() {
                 }}
               >
                 <div className="af-field">
-                  <label className="af-label">
+                  <label htmlFor="cert-informe-o-motivo" className="af-label">
                     Informe o motivo ({reasonModal.propertyName ?? "propriedade"}) *
                   </label>
                   <textarea
+                    id="cert-informe-o-motivo"
                     className="af-textarea"
                     value={reasonText}
                     onChange={(e) => setReasonText(e.target.value)}
@@ -768,15 +749,17 @@ function ProductsPicker({
 
   return (
     <div className="af-field">
-      <label className="af-label">
+      <span className="af-label" id="cert-products-label">
         Produtos certificados * ({total} selecionado{total === 1 ? "" : "s"})
-      </label>
+      </span>
       {loading ? (
         <div className="af-empty-state" style={{ padding: 12 }}>
           Carregando culturas...
         </div>
       ) : (
         <div
+          role="group"
+          aria-labelledby="cert-products-label"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",

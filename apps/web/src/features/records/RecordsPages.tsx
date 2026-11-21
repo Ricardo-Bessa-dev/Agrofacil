@@ -24,6 +24,7 @@ import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
 import { fetchAllPages } from "../../api/pagination";
 import { AttachmentGallery } from "../../components/AttachmentGallery";
 import { RecordTypeAvatar } from "../../components/StatusBadge";
+import { Pagination } from "../../components/Pagination";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
 
@@ -121,8 +122,11 @@ export function RecordsListPage() {
       <div className="af-card">
         <div className="af-filters-bar" style={{ marginBottom: 16 }}>
           <div className="af-field" style={{ minWidth: 220, flex: 1 }}>
-            <label className="af-label">Buscar por cultura, insumo ou agricultor</label>
+            <label htmlFor="rec-buscar-por-cultura-insumo" className="af-label">
+              Buscar por cultura, insumo ou agricultor
+            </label>
             <input
+              id="rec-buscar-por-cultura-insumo"
               type="search"
               className="af-input"
               placeholder="Ex.: Alface, Biofertilizante, João..."
@@ -135,8 +139,11 @@ export function RecordsListPage() {
           </div>
 
           <div className="af-field" style={{ minWidth: 160 }}>
-            <label className="af-label">Completude (RN09)</label>
+            <label htmlFor="rec-completude-rn09" className="af-label">
+              Completude (RN09)
+            </label>
             <select
+              id="rec-completude-rn09"
               className="af-select"
               value={completeness}
               onChange={(e) => {
@@ -151,8 +158,11 @@ export function RecordsListPage() {
           </div>
 
           <div className="af-field" style={{ minWidth: 140 }}>
-            <label className="af-label">De</label>
+            <label htmlFor="rec-de" className="af-label">
+              De
+            </label>
             <input
+              id="rec-de"
               type="date"
               className="af-input"
               value={from}
@@ -164,8 +174,11 @@ export function RecordsListPage() {
           </div>
 
           <div className="af-field" style={{ minWidth: 140 }}>
-            <label className="af-label">Até</label>
+            <label htmlFor="rec-ate" className="af-label">
+              Até
+            </label>
             <input
+              id="rec-ate"
               type="date"
               className="af-input"
               value={to}
@@ -250,31 +263,7 @@ export function RecordsListPage() {
           </div>
         )}
 
-        {meta && (meta.totalPages ?? 1) > 1 && (
-          <div className="af-pagination">
-            <span>
-              Página {(meta.number ?? 0) + 1} de {meta.totalPages} ({meta.totalElements} registros)
-            </span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                className="af-btn af-btn--outline af-btn--sm"
-                disabled={page <= 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                className="af-btn af-btn--outline af-btn--sm"
-                disabled={page + 1 >= (meta.totalPages ?? 1)}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Próxima
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination meta={meta} onPageChange={setPage} itemsLabel="registros" />
       </div>
     </div>
   );
@@ -515,8 +504,14 @@ export function RecordCreatePage() {
 
         <form className="af-form-grid" onSubmit={handleSubmit}>
           <div className="af-field">
-            <label className="af-label">Tipo de manejo *</label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span className="af-label" id="rec-type-label">
+              Tipo de manejo *
+            </span>
+            <div
+              role="group"
+              aria-labelledby="rec-type-label"
+              style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+            >
               {(Object.entries(RECORD_TYPE_LABELS) as [RecordType, string][]).map(([k, label]) => (
                 <button
                   key={k}
@@ -524,6 +519,7 @@ export function RecordCreatePage() {
                   className={`af-btn af-btn--sm ${
                     type === k ? "af-btn--primary" : "af-btn--outline"
                   }`}
+                  aria-pressed={type === k}
                   onClick={() => setType(k)}
                 >
                   {label}
@@ -534,8 +530,11 @@ export function RecordCreatePage() {
 
           <div className="af-form-row">
             <div className="af-field">
-              <label className="af-label">Agricultor *</label>
+              <label htmlFor="rec-agricultor" className="af-label">
+                Agricultor *
+              </label>
               <select
+                id="rec-agricultor"
                 className="af-select"
                 value={farmerId}
                 onChange={(e) => {
@@ -555,8 +554,11 @@ export function RecordCreatePage() {
             </div>
 
             <div className="af-field">
-              <label className="af-label">Propriedade *</label>
+              <label htmlFor="rec-propriedade" className="af-label">
+                Propriedade *
+              </label>
               <select
+                id="rec-propriedade"
                 className="af-select"
                 value={propertyId}
                 onChange={(e) => {
@@ -576,8 +578,11 @@ export function RecordCreatePage() {
             </div>
 
             <div className="af-field">
-              <label className="af-label">Talhão / Área</label>
+              <label htmlFor="rec-talhao-area" className="af-label">
+                Talhão / Área
+              </label>
               <select
+                id="rec-talhao-area"
                 className="af-select"
                 value={plotId}
                 onChange={(e) => setPlotId(e.target.value)}
@@ -595,8 +600,11 @@ export function RecordCreatePage() {
 
           <div className="af-form-row">
             <div className="af-field">
-              <label className="af-label">Data de realização *</label>
+              <label htmlFor="rec-data-de-realizacao" className="af-label">
+                Data de realização *
+              </label>
               <input
+                id="rec-data-de-realizacao"
                 type="date"
                 className="af-input"
                 value={performedOn}
@@ -608,10 +616,11 @@ export function RecordCreatePage() {
 
             {type !== "PLANTING" && type !== "INPUT_PURCHASE" && (
               <div className="af-field">
-                <label className="af-label">
+                <label htmlFor="rec-plantio-vinculado" className="af-label">
                   Plantio vinculado {type === "HARVEST" ? "*" : "(recomendado)"}
                 </label>
                 <select
+                  id="rec-plantio-vinculado"
                   className="af-select"
                   value={plantingId}
                   onChange={(e) => setPlantingId(e.target.value)}
@@ -631,8 +640,11 @@ export function RecordCreatePage() {
           {(type === "PLANTING" || type === "OUTFLOW") && (
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Cultura / Produto do catálogo</label>
+                <label htmlFor="rec-cultura-produto-do-catalogo" className="af-label">
+                  Cultura / Produto do catálogo
+                </label>
                 <select
+                  id="rec-cultura-produto-do-catalogo"
                   className="af-select"
                   value={cropId}
                   onChange={(e) => setCropId(e.target.value)}
@@ -647,8 +659,11 @@ export function RecordCreatePage() {
               </div>
               {!cropId && (
                 <div className="af-field">
-                  <label className="af-label">Nome da cultura / produto *</label>
+                  <label htmlFor="rec-nome-da-cultura-produto" className="af-label">
+                    Nome da cultura / produto *
+                  </label>
                   <input
+                    id="rec-nome-da-cultura-produto"
                     className="af-input"
                     value={cropOtherName}
                     onChange={(e) => setCropOtherName(e.target.value)}
@@ -659,8 +674,11 @@ export function RecordCreatePage() {
               )}
               {type === "PLANTING" && (
                 <div className="af-field">
-                  <label className="af-label">Variedade</label>
+                  <label htmlFor="rec-variedade" className="af-label">
+                    Variedade
+                  </label>
                   <input
+                    id="rec-variedade"
                     className="af-input"
                     value={variety}
                     onChange={(e) => setVariety(e.target.value)}
@@ -674,8 +692,11 @@ export function RecordCreatePage() {
           {(type === "INPUT_APPLICATION" || type === "INPUT_PURCHASE") && (
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Insumo do catálogo</label>
+                <label htmlFor="rec-insumo-do-catalogo" className="af-label">
+                  Insumo do catálogo
+                </label>
                 <select
+                  id="rec-insumo-do-catalogo"
                   className="af-select"
                   value={inputId}
                   onChange={(e) => setInputId(e.target.value)}
@@ -690,8 +711,11 @@ export function RecordCreatePage() {
               </div>
               {!inputId && (
                 <div className="af-field">
-                  <label className="af-label">Nome do insumo *</label>
+                  <label htmlFor="rec-nome-do-insumo" className="af-label">
+                    Nome do insumo *
+                  </label>
                   <input
+                    id="rec-nome-do-insumo"
                     className="af-input"
                     value={inputOtherName}
                     onChange={(e) => setInputOtherName(e.target.value)}
@@ -702,8 +726,11 @@ export function RecordCreatePage() {
               )}
               {type === "INPUT_APPLICATION" && (
                 <div className="af-field">
-                  <label className="af-label">Finalidade *</label>
+                  <label htmlFor="rec-finalidade" className="af-label">
+                    Finalidade *
+                  </label>
                   <select
+                    id="rec-finalidade"
                     className="af-select"
                     value={purpose}
                     onChange={(e) => setPurpose(e.target.value as typeof purpose)}
@@ -722,8 +749,11 @@ export function RecordCreatePage() {
           {type !== "PLANTING" && (
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Quantidade</label>
+                <label htmlFor="rec-quantidade" className="af-label">
+                  Quantidade
+                </label>
                 <input
+                  id="rec-quantidade"
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -734,8 +764,11 @@ export function RecordCreatePage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Unidade</label>
+                <label htmlFor="rec-unidade" className="af-label">
+                  Unidade
+                </label>
                 <select
+                  id="rec-unidade"
                   className="af-select"
                   value={qtyUnit}
                   onChange={(e) => setQtyUnit(e.target.value)}
@@ -756,7 +789,7 @@ export function RecordCreatePage() {
           {(type === "PLANTING" || type === "INPUT_APPLICATION" || type === "HARVEST") && (
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">
+                <label htmlFor="rec-campo" className="af-label">
                   {type === "PLANTING"
                     ? "Área plantada"
                     : type === "INPUT_APPLICATION"
@@ -764,6 +797,7 @@ export function RecordCreatePage() {
                       : "Área colhida"}
                 </label>
                 <input
+                  id="rec-campo"
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -774,8 +808,11 @@ export function RecordCreatePage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Unidade de área</label>
+                <label htmlFor="rec-unidade-de-area" className="af-label">
+                  Unidade de área
+                </label>
                 <select
+                  id="rec-unidade-de-area"
                   className="af-select"
                   value={areaUnit}
                   onChange={(e) => setAreaUnit(e.target.value as typeof areaUnit)}
@@ -793,8 +830,11 @@ export function RecordCreatePage() {
           {type === "PLANTING" && (
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Origem das sementes / mudas</label>
+                <label htmlFor="rec-origem-das-sementes-mudas" className="af-label">
+                  Origem das sementes / mudas
+                </label>
                 <select
+                  id="rec-origem-das-sementes-mudas"
                   className="af-select"
                   value={seedOrigin}
                   onChange={(e) => setSeedOrigin(e.target.value as typeof seedOrigin)}
@@ -808,8 +848,11 @@ export function RecordCreatePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Tipo de propagação</label>
+                <label htmlFor="rec-tipo-de-propagacao" className="af-label">
+                  Tipo de propagação
+                </label>
                 <select
+                  id="rec-tipo-de-propagacao"
                   className="af-select"
                   value={propagationType}
                   onChange={(e) => setPropagationType(e.target.value as typeof propagationType)}
@@ -823,8 +866,11 @@ export function RecordCreatePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Previsão de colheita</label>
+                <label htmlFor="rec-previsao-de-colheita" className="af-label">
+                  Previsão de colheita
+                </label>
                 <input
+                  id="rec-previsao-de-colheita"
                   type="date"
                   className="af-input"
                   value={expectedHarvestOn}
@@ -849,8 +895,11 @@ export function RecordCreatePage() {
 
           {type === "INPUT_PURCHASE" && (
             <div className="af-field">
-              <label className="af-label">Fornecedor / Origem da compra</label>
+              <label htmlFor="rec-fornecedor-origem-da-compra" className="af-label">
+                Fornecedor / Origem da compra
+              </label>
               <input
+                id="rec-fornecedor-origem-da-compra"
                 className="af-input"
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
@@ -862,8 +911,11 @@ export function RecordCreatePage() {
           {type === "OUTFLOW" && (
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Destino da produção</label>
+                <label htmlFor="rec-destino-da-producao" className="af-label">
+                  Destino da produção
+                </label>
                 <select
+                  id="rec-destino-da-producao"
                   className="af-select"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value as typeof destination)}
@@ -876,8 +928,11 @@ export function RecordCreatePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Comprador / Feira (opcional)</label>
+                <label htmlFor="rec-comprador-feira-opcional" className="af-label">
+                  Comprador / Feira (opcional)
+                </label>
                 <input
+                  id="rec-comprador-feira-opcional"
                   className="af-input"
                   value={buyerName}
                   onChange={(e) => setBuyerName(e.target.value)}
@@ -888,8 +943,11 @@ export function RecordCreatePage() {
           )}
 
           <div className="af-field">
-            <label className="af-label">Observações do manejo</label>
+            <label htmlFor="rec-observacoes-do-manejo" className="af-label">
+              Observações do manejo
+            </label>
             <textarea
+              id="rec-observacoes-do-manejo"
               className="af-textarea"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -1169,8 +1227,11 @@ export function RecordDetailPage() {
             }}
           >
             <div className="af-field">
-              <label className="af-label">Novo pedido de correção para o agricultor</label>
+              <label htmlFor="rec-novo-pedido-de-correcao" className="af-label">
+                Novo pedido de correção para o agricultor
+              </label>
               <textarea
+                id="rec-novo-pedido-de-correcao"
                 className="af-textarea"
                 value={correctionMsg}
                 onChange={(e) => setCorrectionMsg(e.target.value)}

@@ -1,5 +1,7 @@
 # Agrofácil: guia da API
 
+> **Nota de implementação (nov/2026):** o app do agricultor foi construído como **PWA** (Vite + React, em `apps/mobile`), e não em Expo / React Native. As partes que falam de Expo, SQLite, EAS e APK descrevem a proposta original. O que vale hoje está no [`apps/mobile/README.md`](../apps/mobile/README.md) e em [`CONTINUIDADE-DO-PROJETO.md`](CONTINUIDADE-DO-PROJETO.md). Os avisos ao agricultor aparecem só dentro do app: o push pelo Expo fica desligado (`PUSH_ENABLED=false`).
+
 Este guia leva do projeto vazio até a API completa do contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)) e depois até ela rodando, com HTTPS e backup. Ele assume que a equipe conhece Java e o básico de Spring. O que é específico do Agrofácil vem com código.
 
 > **Antes de começar:** leia o modelo e as RNs ([doc 1, Parte 2](1-arquitetura-e-contrato.md#parte-2-modelo-de-domínio-e-regras-de-negócio)), o contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)), a sincronização ([doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline)) e a segurança e LGPD ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)). Este guia mostra *como* implementar; o *quê* está lá.
@@ -154,6 +156,7 @@ app:
     refresh-max-ttl: P7D
   storage.dir: ${STORAGE_DIR:./data/files}
   mail.from: ${MAIL_FROM:Agrofácil <nao-responda@agrofacil.app>}
+  push.enabled: ${PUSH_ENABLED:false}      # desligado: o PWA mostra os avisos só dentro do app
   push.expo-access-token: ${EXPO_ACCESS_TOKEN:}
   bootstrap.coordinator-email: ${BOOTSTRAP_COORDINATOR_EMAIL:}
 
@@ -755,7 +758,7 @@ Habilite `@EnableScheduling` numa classe de configuração. Como há uma só ins
 
 #### 1.12.2 Notificações e push
 - `NotificationService.notify(userIds, type, title, body, data)` grava as linhas de `notification` e publica um evento `NotificationsCreated`.
-- O `ExpoPushSender` escuta com `@TransactionalEventListener(phase = AFTER_COMMIT)` + `@Async`. Ele busca os `push_token` dos aparelhos ativos e envia em lotes de até 100 para `POST https://exp.host/--/api/v2/push/send`:
+- O `ExpoPushSender` só existe com `app.push.enabled=true` (padrão: `false`, avisos só no app). Ele escuta com `@TransactionalEventListener(phase = AFTER_COMMIT)` + `@Async`. Ele busca os `push_token` dos aparelhos ativos e envia em lotes de até 100 para `POST https://exp.host/--/api/v2/push/send`:
 
 ```json
 [{ "to": "ExponentPushToken[xxxx]", "title": "Sua certificação vence em 30 dias",
@@ -1755,9 +1758,7 @@ Primeiro uso:
 1. `cp api/.env.example api/.env` e preencha o `JWT_SECRET` (`openssl rand -base64 48`) e o `BOOTSTRAP_COORDINATOR_EMAIL`.
 2. `cd api && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. O suporte a Docker Compose do Spring Boot sobe o Postgres e o Mailpit sozinho (o `docker compose -f infra/docker-compose.dev.yml up -d` continua valendo para subir à mão). O Flyway cria o banco, e o convite do primeiro coordenador aparece no Mailpit.
 3. `corepack pnpm install` na raiz (ou `corepack enable` uma vez e depois só `pnpm`), depois `pnpm gen:api` e `pnpm --filter @agrofacil/web dev`.
-4. Mobile:
-   1. copie `apps/mobile/.env.example` para `apps/mobile/.env` e defina `EXPO_PUBLIC_API_URL=http://<seu IP>:8080`;
-   2. rode `npx expo run:android` com o celular em modo desenvolvedor ou num emulador.
+4. Mobile (PWA): `pnpm --filter @agrofacil/mobile dev --host` e abra `http://<seu IP>:5174` no celular. O Vite repassa `/api` para a API. Para enviar fotos, o celular precisa de contexto seguro (HTTPS ou `localhost`).
 
 > **Android e HTTP:** o Android bloqueia HTTP sem TLS por padrão. No perfil de desenvolvimento, libere o tráfego em texto claro **só no build de desenvolvimento**, com o plugin `expo-build-properties` (`android.usesCleartextTraffic: true`). Os builds `preview` usam sempre HTTPS.
 

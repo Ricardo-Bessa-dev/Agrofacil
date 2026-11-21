@@ -1,5 +1,7 @@
 # Agrofácil: arquitetura, domínio e contrato API-front
 
+> **Nota de implementação (nov/2026):** o app do agricultor foi construído como **PWA** (Vite + React, em `apps/mobile`), e não em Expo / React Native. As partes que falam de Expo, SQLite, EAS e APK descrevem a proposta original. O que vale hoje está no [`apps/mobile/README.md`](../apps/mobile/README.md) e em [`CONTINUIDADE-DO-PROJETO.md`](CONTINUIDADE-DO-PROJETO.md). Os avisos ao agricultor aparecem só dentro do app: o push pelo Expo fica desligado (`PUSH_ENABLED=false`).
+
 O Agrofácil é o caderno de campo digital dos agricultores orgânicos de uma cooperativa que certifica pelo Sistema Participativo de Garantia (SPG), como núcleo regional de um OPAC. Ele tem duas partes:
 
 - **um app Android para o agricultor**, que registra o manejo exigido pela Portaria MAPA 52/2021 e funciona sem internet;
@@ -320,7 +322,7 @@ Cada ADR tem **contexto → decisão → consequências**. Os antigos nunca são
 - Plano de Manejo Orgânico estruturado: no MVP, é só um PDF anexado à propriedade.
 - Produção animal e apicultura.
 - Módulos financeiros.
-- App para iOS. O código Expo permite gerar depois.
+- App nativo para iOS. Como o app é um PWA, ele já abre no navegador do iPhone.
 - Chat dentro do app.
 
 ### 1.8 Pendências **[confirmar]** com a associação

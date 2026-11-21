@@ -12,6 +12,7 @@ import {
 import { api, fetchMobileRecordDetail, uploadRecordPhoto } from "../api/client";
 import { generateUuid } from "../api/uuid";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
+import { onActivateKey } from "../a11y";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
 
@@ -534,16 +535,24 @@ export function NewRecordPage() {
         {/* Escolha do Tipo de Manejo (bloqueado na edição pois a API não permite trocar o subtipo) */}
         {!isEditMode && (
           <div style={{ marginBottom: "20px" }}>
-            <label className="form-label" style={{ marginBottom: "10px" }}>
+            <span className="form-label" id="record-type-label" style={{ marginBottom: "10px" }}>
               Tipo de Atividade / Manejo
-            </label>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="record-type-label"
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
               {RECORD_TYPES.map((t) => {
                 const isSelected = selectedType === t.type;
                 return (
                   <div
                     key={t.type}
+                    role="radio"
+                    aria-checked={isSelected}
+                    tabIndex={0}
                     onClick={() => setSelectedType(t.type)}
+                    onKeyDown={onActivateKey(() => setSelectedType(t.type))}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -793,9 +802,12 @@ export function NewRecordPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Área Plantada</label>
+                <label htmlFor="newrecord-area-plantada" className="form-label">
+                  Área Plantada
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-area-plantada"
                     type="number"
                     step="any"
                     placeholder="Ex: 500"
@@ -955,9 +967,12 @@ export function NewRecordPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Quantidade / Dose Aplicada</label>
+                <label htmlFor="newrecord-quantidade-dose-aplicada" className="form-label">
+                  Quantidade / Dose Aplicada
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade-dose-aplicada"
                     type="number"
                     step="any"
                     placeholder="Ex: 20"
@@ -1004,9 +1019,12 @@ export function NewRecordPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Quantidade Colhida</label>
+                <label htmlFor="newrecord-quantidade-colhida" className="form-label">
+                  Quantidade Colhida
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade-colhida"
                     type="number"
                     step="any"
                     placeholder="Ex: 150"
@@ -1094,9 +1112,12 @@ export function NewRecordPage() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Quantidade Comprada</label>
+                <label htmlFor="newrecord-quantidade-comprada" className="form-label">
+                  Quantidade Comprada
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade-comprada"
                     type="number"
                     step="any"
                     placeholder="Ex: 5"
@@ -1182,9 +1203,12 @@ export function NewRecordPage() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Quantidade</label>
+                <label htmlFor="newrecord-quantidade" className="form-label">
+                  Quantidade
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade"
                     type="number"
                     step="any"
                     placeholder="Ex: 50"

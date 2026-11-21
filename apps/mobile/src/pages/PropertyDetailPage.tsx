@@ -1,14 +1,21 @@
+// Detalhe de uma propriedade do agricultor: áreas, trabalhadores e edição dos dados básicos.
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import {
+  AREA_ROUNDING_TOLERANCE_M2,
+  DEFAULT_TAREFA_M2,
   formatArea,
+  fromSquareMeters,
+  plotsOccupiedM2,
   PLOT_STATUS_LABELS,
+  toSquareMeters,
   WORKER_RELATIONSHIP_LABELS,
   type AreaUnitCode,
 } from "@agrofacil/domain";
 import { api, upsertFarmerProperty } from "../api/client";
-import propertyImg1 from "../assets/figma/property-placeholder-1.png";
+import { useAuth } from "../auth/useAuth";
+import propertyImg1 from "../assets/figma/property-placeholder-1.webp";
 import statusOkIcon from "../assets/figma/status-ok.svg";
 
 export function PropertyDetailPage() {
@@ -52,6 +59,15 @@ export function PropertyDetailPage() {
   const property = propertyQuery.data;
   const plots = plotsQuery.data ?? property?.plots ?? [];
   const workers = property?.workers ?? [];
+  const { user } = useAuth();
+  const tarefaM2 = user?.association?.tarefaM2 ?? DEFAULT_TAREFA_M2;
+  // RN41: a propriedade não pode ficar menor que as áreas cadastradas pela coordenação.
+  const occupiedM2 = plotsOccupiedM2(property?.totalArea, plots);
+  const typedArea = Number(areaVal);
+  const areaTooSmall =
+    occupiedM2 > 0 &&
+    typedArea > 0 &&
+    toSquareMeters(typedArea, areaUnit, tarefaM2) + AREA_ROUNDING_TOLERANCE_M2 < occupiedM2;
 
   const openEditForm = () => {
     if (!property) return;
@@ -65,7 +81,7 @@ export function PropertyDetailPage() {
 
   const handleSaveProperty = async (e: FormEvent) => {
     e.preventDefault();
-    if (!property?.id || !property.name) return;
+    if (!property?.id || !property.name || areaTooSmall) return;
     setSaving(true);
     setSaveFeedback(null);
     try {
@@ -271,9 +287,14 @@ export function PropertyDetailPage() {
           {editing ? (
             <form onSubmit={handleSaveProperty} style={{ marginTop: "8px" }}>
               <div className="form-group">
-                <label className="form-label">Área Total da Propriedade</label>
+                <label className="form-label" htmlFor="property-area">
+                  Área Total da Propriedade
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="property-area"
+                    aria-invalid={areaTooSmall}
+                    aria-describedby={occupiedM2 > 0 ? "property-area-hint" : undefined}
                     type="number"
                     step="any"
                     value={areaVal}
@@ -282,6 +303,7 @@ export function PropertyDetailPage() {
                     style={{ flex: 2 }}
                   />
                   <select
+                    aria-label="Unidade da área"
                     value={areaUnit}
                     onChange={(e) => setAreaUnit(e.target.value as AreaUnitCode)}
                     className="form-select"
@@ -292,11 +314,35 @@ export function PropertyDetailPage() {
                     <option value="SQUARE_METER">m²</option>
                   </select>
                 </div>
+                {occupiedM2 > 0 && (
+                  <div
+                    id="property-area-hint"
+                    role={areaTooSmall ? "alert" : undefined}
+                    style={{
+                      fontSize: "13px",
+                      marginTop: "6px",
+                      color: areaTooSmall ? "#b42318" : "var(--color-text-secondary)",
+                    }}
+                  >
+                    {areaTooSmall
+                      ? "A propriedade não pode ser menor que as áreas cadastradas. "
+                      : ""}
+                    As áreas da propriedade já ocupam{" "}
+                    {formatArea({
+                      value: fromSquareMeters(occupiedM2, areaUnit, tarefaM2),
+                      unit: areaUnit,
+                    })}
+                    .{areaTooSmall ? " Fale com a coordenação para ajustar as áreas." : ""}
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
-                <label className="form-label">Descrição da Produção e Talhões</label>
+                <label htmlFor="propertydetail-descricao-da-producao-e" className="form-label">
+                  Descrição da Produção e Talhões
+                </label>
                 <input
+                  id="propertydetail-descricao-da-producao-e"
                   type="text"
                   value={prodDesc}
                   onChange={(e) => setProdDesc(e.target.value)}
@@ -306,8 +352,11 @@ export function PropertyDetailPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Roteiro de Acesso (para visitas do SPG)</label>
+                <label htmlFor="propertydetail-roteiro-de-acesso-para" className="form-label">
+                  Roteiro de Acesso (para visitas do SPG)
+                </label>
                 <textarea
+                  id="propertydetail-roteiro-de-acesso-para"
                   rows={2}
                   value={accessDir}
                   onChange={(e) => setAccessDir(e.target.value)}
@@ -325,7 +374,12 @@ export function PropertyDetailPage() {
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn-primary" disabled={saving} style={{ flex: 1 }}>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={saving || areaTooSmall}
+                  style={{ flex: 1 }}
+                >
                   {saving ? "Salvando..." : "Salvar"}
                 </button>
               </div>

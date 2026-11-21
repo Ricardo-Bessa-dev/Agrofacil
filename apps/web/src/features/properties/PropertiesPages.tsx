@@ -19,11 +19,12 @@ import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
 import { fetchAllPages } from "../../api/pagination";
 import { fetchMunicipalities } from "../../api/municipalities";
 import { CertificationStatusBadge } from "../../components/StatusBadge";
-import propertyImg1 from "../../assets/figma/property-placeholder-1.png";
-import propertyImg2 from "../../assets/figma/property-placeholder-2.png";
+import propertyImg1 from "../../assets/figma/property-placeholder-1.webp";
+import propertyImg2 from "../../assets/figma/property-placeholder-2.webp";
 import iconMapPin from "../../assets/figma/icon-map-pin.svg";
 import iconFarm from "../../assets/figma/icon-farm.svg";
 import iconArrowRight from "../../assets/figma/icon-arrow-right.svg";
+import { Pagination } from "../../components/Pagination";
 
 export function PropertiesListPage() {
   const [searchParams] = useSearchParams();
@@ -351,30 +352,8 @@ export function PropertiesListPage() {
         </div>
       )}
 
-      {meta && (meta.totalPages ?? 1) > 1 && viewMode !== "map" && (
-        <div className="af-pagination" style={{ marginTop: 16 }}>
-          <span>
-            Página {(meta.number ?? 0) + 1} de {meta.totalPages} ({meta.totalElements} propriedades)
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="af-btn af-btn--outline af-btn--sm"
-              disabled={page <= 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              className="af-btn af-btn--outline af-btn--sm"
-              disabled={page + 1 >= (meta.totalPages ?? 1)}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
+      {viewMode !== "map" && (
+        <Pagination meta={meta} onPageChange={setPage} itemsLabel="propriedades" />
       )}
 
       {showCreateModal && (
@@ -476,8 +455,11 @@ function CreatePropertyModal({
           )}
           <form className="af-form-grid" onSubmit={handleSubmit}>
             <div className="af-field">
-              <label className="af-label">Agricultor responsável *</label>
+              <label htmlFor="prop-agricultor-responsavel" className="af-label">
+                Agricultor responsável *
+              </label>
               <select
+                id="prop-agricultor-responsavel"
                 className="af-select"
                 value={farmerId}
                 onChange={(e) => setFarmerId(e.target.value)}
@@ -493,8 +475,11 @@ function CreatePropertyModal({
             </div>
 
             <div className="af-field">
-              <label className="af-label">Nome da propriedade / sítio *</label>
+              <label htmlFor="prop-nome-da-propriedade-sitio" className="af-label">
+                Nome da propriedade / sítio *
+              </label>
               <input
+                id="prop-nome-da-propriedade-sitio"
                 className="af-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -505,8 +490,11 @@ function CreatePropertyModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Área total</label>
+                <label htmlFor="prop-area-total" className="af-label">
+                  Área total
+                </label>
                 <input
+                  id="prop-area-total"
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -517,8 +505,11 @@ function CreatePropertyModal({
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Unidade de medida</label>
+                <label htmlFor="prop-unidade-de-medida" className="af-label">
+                  Unidade de medida
+                </label>
                 <select
+                  id="prop-unidade-de-medida"
                   className="af-select"
                   value={areaUnit}
                   onChange={(e) => setAreaUnit(e.target.value as typeof areaUnit)}
@@ -534,8 +525,11 @@ function CreatePropertyModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">UF</label>
+                <label htmlFor="prop-uf" className="af-label">
+                  UF
+                </label>
                 <select
+                  id="prop-uf"
                   className="af-select"
                   value={uf}
                   onChange={(e) => {
@@ -550,8 +544,11 @@ function CreatePropertyModal({
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Município</label>
+                <label htmlFor="prop-municipio" className="af-label">
+                  Município
+                </label>
                 <select
+                  id="prop-municipio"
                   className="af-select"
                   value={municipalityId}
                   onChange={(e) => setMunicipalityId(e.target.value)}
@@ -565,8 +562,11 @@ function CreatePropertyModal({
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Comunidade / Povoado</label>
+                <label htmlFor="prop-comunidade-povoado" className="af-label">
+                  Comunidade / Povoado
+                </label>
                 <input
+                  id="prop-comunidade-povoado"
                   className="af-input"
                   value={locality}
                   onChange={(e) => setLocality(e.target.value)}
@@ -577,8 +577,11 @@ function CreatePropertyModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Latitude (opcional)</label>
+                <label htmlFor="prop-latitude-opcional" className="af-label">
+                  Latitude (opcional)
+                </label>
                 <input
+                  id="prop-latitude-opcional"
                   type="number"
                   step="any"
                   className="af-input"
@@ -588,8 +591,11 @@ function CreatePropertyModal({
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Longitude (opcional)</label>
+                <label htmlFor="prop-longitude-opcional" className="af-label">
+                  Longitude (opcional)
+                </label>
                 <input
+                  id="prop-longitude-opcional"
                   type="number"
                   step="any"
                   className="af-input"
@@ -601,8 +607,11 @@ function CreatePropertyModal({
             </div>
 
             <div className="af-field">
-              <label className="af-label">Descrição da produção</label>
+              <label htmlFor="prop-descricao-da-producao" className="af-label">
+                Descrição da produção
+              </label>
               <input
+                id="prop-descricao-da-producao"
                 className="af-input"
                 value={productionDescription}
                 onChange={(e) => setProductionDescription(e.target.value)}
@@ -611,8 +620,11 @@ function CreatePropertyModal({
             </div>
 
             <div className="af-field">
-              <label className="af-label">Roteiro de acesso</label>
+              <label htmlFor="prop-roteiro-de-acesso" className="af-label">
+                Roteiro de acesso
+              </label>
               <textarea
+                id="prop-roteiro-de-acesso"
                 className="af-textarea"
                 value={accessDirections}
                 onChange={(e) => setAccessDirections(e.target.value)}
@@ -1128,8 +1140,11 @@ export function PropertyDetailPage() {
               }}
             >
               <div className="af-field">
-                <label className="af-label">Nome completo *</label>
+                <label htmlFor="prop-nome-completo" className="af-label">
+                  Nome completo *
+                </label>
                 <input
+                  id="prop-nome-completo"
                   className="af-input"
                   value={workerName}
                   onChange={(e) => setWorkerName(e.target.value)}
@@ -1138,8 +1153,11 @@ export function PropertyDetailPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Vínculo com a unidade familiar</label>
+                <label htmlFor="prop-vinculo-com-a-unidade" className="af-label">
+                  Vínculo com a unidade familiar
+                </label>
                 <select
+                  id="prop-vinculo-com-a-unidade"
                   className="af-select"
                   value={workerRelation}
                   onChange={(e) => setWorkerRelation(e.target.value as typeof workerRelation)}

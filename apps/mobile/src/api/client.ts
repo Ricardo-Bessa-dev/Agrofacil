@@ -16,7 +16,7 @@ import type {
   RecordView,
   SessionResponse,
 } from "@agrofacil/api-types";
-import { BAHIA_MUNICIPALITIES } from "../../../web/src/api/municipalities";
+import { BAHIA_MUNICIPALITIES } from "@agrofacil/domain";
 import { generateUuid } from "./uuid";
 import {
   deletePendingPhoto,

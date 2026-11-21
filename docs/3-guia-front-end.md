@@ -1,5 +1,7 @@
 # Agrofácil: guia do front-end
 
+> **Nota de implementação (nov/2026):** o app do agricultor foi construído como **PWA** (Vite + React, em `apps/mobile`), e não em Expo / React Native. As partes que falam de Expo, SQLite, EAS e APK descrevem a proposta original. O que vale hoje está no [`apps/mobile/README.md`](../apps/mobile/README.md) e em [`CONTINUIDADE-DO-PROJETO.md`](CONTINUIDADE-DO-PROJETO.md). Os avisos ao agricultor aparecem só dentro do app: o push pelo Expo fica desligado (`PUSH_ENABLED=false`).
+
 O front tem dois apps no mesmo monorepo. Este guia está dividido assim:
 
 - **[Parte A](#parte-a-experiência-do-agricultor-ux): a experiência do agricultor (UX).** Telas, textos, acessibilidade e testes com agricultores. Define *o que* o app mostra.

@@ -18,6 +18,10 @@ import {
 import type { GenerateDocumentRequest, ParticipantWrite } from "@agrofacil/api-types";
 import { api, ApiProblemError, downloadFile, normalizePhoneE164, unwrap } from "../../api/client";
 import { fetchAllPages } from "../../api/pagination";
+import { Pagination } from "../../components/Pagination";
+
+/** Itens por página nas listas de visitas e documentos. */
+const LIST_PAGE_SIZE = 20;
 
 export function VisitsPage() {
   const [searchParams] = useSearchParams();
@@ -28,16 +32,18 @@ export function VisitsPage() {
     initialPropertyId || null,
   );
   const [resultVisitId, setResultVisitId] = useState<string | null>(null);
+  const [statusPage, setStatusPage] = useState(0);
+  const [visitsPage, setVisitsPage] = useState(0);
 
   const statusQuery = useQuery({
-    queryKey: ["visits", "status"],
+    queryKey: ["visits", "status", statusPage],
     enabled: tab === "status",
     queryFn: () =>
       unwrap(
         api.GET("/visits/status", {
           params: {
             query: {
-              pageable: { page: 0, size: 30 },
+              pageable: { page: statusPage, size: LIST_PAGE_SIZE },
             },
           },
         }),
@@ -45,7 +51,7 @@ export function VisitsPage() {
   });
 
   const visitsQuery = useQuery({
-    queryKey: ["visits", "list"],
+    queryKey: ["visits", "list", visitsPage],
     enabled: tab === "list",
     queryFn: () =>
       unwrap(
@@ -53,7 +59,7 @@ export function VisitsPage() {
           params: {
             query: {
               filter: {},
-              pageable: { page: 0, size: 30, sort: ["plannedOn,desc"] },
+              pageable: { page: visitsPage, size: LIST_PAGE_SIZE, sort: ["plannedOn,desc"] },
             },
           },
         }),
@@ -183,6 +189,11 @@ export function VisitsPage() {
               </table>
             </div>
           )}
+          <Pagination
+            meta={statusQuery.data?.page}
+            onPageChange={setStatusPage}
+            itemsLabel="propriedades"
+          />
         </div>
       )}
 
@@ -268,6 +279,11 @@ export function VisitsPage() {
               </table>
             </div>
           )}
+          <Pagination
+            meta={visitsQuery.data?.page}
+            onPageChange={setVisitsPage}
+            itemsLabel="visitas"
+          />
         </div>
       )}
 
@@ -392,8 +408,11 @@ function ScheduleVisitModal({
           )}
           <form className="af-form-grid" onSubmit={handleSubmit}>
             <div className="af-field">
-              <label className="af-label">Propriedade a visitar *</label>
+              <label htmlFor="spg-propriedade-a-visitar" className="af-label">
+                Propriedade a visitar *
+              </label>
               <select
+                id="spg-propriedade-a-visitar"
                 className="af-select"
                 value={propertyId}
                 onChange={(e) => {
@@ -413,8 +432,11 @@ function ScheduleVisitModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Tipo de visita *</label>
+                <label htmlFor="spg-tipo-de-visita" className="af-label">
+                  Tipo de visita *
+                </label>
                 <select
+                  id="spg-tipo-de-visita"
                   className="af-select"
                   value={type}
                   onChange={(e) => {
@@ -427,8 +449,11 @@ function ScheduleVisitModal({
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Data planejada *</label>
+                <label htmlFor="spg-data-planejada" className="af-label">
+                  Data planejada *
+                </label>
                 <input
+                  id="spg-data-planejada"
                   type="date"
                   className="af-input"
                   value={plannedOn}
@@ -453,9 +478,9 @@ function ScheduleVisitModal({
 
             {propertyId && (
               <div className="af-field">
-                <label className="af-label">
+                <span className="af-label">
                   Sugestão inteligente de visitantes (RN33 — proximidade e rodízio)
-                </label>
+                </span>
                 {suggestQuery.isLoading ? (
                   <div style={{ fontSize: "0.85rem", color: "var(--af-text-secondary)" }}>
                     Calculando visitantes elegíveis...
@@ -618,8 +643,11 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
           )}
           <form className="af-form-grid" onSubmit={handleSubmit}>
             <div className="af-field">
-              <label className="af-label">Data de realização *</label>
+              <label htmlFor="spg-data-de-realizacao" className="af-label">
+                Data de realização *
+              </label>
               <input
+                id="spg-data-de-realizacao"
                 type="date"
                 className="af-input"
                 value={doneOn}
@@ -642,8 +670,11 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
 
             {issuesFound && (
               <div className="af-field">
-                <label className="af-label">Pontos a melhorar *</label>
+                <label htmlFor="spg-pontos-a-melhorar" className="af-label">
+                  Pontos a melhorar *
+                </label>
                 <textarea
+                  id="spg-pontos-a-melhorar"
                   className="af-textarea"
                   value={improvementPoints}
                   onChange={(e) => setImprovementPoints(e.target.value)}
@@ -653,8 +684,11 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
             )}
 
             <div className="af-field">
-              <label className="af-label">Recomendações ao agricultor</label>
+              <label htmlFor="spg-recomendacoes-ao-agricultor" className="af-label">
+                Recomendações ao agricultor
+              </label>
               <textarea
+                id="spg-recomendacoes-ao-agricultor"
                 className="af-textarea"
                 value={recommendations}
                 onChange={(e) => setRecommendations(e.target.value)}
@@ -662,8 +696,11 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
             </div>
 
             <div className="af-field">
-              <label className="af-label">Observações gerais da ata</label>
+              <label htmlFor="spg-observacoes-gerais-da-ata" className="af-label">
+                Observações gerais da ata
+              </label>
               <textarea
+                id="spg-observacoes-gerais-da-ata"
                 className="af-textarea"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -697,15 +734,16 @@ export function DocumentsPage() {
   const [verifyResult, setVerifyResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [docsPage, setDocsPage] = useState(0);
   const docsQuery = useQuery({
-    queryKey: ["documents"],
+    queryKey: ["documents", docsPage],
     queryFn: () =>
       unwrap(
         api.GET("/documents", {
           params: {
             query: {
               filter: {},
-              pageable: { page: 0, size: 25 },
+              pageable: { page: docsPage, size: LIST_PAGE_SIZE },
             },
           },
         }),
@@ -825,8 +863,11 @@ export function DocumentsPage() {
             }}
           >
             <div className="af-field">
-              <label className="af-label">Modelo de documento (D1 a D8) *</label>
+              <label htmlFor="spg-modelo-de-documento-d1" className="af-label">
+                Modelo de documento (D1 a D8) *
+              </label>
               <select
+                id="spg-modelo-de-documento-d1"
                 className="af-select"
                 value={kind}
                 onChange={(e) => setKind(e.target.value as GenerateDocumentRequest["kind"])}
@@ -842,8 +883,11 @@ export function DocumentsPage() {
             {kind === "MEMBERSHIP_REQUEST" && (
               <div className="af-form-row">
                 <div className="af-field">
-                  <label className="af-label">Agricultor *</label>
+                  <label htmlFor="spg-agricultor" className="af-label">
+                    Agricultor *
+                  </label>
                   <select
+                    id="spg-agricultor"
                     className="af-select"
                     value={farmerId}
                     onChange={(e) => setFarmerId(e.target.value)}
@@ -858,8 +902,11 @@ export function DocumentsPage() {
                   </select>
                 </div>
                 <div className="af-field">
-                  <label className="af-label">Propriedade *</label>
+                  <label htmlFor="spg-propriedade" className="af-label">
+                    Propriedade *
+                  </label>
                   <select
+                    id="spg-propriedade"
                     className="af-select"
                     value={propertyId}
                     onChange={(e) => setPropertyId(e.target.value)}
@@ -878,8 +925,11 @@ export function DocumentsPage() {
 
             {kind === "CONFORMITY_DECISION" && (
               <div className="af-field">
-                <label className="af-label">Propriedade *</label>
+                <label htmlFor="spg-propriedade-2" className="af-label">
+                  Propriedade *
+                </label>
                 <select
+                  id="spg-propriedade-2"
                   className="af-select"
                   value={propertyId}
                   onChange={(e) => setPropertyId(e.target.value)}
@@ -897,8 +947,11 @@ export function DocumentsPage() {
 
             {(kind === "EVALUATION_REQUEST" || kind === "VISIT_PLAN") && (
               <div className="af-field">
-                <label className="af-label">Grupo SPG *</label>
+                <label htmlFor="spg-grupo-spg" className="af-label">
+                  Grupo SPG *
+                </label>
                 <select
+                  id="spg-grupo-spg"
                   className="af-select"
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
@@ -918,8 +971,11 @@ export function DocumentsPage() {
               kind === "PEER_VISIT_RECORD" ||
               kind === "VERIFICATION_REPORT") && (
               <div className="af-field">
-                <label className="af-label">Visita *</label>
+                <label htmlFor="spg-visita" className="af-label">
+                  Visita *
+                </label>
                 <select
+                  id="spg-visita"
                   className="af-select"
                   value={visitId}
                   onChange={(e) => setVisitId(e.target.value)}
@@ -938,8 +994,11 @@ export function DocumentsPage() {
 
             {kind === "CERTIFICATE" && (
               <div className="af-field">
-                <label className="af-label">Certificação *</label>
+                <label htmlFor="spg-certificacao" className="af-label">
+                  Certificação *
+                </label>
                 <select
+                  id="spg-certificacao"
                   className="af-select"
                   value={certificationId}
                   onChange={(e) => setCertificationId(e.target.value)}
@@ -974,8 +1033,11 @@ export function DocumentsPage() {
           </p>
           <form className="af-form-grid" onSubmit={handleVerify}>
             <div className="af-field">
-              <label className="af-label">Código de verificação</label>
+              <label htmlFor="spg-codigo-de-verificacao" className="af-label">
+                Código de verificação
+              </label>
               <input
+                id="spg-codigo-de-verificacao"
                 className="af-input"
                 value={verifyCode}
                 onChange={(e) => setVerifyCode(e.target.value)}
@@ -1060,6 +1122,11 @@ export function DocumentsPage() {
             </table>
           </div>
         )}
+        <Pagination
+          meta={docsQuery.data?.page}
+          onPageChange={setDocsPage}
+          itemsLabel="documentos"
+        />
       </div>
     </div>
   );
@@ -1262,8 +1329,11 @@ export function SpgPeoplePage() {
               }}
             >
               <div className="af-field">
-                <label className="af-label">Agricultor *</label>
+                <label htmlFor="spg-agricultor-2" className="af-label">
+                  Agricultor *
+                </label>
                 <select
+                  id="spg-agricultor-2"
                   className="af-select"
                   value={commFarmerId}
                   onChange={(e) => setCommFarmerId(e.target.value)}
@@ -1278,8 +1348,11 @@ export function SpgPeoplePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Grupo representado *</label>
+                <label htmlFor="spg-grupo-representado" className="af-label">
+                  Grupo representado *
+                </label>
                 <select
+                  id="spg-grupo-representado"
                   className="af-select"
                   value={commGroupId}
                   onChange={(e) => setCommGroupId(e.target.value)}
@@ -1294,8 +1367,11 @@ export function SpgPeoplePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Papel</label>
+                <label htmlFor="spg-papel" className="af-label">
+                  Papel
+                </label>
                 <select
+                  id="spg-papel"
                   className="af-select"
                   value={commRole}
                   onChange={(e) => setCommRole(e.target.value as "HOLDER" | "ALTERNATE")}
@@ -1361,8 +1437,11 @@ export function SpgPeoplePage() {
               }}
             >
               <div className="af-field">
-                <label className="af-label">Nome completo *</label>
+                <label htmlFor="spg-nome-completo" className="af-label">
+                  Nome completo *
+                </label>
                 <input
+                  id="spg-nome-completo"
                   className="af-input"
                   value={collabName}
                   onChange={(e) => setCollabName(e.target.value)}
@@ -1370,8 +1449,11 @@ export function SpgPeoplePage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Perfil *</label>
+                <label htmlFor="spg-perfil" className="af-label">
+                  Perfil *
+                </label>
                 <select
+                  id="spg-perfil"
                   className="af-select"
                   value={collabKind}
                   onChange={(e) => setCollabKind(e.target.value as typeof collabKind)}
@@ -1384,8 +1466,11 @@ export function SpgPeoplePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Instituição / Organização</label>
+                <label htmlFor="spg-instituicao-organizacao" className="af-label">
+                  Instituição / Organização
+                </label>
                 <input
+                  id="spg-instituicao-organizacao"
                   className="af-input"
                   value={collabOrg}
                   onChange={(e) => setCollabOrg(e.target.value)}
@@ -1393,8 +1478,11 @@ export function SpgPeoplePage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Telefone</label>
+                <label htmlFor="spg-telefone" className="af-label">
+                  Telefone
+                </label>
                 <input
+                  id="spg-telefone"
                   className="af-input"
                   value={collabPhone}
                   onChange={(e) => setCollabPhone(e.target.value)}
@@ -1470,8 +1558,11 @@ export function SpgPeoplePage() {
               }}
             >
               <div className="af-field">
-                <label className="af-label">Agricultor A *</label>
+                <label htmlFor="spg-agricultor-a" className="af-label">
+                  Agricultor A *
+                </label>
                 <select
+                  id="spg-agricultor-a"
                   className="af-select"
                   value={farmerAId}
                   onChange={(e) => setFarmerAId(e.target.value)}
@@ -1486,8 +1577,11 @@ export function SpgPeoplePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Agricultor B *</label>
+                <label htmlFor="spg-agricultor-b" className="af-label">
+                  Agricultor B *
+                </label>
                 <select
+                  id="spg-agricultor-b"
                   className="af-select"
                   value={farmerBId}
                   onChange={(e) => setFarmerBId(e.target.value)}
@@ -1502,8 +1596,11 @@ export function SpgPeoplePage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Motivo do impedimento *</label>
+                <label htmlFor="spg-motivo-do-impedimento" className="af-label">
+                  Motivo do impedimento *
+                </label>
                 <select
+                  id="spg-motivo-do-impedimento"
                   className="af-select"
                   value={conflictReason}
                   onChange={(e) => setConflictReason(e.target.value as typeof conflictReason)}

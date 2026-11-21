@@ -1,6 +1,12 @@
 // Testa o cálculo da área livre da propriedade e se uma nova área cabe nela (RN41).
 import { describe, expect, it } from "vitest";
-import { freePropertyAreaM2, fromSquareMeters, plotFitsInProperty } from "./plotArea";
+import {
+  freePropertyAreaM2,
+  fromSquareMeters,
+  MAIN_PLOT_NAME,
+  plotFitsInProperty,
+  plotsOccupiedM2,
+} from "./plotArea";
 
 const TAREFA = 4356;
 const total = { value: 4, unit: "TAREFA", m2: 4 * TAREFA };
@@ -43,5 +49,16 @@ describe("fromSquareMeters", () => {
     expect(fromSquareMeters(25000, "HECTARE", TAREFA)).toBe(2.5);
     expect(fromSquareMeters(2 * TAREFA, "TAREFA", TAREFA)).toBe(2);
     expect(fromSquareMeters(300, "SQUARE_METER", TAREFA)).toBe(300);
+  });
+});
+
+describe("plotsOccupiedM2", () => {
+  it("não limita quando só existe a Área principal do tamanho da propriedade", () => {
+    const main = { name: MAIN_PLOT_NAME, area: { m2: 4 * TAREFA } };
+    expect(plotsOccupiedM2(total, [main])).toBe(0);
+  });
+
+  it("soma as áreas quando elas já foram divididas", () => {
+    expect(plotsOccupiedM2(total, plots)).toBe(3 * TAREFA);
   });
 });

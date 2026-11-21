@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { formatArea } from "@agrofacil/domain";
 import { api } from "../api/client";
-import propertyImg1 from "../assets/figma/property-placeholder-1.png";
-import propertyImg2 from "../assets/figma/property-placeholder-2.png";
+import propertyImg1 from "../assets/figma/property-placeholder-1.webp";
+import propertyImg2 from "../assets/figma/property-placeholder-2.webp";
 import statusOkIcon from "../assets/figma/status-ok.svg";
 
 export function PropertiesPage() {

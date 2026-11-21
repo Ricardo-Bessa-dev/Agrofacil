@@ -12,6 +12,10 @@ import {
 } from "@agrofacil/domain";
 import { api, ApiProblemError, downloadFile, normalizePhoneE164, unwrap } from "../../api/client";
 import { fetchAllPages } from "../../api/pagination";
+import { Pagination } from "../../components/Pagination";
+
+/** Comunicados por página. */
+const ANNOUNCEMENTS_PAGE_SIZE = 20;
 
 export function AnnouncementsPage() {
   const queryClient = useQueryClient();
@@ -19,13 +23,18 @@ export function AnnouncementsPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [groupId, setGroupId] = useState("");
+  const [page, setPage] = useState(0);
 
   const listQuery = useQuery({
-    queryKey: ["announcements"],
+    queryKey: ["announcements", page],
     queryFn: () =>
       unwrap(
         api.GET("/announcements", {
-          params: { query: { pageable: { page: 0, size: 25, sort: ["publishedAt,desc"] } } },
+          params: {
+            query: {
+              pageable: { page, size: ANNOUNCEMENTS_PAGE_SIZE, sort: ["publishedAt,desc"] },
+            },
+          },
         }),
       ),
   });
@@ -87,8 +96,11 @@ export function AnnouncementsPage() {
           >
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Tipo *</label>
+                <label htmlFor="mgmt-tipo" className="af-label">
+                  Tipo *
+                </label>
                 <select
+                  id="mgmt-tipo"
                   className="af-select"
                   value={type}
                   onChange={(e) => setType(e.target.value as "NOTICE" | "TIP")}
@@ -101,8 +113,11 @@ export function AnnouncementsPage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Público-alvo</label>
+                <label htmlFor="mgmt-publico-alvo" className="af-label">
+                  Público-alvo
+                </label>
                 <select
+                  id="mgmt-publico-alvo"
                   className="af-select"
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
@@ -118,8 +133,11 @@ export function AnnouncementsPage() {
             </div>
 
             <div className="af-field">
-              <label className="af-label">Título *</label>
+              <label htmlFor="mgmt-titulo" className="af-label">
+                Título *
+              </label>
               <input
+                id="mgmt-titulo"
                 className="af-input"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -129,8 +147,11 @@ export function AnnouncementsPage() {
             </div>
 
             <div className="af-field">
-              <label className="af-label">Mensagem *</label>
+              <label htmlFor="mgmt-mensagem" className="af-label">
+                Mensagem *
+              </label>
               <textarea
+                id="mgmt-mensagem"
                 className="af-textarea"
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
@@ -209,6 +230,7 @@ export function AnnouncementsPage() {
               ))}
             </div>
           )}
+          <Pagination meta={listQuery.data?.page} onPageChange={setPage} itemsLabel="comunicados" />
         </div>
       </div>
     </div>
@@ -405,8 +427,11 @@ export function CatalogPage() {
               }}
             >
               <div className="af-field">
-                <label className="af-label">Nome da cultura *</label>
+                <label htmlFor="mgmt-nome-da-cultura" className="af-label">
+                  Nome da cultura *
+                </label>
                 <input
+                  id="mgmt-nome-da-cultura"
                   className="af-input"
                   value={cropName}
                   onChange={(e) => setCropName(e.target.value)}
@@ -415,8 +440,11 @@ export function CatalogPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Categoria</label>
+                <label htmlFor="mgmt-categoria" className="af-label">
+                  Categoria
+                </label>
                 <select
+                  id="mgmt-categoria"
                   className="af-select"
                   value={cropCategoryId}
                   onChange={(e) => setCropCategoryId(e.target.value)}
@@ -483,8 +511,11 @@ export function CatalogPage() {
               }}
             >
               <div className="af-field">
-                <label className="af-label">Nome do insumo *</label>
+                <label htmlFor="mgmt-nome-do-insumo" className="af-label">
+                  Nome do insumo *
+                </label>
                 <input
+                  id="mgmt-nome-do-insumo"
                   className="af-input"
                   value={inputName}
                   onChange={(e) => setInputName(e.target.value)}
@@ -493,8 +524,11 @@ export function CatalogPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Classificação *</label>
+                <label htmlFor="mgmt-classificacao" className="af-label">
+                  Classificação *
+                </label>
                 <select
+                  id="mgmt-classificacao"
                   className="af-select"
                   value={inputType}
                   onChange={(e) => setInputType(e.target.value as typeof inputType)}
@@ -690,8 +724,11 @@ export function ReportsPage() {
           </p>
           <div className="af-form-grid">
             <div className="af-field">
-              <label className="af-label">Propriedade *</label>
+              <label htmlFor="mgmt-propriedade" className="af-label">
+                Propriedade *
+              </label>
               <select
+                id="mgmt-propriedade"
                 className="af-select"
                 value={propertyId}
                 onChange={(e) => setPropertyId(e.target.value)}
@@ -706,8 +743,11 @@ export function ReportsPage() {
             </div>
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Período inicial (opcional)</label>
+                <label htmlFor="mgmt-periodo-inicial-opcional" className="af-label">
+                  Período inicial (opcional)
+                </label>
                 <input
+                  id="mgmt-periodo-inicial-opcional"
                   type="date"
                   className="af-input"
                   value={from}
@@ -715,8 +755,11 @@ export function ReportsPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Período final (opcional)</label>
+                <label htmlFor="mgmt-periodo-final-opcional" className="af-label">
+                  Período final (opcional)
+                </label>
                 <input
+                  id="mgmt-periodo-final-opcional"
                   type="date"
                   className="af-input"
                   value={to}
@@ -981,8 +1024,11 @@ export function SettingsPage() {
             }}
           >
             <div className="af-field">
-              <label className="af-label">Nome da Associação *</label>
+              <label htmlFor="mgmt-nome-da-associacao" className="af-label">
+                Nome da Associação *
+              </label>
               <input
+                id="mgmt-nome-da-associacao"
                 className="af-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -990,10 +1036,11 @@ export function SettingsPage() {
               />
             </div>
             <div className="af-field">
-              <label className="af-label">
+              <label htmlFor="mgmt-nome-do-opac-organismo" className="af-label">
                 Nome do OPAC (Organismo de Avaliação da Conformidade)
               </label>
               <input
+                id="mgmt-nome-do-opac-organismo"
                 className="af-input"
                 value={opacName}
                 onChange={(e) => setOpacName(e.target.value)}
@@ -1001,16 +1048,22 @@ export function SettingsPage() {
             </div>
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">CNPJ</label>
+                <label htmlFor="mgmt-cnpj" className="af-label">
+                  CNPJ
+                </label>
                 <input
+                  id="mgmt-cnpj"
                   className="af-input"
                   value={cnpj}
                   onChange={(e) => setCnpj(e.target.value)}
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">WhatsApp de suporte</label>
+                <label htmlFor="mgmt-whatsapp-de-suporte" className="af-label">
+                  WhatsApp de suporte
+                </label>
                 <input
+                  id="mgmt-whatsapp-de-suporte"
                   className="af-input"
                   value={whatsapp}
                   onChange={(e) => setWhatsapp(e.target.value)}
@@ -1019,8 +1072,11 @@ export function SettingsPage() {
             </div>
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">1 Tarefa equivale a quantos m²? (RN14)</label>
+                <label htmlFor="mgmt-1-tarefa-equivale-a" className="af-label">
+                  1 Tarefa equivale a quantos m²? (RN14)
+                </label>
                 <input
+                  id="mgmt-1-tarefa-equivale-a"
                   type="number"
                   className="af-input"
                   value={tarefaM2}
@@ -1029,8 +1085,11 @@ export function SettingsPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Visitas de pares por ano (RN29)</label>
+                <label htmlFor="mgmt-visitas-de-pares-por" className="af-label">
+                  Visitas de pares por ano (RN29)
+                </label>
                 <input
+                  id="mgmt-visitas-de-pares-por"
                   type="number"
                   className="af-input"
                   value={peerVisitsPerYear}
@@ -1039,8 +1098,11 @@ export function SettingsPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Janela de visitas (dias)</label>
+                <label htmlFor="mgmt-janela-de-visitas-dias" className="af-label">
+                  Janela de visitas (dias)
+                </label>
                 <input
+                  id="mgmt-janela-de-visitas-dias"
                   type="number"
                   className="af-input"
                   value={visitWindowDays}
@@ -1113,8 +1175,11 @@ export function SettingsPage() {
           >
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Nome *</label>
+                <label htmlFor="mgmt-nome" className="af-label">
+                  Nome *
+                </label>
                 <input
+                  id="mgmt-nome"
                   className="af-input"
                   value={inviteName}
                   onChange={(e) => setInviteName(e.target.value)}
@@ -1122,8 +1187,11 @@ export function SettingsPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">E-mail *</label>
+                <label htmlFor="mgmt-e-mail" className="af-label">
+                  E-mail *
+                </label>
                 <input
+                  id="mgmt-e-mail"
                   type="email"
                   className="af-input"
                   value={inviteEmail}

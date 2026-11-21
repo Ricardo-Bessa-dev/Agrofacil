@@ -41,15 +41,15 @@ docs/                 # arquitetura, contrato API-front, guias da API e do front
    pnpm install
    pnpm gen:api                         # com a API rodando: atualiza packages/api-types
    pnpm --filter @agrofacil/web dev     # painel em http://localhost:5173
-   pnpm --filter @agrofacil/mobile start
+   pnpm --filter @agrofacil/mobile dev --host   # app em http://localhost:5174 (--host: abrir no celular pela rede)
    ```
 
 ## Estado da API
 
-A API cobre os marcos **M0 a M10** do [doc 2 §1.18](documentacao/2-guia-api.md#118-ordem-de-implementação-sugerida) e parte do M11:
+A API cobre os marcos **M0 a M10** do [doc 2 §1.18](docs/2-guia-api.md#118-ordem-de-implementação-sugerida) e parte do M11:
 
 - **M0–M6:** banco (migrações Flyway + auditoria com Envers), autenticação (2FA do coordenador, ativação do agricultor, refresh rotativo), associação, coordenadores, grupos, agricultores, aparelhos, `/me`, propriedades/áreas/trabalhadores, registros de manejo com completude e histórico, pedidos de correção, notificações, anexos e sincronização (`/sync/push` e `/sync/pull`).
-- **M7:** cadastro, renovação, suspensão e cancelamento de certificações; rotina diária de alertas de vencimento (07:00) com notificação, push e e-mail.
+- **M7:** cadastro, renovação, suspensão e cancelamento de certificações; rotina diária de alertas de vencimento (07:00) com notificação no app e e-mail. O envio de push pelo Expo existe, mas fica desligado (`PUSH_ENABLED=false`): o app atual é um PWA e mostra os avisos só dentro dele.
 - **M8:** comunicados (todos ou um grupo, também no pull), gestão de culturas, insumos e unidades, e "itens sem catálogo".
 - **M9:** painel inicial (`/dashboard/summary`) e relatórios em PDF/CSV (caderno de campo, agricultores, certificações e exportação de registros).
 - **M10:** colaboradores, Comissão de Avaliação e impedimentos; roteiro da visita; situação das visitas (RN29); sugestão de visitadores; visitas pelo painel e resultado pelo app (mutação `visit`); rotina de avisos (07:05); documentos D1–D8 com código de verificação e cópia assinada.
