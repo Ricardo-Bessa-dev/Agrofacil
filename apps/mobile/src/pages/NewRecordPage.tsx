@@ -1,3 +1,4 @@
+// Formulário de criação e edição de manejo do agricultor, com foto opcional; funciona sem internet (ADR-02).
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -9,7 +10,9 @@ import {
   type AreaUnitCode,
 } from "@agrofacil/domain";
 import { api, fetchMobileRecordDetail, uploadRecordPhoto } from "../api/client";
+import { generateUuid } from "../api/uuid";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
+import { onActivateKey } from "../a11y";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
 
@@ -48,6 +51,9 @@ export function NewRecordPage() {
   const [searchParams] = useSearchParams();
   const editingRecordId = routeRecordId || searchParams.get("editId") || "";
   const isEditMode = Boolean(editingRecordId);
+  // ID do registro novo gerado uma vez por formulário: se o salvamento for repetido (falha de rede,
+  // erro na foto), o mesmo registro é reenviado em vez de criar uma cópia.
+  const [newRecordId] = useState(generateUuid);
 
   const [selectedType, setSelectedType] = useState<RecordType>("PLANTING");
   const [performedOn, setPerformedOn] = useState<string>(todayIso());
@@ -268,12 +274,14 @@ export function NewRecordPage() {
   const farmInputs = farmInputsQuery.data ?? [];
   const activePlantings = activePlantingsQuery.data ?? [];
 
-  // Auto-seleciona o primeiro plantio ativo para Colheita caso ainda não selecionado
+  // Só escolhe o plantio sozinho quando há um único em andamento; com mais de um, o agricultor escolhe,
+  // para a colheita não ficar ligada ao plantio errado.
+  const onlyPlantingId = activePlantings.length === 1 ? activePlantings[0]?.id : undefined;
   useEffect(() => {
-    if (selectedType === "HARVEST" && !plantingId && activePlantings[0]?.id) {
-      setPlantingId(activePlantings[0].id);
+    if (selectedType === "HARVEST" && !plantingId && onlyPlantingId) {
+      setPlantingId(onlyPlantingId);
     }
-  }, [selectedType, plantingId, activePlantings]);
+  }, [selectedType, plantingId, onlyPlantingId]);
 
   const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -298,17 +306,29 @@ export function NewRecordPage() {
       return;
     }
 
-    if (selectedType === "HARVEST" && !plantingId && activePlantings.length === 0) {
+    if (selectedType === "HARVEST" && activePlantings.length === 0) {
       setErrorMsg(
         "Para registrar uma colheita, é necessário ter um Plantio ativo cadastrado nesta propriedade.",
       );
+      return;
+    }
+    if (selectedType === "HARVEST" && !plantingId) {
+      setErrorMsg("Escolha de qual plantio é esta colheita.");
+      return;
+    }
+
+    // RN: plantio sempre tem área; aplicação precisa de área quando não está ligada a um plantio.
+    const targetPlotId = plotId || (plots.length === 1 ? plots[0]?.id : undefined);
+    const needsPlot =
+      selectedType === "PLANTING" || (selectedType === "INPUT_APPLICATION" && !plantingId);
+    if (needsPlot && !targetPlotId) {
+      setErrorMsg("Escolha o talhão / área.");
       return;
     }
 
     setIsSubmitting(true);
     try {
       let bodyPayload: RecordWrite;
-      const targetPlotId = plotId || plots[0]?.id || undefined;
 
       if (selectedType === "PLANTING") {
         bodyPayload = {
@@ -353,7 +373,7 @@ export function NewRecordPage() {
             harvestCropName && !notes.includes(harvestCropName)
               ? `${harvestCropName}${notes ? ` — ${notes}` : ""}`
               : notes || undefined,
-          plantingId: plantingId || activePlantings[0]?.id || "",
+          plantingId,
           quantity: harvestQtyVal
             ? { value: Number(harvestQtyVal), unit: harvestQtyUnit }
             : undefined,
@@ -403,7 +423,7 @@ export function NewRecordPage() {
             body: bodyPayload,
           })
         : await api.POST("/records", {
-            body: bodyPayload,
+            body: { ...bodyPayload, id: newRecordId },
           });
 
       const { data: savedData, error, response } = resultCall;
@@ -428,7 +448,7 @@ export function NewRecordPage() {
       }
 
       const targetRecordId =
-        editingRecordId || ((savedData as { id?: string } | undefined)?.id ?? "");
+        editingRecordId || ((savedData as { id?: string } | undefined)?.id ?? newRecordId);
 
       if (photoFile && targetRecordId) {
         await uploadRecordPhoto(targetRecordId, photoFile);
@@ -515,16 +535,24 @@ export function NewRecordPage() {
         {/* Escolha do Tipo de Manejo (bloqueado na edição pois a API não permite trocar o subtipo) */}
         {!isEditMode && (
           <div style={{ marginBottom: "20px" }}>
-            <label className="form-label" style={{ marginBottom: "10px" }}>
+            <span className="form-label" id="record-type-label" style={{ marginBottom: "10px" }}>
               Tipo de Atividade / Manejo
-            </label>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="record-type-label"
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
               {RECORD_TYPES.map((t) => {
                 const isSelected = selectedType === t.type;
                 return (
                   <div
                     key={t.type}
+                    role="radio"
+                    aria-checked={isSelected}
+                    tabIndex={0}
                     onClick={() => setSelectedType(t.type)}
+                    onKeyDown={onActivateKey(() => setSelectedType(t.type))}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -653,7 +681,9 @@ export function NewRecordPage() {
                 onChange={(e) => setPlotId(e.target.value)}
                 className="form-select"
               >
-                <option value="">Área principal (automático)</option>
+                <option value="">
+                  {plots.length === 1 ? "Área principal (automático)" : "Selecione a área..."}
+                </option>
                 {plots.map((plot) => (
                   <option key={plot.id} value={plot.id}>
                     {plot.name} {plot.area?.value ? `(${plot.area.value} ${plot.area.unit})` : ""}
@@ -772,9 +802,12 @@ export function NewRecordPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Área Plantada</label>
+                <label htmlFor="newrecord-area-plantada" className="form-label">
+                  Área Plantada
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-area-plantada"
                     type="number"
                     step="any"
                     placeholder="Ex: 500"
@@ -934,9 +967,12 @@ export function NewRecordPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Quantidade / Dose Aplicada</label>
+                <label htmlFor="newrecord-quantidade-dose-aplicada" className="form-label">
+                  Quantidade / Dose Aplicada
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade-dose-aplicada"
                     type="number"
                     step="any"
                     placeholder="Ex: 20"
@@ -983,9 +1019,12 @@ export function NewRecordPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Quantidade Colhida</label>
+                <label htmlFor="newrecord-quantidade-colhida" className="form-label">
+                  Quantidade Colhida
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade-colhida"
                     type="number"
                     step="any"
                     placeholder="Ex: 150"
@@ -1073,9 +1112,12 @@ export function NewRecordPage() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Quantidade Comprada</label>
+                <label htmlFor="newrecord-quantidade-comprada" className="form-label">
+                  Quantidade Comprada
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade-comprada"
                     type="number"
                     step="any"
                     placeholder="Ex: 5"
@@ -1161,9 +1203,12 @@ export function NewRecordPage() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Quantidade</label>
+                <label htmlFor="newrecord-quantidade" className="form-label">
+                  Quantidade
+                </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
+                    id="newrecord-quantidade"
                     type="number"
                     step="any"
                     placeholder="Ex: 50"

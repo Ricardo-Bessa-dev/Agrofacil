@@ -13,6 +13,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -25,9 +26,11 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Falha no push não é erro de negócio: vai para o log, e a notificação continua chegando ao app
- * pelo pull (doc 2 §1.12.2).
+ * pelo pull (doc 2 §1.12.2). Só existe com {@code app.push.enabled=true}: o app atual é um PWA e
+ * mostra os avisos apenas dentro dele.
  */
 @Component
+@ConditionalOnBooleanProperty("app.push.enabled")
 public class ExpoPushSender {
 
   private static final Logger log = LoggerFactory.getLogger(ExpoPushSender.class);

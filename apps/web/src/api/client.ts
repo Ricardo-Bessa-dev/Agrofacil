@@ -100,10 +100,33 @@ function serializeSpringQuery(params: Record<string, unknown>): string {
   return searchParams.toString();
 }
 
+/** Rotas de autenticação: um 401 nelas é resposta final, nunca motivo para renovar a sessão. */
+const AUTH_PATH = "/api/v1/auth/";
+
+/**
+ * fetch do cliente tipado: em 401, renova a sessão (o token de acesso dura 15 min) e repete a
+ * chamada uma vez com o token novo. Sem isso, a primeira ação depois de expirar falharia.
+ */
+async function fetchWithRefresh(request: Request): Promise<Response> {
+  const retry = request.clone(); // o corpo só pode ser lido uma vez
+  const response = await fetch(request);
+  if (response.status !== 401 || new URL(request.url).pathname.startsWith(AUTH_PATH)) {
+    return response;
+  }
+  const session = await refreshSession();
+  if (!session?.accessToken) return response;
+  retry.headers.set("Authorization", `Bearer ${session.accessToken}`);
+  return fetch(retry);
+}
+
+/** Mesma origem da página (o proxy do Vite e o nginx repassam /api); localhost só nos testes em Node. */
+const API_BASE_URL = new URL("/api/v1", globalThis.location?.origin ?? "http://localhost").href;
+
 export const api = createClient<paths>({
-  baseUrl: "/api/v1",
+  baseUrl: API_BASE_URL,
   credentials: "include",
   querySerializer: serializeSpringQuery,
+  fetch: fetchWithRefresh,
 });
 
 async function doRefreshSession(): Promise<SessionResponse | null> {
@@ -155,28 +178,30 @@ export async function unwrap<T>(
 ): Promise<T> {
   const { data, error, response } = await call;
   if (error !== undefined || !response.ok) {
+    // O fetchWithRefresh já tentou renovar: um 401 aqui significa sessão encerrada.
     if (response.status === 401) {
-      const refreshed = await refreshSession();
-      if (!refreshed) {
-        onUnauthorizedCallback?.();
-      }
+      onUnauthorizedCallback?.();
     }
     throw new ApiError(response.status, error);
   }
   return data as T;
 }
 
-/** Faz download autenticado de binários (PDF, CSV, fotos, áudios) e aciona o download no navegador. */
-export async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
-  const headers: Record<string, string> = {};
-  if (accessToken) {
-    headers["Authorization"] = `Bearer ${accessToken}`;
+/**
+ * GET autenticado de um binário. Necessário porque <img src> e <a href> não enviam o token Bearer.
+ * @param path caminho relativo a /api/v1, ex.: "/files/{id}/content"
+ */
+async function fetchBinary(path: string): Promise<Response> {
+  const get = () =>
+    fetch(`/api/v1${path}`, {
+      method: "GET",
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      credentials: "include",
+    });
+  let response = await get();
+  if (response.status === 401 && (await refreshSession())) {
+    response = await get(); // refreshSession já gravou o token novo
   }
-  const response = await fetch(`/api/v1${path}`, {
-    method: "GET",
-    headers,
-    credentials: "include",
-  });
   if (!response.ok) {
     let body: unknown = null;
     try {
@@ -186,6 +211,17 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
     }
     throw new ApiError(response.status, body);
   }
+  return response;
+}
+
+/** Baixa um binário autenticado (foto, áudio) para exibir na página com URL.createObjectURL. */
+export async function fetchFileBlob(path: string): Promise<Blob> {
+  return (await fetchBinary(path)).blob();
+}
+
+/** Faz download autenticado de binários (PDF, CSV, fotos, áudios) e aciona o download no navegador. */
+export async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
+  const response = await fetchBinary(path);
   const disposition = response.headers.get("Content-Disposition");
   const filenameMatch = disposition?.match(/filename="?([^";]+)"?/i);
   const filename = filenameMatch?.[1] ?? fallbackFilename;

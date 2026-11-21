@@ -1,4 +1,4 @@
-// Cria, edita, lista e exclui propriedades pelo painel e pelo push do app (RN06, RN07).
+// Cria, edita, lista e exclui propriedades pelo painel e pelo push do app (RN06, RN07, RN41).
 package br.edu.ifba.agrofacil.property;
 
 import br.edu.ifba.agrofacil.association.Association;
@@ -270,16 +270,57 @@ public class PropertyService {
       errors.add(
           new FieldErrorItem("address.municipalityId", "NOT_FOUND", "Município não encontrado."));
     }
+    var tarefaM2 = associations.get(property.getAssociationId()).getTarefaM2();
+    Plot mainPlotToResize = null;
+    AreaValue newTotal = null;
+    if (errors.isEmpty()) {
+      newTotal = AreaValue.from(write.totalArea(), tarefaM2);
+      var activePlots = plots.findByPropertyIdAndDeletedAtIsNullOrderByName(property.getId());
+      mainPlotToResize = mainPlotFollowingTotal(activePlots, property.getTotalArea());
+      if (mainPlotToResize == null) {
+        var plotsM2 = PlotAreaLimit.sumM2(activePlots.stream().map(Plot::getArea).toList());
+        PlotAreaLimit.checkProperty(newTotal, plotsM2, tarefaM2).ifPresent(errors::add);
+      }
+    }
     if (!errors.isEmpty()) {
       throw ApiException.validation(errors);
     }
-    var association = associations.get(property.getAssociationId());
     property.setName(write.name().trim());
-    property.setTotalArea(AreaValue.from(write.totalArea(), association.getTarefaM2()));
+    property.setTotalArea(newTotal);
+    if (mainPlotToResize != null) {
+      mainPlotToResize.update(
+          mainPlotToResize.getName(),
+          AreaValue.copyOf(newTotal),
+          mainPlotToResize.getStatus(),
+          mainPlotToResize.getConversionEndsOn(),
+          mainPlotToResize.getNotes());
+    }
     property.setProductionDescription(write.productionDescription());
     property.setLocation(GeoPointValue.from(write.location()));
     property.setAddress(AddressValue.from(write.address()));
     property.setAccessDirections(write.accessDirections());
+  }
+
+  /**
+   * A "Área principal" criada junto com a propriedade (RN06) acompanha o tamanho dela enquanto for
+   * a única área e ninguém tiver mudado o tamanho dela. Assim, corrigir o tamanho da propriedade
+   * não esbarra na RN41.
+   *
+   * @return a área a redimensionar, ou null se as áreas já foram divididas à mão
+   */
+  private static Plot mainPlotFollowingTotal(List<Plot> activePlots, AreaValue currentTotal) {
+    if (activePlots.size() != 1) {
+      return null;
+    }
+    var plot = activePlots.getFirst();
+    if (!Plot.MAIN_PLOT_NAME.equals(plot.getName())) {
+      return null;
+    }
+    var plotM2 = plot.getArea() == null ? null : plot.getArea().getM2();
+    var totalM2 = currentTotal == null ? null : currentTotal.getM2();
+    boolean sameSize =
+        plotM2 == null ? totalM2 == null : totalM2 != null && plotM2.compareTo(totalM2) == 0;
+    return sameSize ? plot : null;
   }
 
   private void softDelete(Property property) {

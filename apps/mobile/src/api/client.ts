@@ -1,6 +1,7 @@
 // Cliente HTTP tipado com openapi-fetch para a aplicação mobile do agricultor.
 // Inclui ponte transparente para /sync/pull e /sync/push, cache offline em localStorage (ADR-02),
 // fila de mutações offline e upload de anexos fotográficos com verificação SHA-256.
+// Toda chamada à API passa por authFetch, que renova o token vencido (15 min) e repete a chamada uma vez.
 import createClient, { type Middleware } from "openapi-fetch";
 import type {
   AttachmentView,
@@ -15,7 +16,18 @@ import type {
   RecordView,
   SessionResponse,
 } from "@agrofacil/api-types";
-import { BAHIA_MUNICIPALITIES } from "../../../web/src/api/municipalities";
+import { BAHIA_MUNICIPALITIES } from "@agrofacil/domain";
+import { generateUuid } from "./uuid";
+import {
+  deletePendingPhoto,
+  listPendingPhotos,
+  savePendingPhoto,
+  type PendingPhoto,
+} from "./photoQueue";
+import { splitPushResults, type RejectedChange } from "./pushResults";
+import { applyPull, emptySyncState, parseSyncState, type SyncState } from "./syncState";
+
+export type { RejectedChange } from "./pushResults";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -51,9 +63,21 @@ const STORAGE_KEYS = {
   REFRESH_TOKEN: "af_mobile_refresh_token",
   USER: "af_mobile_user",
   DEVICE_ID: "af_mobile_device_id",
-  SYNC_SNAPSHOT: "af_mobile_sync_snapshot",
+  SYNC_STATE: "af_mobile_sync_state",
+  /** Formato antigo (pull completo a cada vez); só é apagado. */
+  LEGACY_SYNC_SNAPSHOT: "af_mobile_sync_snapshot",
   OFFLINE_QUEUE: "af_mobile_offline_queue",
+  REJECTED_CHANGES: "af_mobile_rejected_changes",
 } as const;
+
+/** Evento disparado quando a fila, as fotos pendentes ou as recusas mudam (o banner do app escuta). */
+export const OFFLINE_QUEUE_EVENT = "af-offline-queue-changed";
+
+/** Página do /sync/pull (doc 1 §3.5.2) e teto de páginas por sincronização, para não girar sem fim. */
+const PULL_PAGE_SIZE = 500;
+const MAX_PULL_PAGES = 50;
+/** Pulls seguidos dentro deste intervalo (ms) reaproveitam o resultado em memória. */
+const PULL_MEMORY_CACHE_MS = 2500;
 
 export interface QueuedMutation {
   mutationId: string;
@@ -82,7 +106,7 @@ export interface MobileRecordDetail {
 export function getStoredDeviceId(): string {
   let id = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateUuid();
     localStorage.setItem(STORAGE_KEYS.DEVICE_ID, id);
   }
   return id;
@@ -122,6 +146,10 @@ export function clearSession(): void {
   localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
   localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
   localStorage.removeItem(STORAGE_KEYS.USER);
+  // LGPD: o espelho tem dados pessoais e não pode ficar para o próximo usuário do aparelho.
+  // A fila offline e as recusas ficam: são trabalho do agricultor que ainda não chegou à API.
+  localStorage.removeItem(STORAGE_KEYS.SYNC_STATE);
+  localStorage.removeItem(STORAGE_KEYS.LEGACY_SYNC_SNAPSHOT);
   cachedPull = null;
 }
 
@@ -137,7 +165,36 @@ export function getOfflineQueue(): QueuedMutation[] {
 
 function setOfflineQueue(queue: QueuedMutation[]): void {
   localStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(queue));
-  window.dispatchEvent(new CustomEvent("af-offline-queue-changed"));
+  notifyQueueChanged();
+}
+
+function notifyQueueChanged(): void {
+  window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_EVENT));
+}
+
+/** Alterações que a API recusou e o agricultor ainda não viu. */
+export function getRejectedChanges(): RejectedChange[] {
+  const raw = localStorage.getItem(STORAGE_KEYS.REJECTED_CHANGES);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as RejectedChange[];
+  } catch {
+    return [];
+  }
+}
+
+function addRejectedChanges(items: RejectedChange[]): void {
+  if (items.length === 0) return;
+  localStorage.setItem(
+    STORAGE_KEYS.REJECTED_CHANGES,
+    JSON.stringify([...getRejectedChanges(), ...items]),
+  );
+  notifyQueueChanged();
+}
+
+export function dismissRejectedChanges(): void {
+  localStorage.removeItem(STORAGE_KEYS.REJECTED_CHANGES);
+  notifyQueueChanged();
 }
 
 function enqueueOfflineMutation(mutation: QueuedMutation): void {
@@ -148,21 +205,16 @@ function enqueueOfflineMutation(mutation: QueuedMutation): void {
   setOfflineQueue(current);
 }
 
-function loadPersistedSnapshot(): PullResponse | null {
-  const raw = localStorage.getItem(STORAGE_KEYS.SYNC_SNAPSHOT);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as PullResponse;
-  } catch {
-    return null;
-  }
+function loadSyncState(): SyncState | null {
+  return parseSyncState(localStorage.getItem(STORAGE_KEYS.SYNC_STATE));
 }
 
-function savePersistedSnapshot(snapshot: PullResponse): void {
+function saveSyncState(state: SyncState): void {
+  localStorage.removeItem(STORAGE_KEYS.LEGACY_SYNC_SNAPSHOT);
   try {
-    localStorage.setItem(STORAGE_KEYS.SYNC_SNAPSHOT, JSON.stringify(snapshot));
+    localStorage.setItem(STORAGE_KEYS.SYNC_STATE, JSON.stringify(state));
   } catch {
-    // Ignora se exceder cota de armazenamento local
+    // Cota cheia: o espelho continua só em memória e o próximo início puxa tudo de novo (cursor "0").
   }
 }
 
@@ -171,6 +223,67 @@ let onUnauthorizedCallback: (() => void) | null = null;
 
 export function setOnUnauthorized(cb: (() => void) | null): void {
   onUnauthorizedCallback = cb;
+}
+
+/** Renova o token com o refresh token. Chamadas simultâneas compartilham a mesma renovação. */
+function refreshSession(): Promise<SessionResponse | null> {
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) {
+    clearSession();
+    onUnauthorizedCallback?.();
+    return Promise.resolve(null);
+  }
+  refreshingPromise ??= (async () => {
+    try {
+      const refreshRes = await window.fetch("/api/v1/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken, deviceId: getStoredDeviceId() }),
+      });
+      if (!refreshRes.ok) {
+        clearSession();
+        onUnauthorizedCallback?.();
+        return null;
+      }
+      const session = (await refreshRes.json()) as SessionResponse;
+      saveSession(session);
+      return session;
+    } catch {
+      // Sem rede: não derruba a sessão; o agricultor continua trabalhando offline.
+      return null;
+    } finally {
+      refreshingPromise = null;
+    }
+  })();
+  return refreshingPromise;
+}
+
+/**
+ * fetch para a API com o token do aparelho. Em 401, renova o token e repete a chamada uma vez.
+ * O body precisa poder ser reenviado (string, ArrayBuffer ou Blob; não stream).
+ * @param path caminho relativo a /api/v1, com a query string
+ */
+async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const send = (token: string | null) => {
+    const headers = new Headers(init.headers);
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    else headers.delete("Authorization");
+    return window.fetch(`/api/v1${path}`, { ...init, headers });
+  };
+  const response = await send(getStoredAccessToken());
+  if (response.status !== 401 || path.startsWith("/auth/")) {
+    return response;
+  }
+  const session = await refreshSession();
+  return session?.accessToken ? send(session.accessToken) : response;
+}
+
+function jsonPost(path: string, body: unknown): Promise<Response> {
+  return authFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 function serializeSpringQuery(params: Record<string, unknown>): string {
@@ -211,35 +324,24 @@ export function invalidateMobileSyncCache(): void {
   cachedPull = null;
 }
 
-async function fetchSyncSnapshot(authHeader: string | null, force = false): Promise<PullResponse> {
-  const now = Date.now();
-  if (!force && cachedPull && now - cachedPull.at < 2500) {
+/**
+ * Devolve o espelho local atualizado. Puxa só o que mudou desde o último cursor, página a página,
+ * até hasMore=false. Sem rede, devolve o último espelho salvo no aparelho.
+ */
+async function fetchSyncSnapshot(force = false): Promise<PullResponse> {
+  if (!force && cachedPull && Date.now() - cachedPull.at < PULL_MEMORY_CACHE_MS) {
     return cachedPull.data;
   }
-  if (inflightPull) {
-    return inflightPull;
-  }
-  inflightPull = (async () => {
+  inflightPull ??= (async () => {
     try {
-      const headers: Record<string, string> = { Accept: "application/json" };
-      if (authHeader) {
-        headers["Authorization"] = authHeader;
-      }
-      const res = await window.fetch("/api/v1/sync/pull?cursor=0&limit=1000", {
-        method: "GET",
-        headers,
-      });
-      if (!res.ok) {
-        throw new Error(`Sync pull failed with status ${res.status}`);
-      }
-      const data = (await res.json()) as PullResponse;
+      const state = await pullChanges(loadSyncState() ?? emptySyncState());
+      const data: PullResponse = { cursor: state.cursor, changes: state.changes };
       cachedPull = { at: Date.now(), data };
-      savePersistedSnapshot(data);
       return data;
     } catch (err) {
-      const fallback = cachedPull?.data ?? loadPersistedSnapshot();
-      if (fallback) {
-        return fallback;
+      const saved = loadSyncState();
+      if (saved) {
+        return { cursor: saved.cursor, changes: saved.changes };
       }
       throw err;
     } finally {
@@ -249,39 +351,56 @@ async function fetchSyncSnapshot(authHeader: string | null, force = false): Prom
   return inflightPull;
 }
 
+async function pullChanges(initial: SyncState): Promise<SyncState> {
+  let state = initial;
+  for (let page = 0; page < MAX_PULL_PAGES; page++) {
+    const res = await authFetch(
+      `/sync/pull?cursor=${encodeURIComponent(state.cursor)}&limit=${PULL_PAGE_SIZE}`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) {
+      throw new Error(`Sync pull failed with status ${res.status}`);
+    }
+    const data = (await res.json()) as PullResponse;
+    state = applyPull(state, data);
+    saveSyncState(state);
+    // reset: o espelho foi zerado; a próxima volta puxa tudo de novo a partir do cursor "0".
+    if (!data.reset && !data.hasMore) break;
+  }
+  return state;
+}
+
 /**
  * Sincroniza mutações pendentes na fila offline quando a conexão é restabelecida.
  */
 export async function flushOfflineQueue(): Promise<{ synced: number; remaining: number }> {
   const queue = getOfflineQueue();
-  if (queue.length === 0) {
-    return { synced: 0, remaining: 0 };
-  }
-  const token = getStoredAccessToken();
-  if (!token) {
-    return { synced: 0, remaining: queue.length };
-  }
-  try {
-    const res = await window.fetch("/api/v1/sync/push", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        deviceId: getStoredDeviceId(),
-        mutations: queue,
-      }),
-    });
-    if (!res.ok) {
-      return { synced: 0, remaining: queue.length };
+  let synced = 0;
+  if (queue.length > 0 && getStoredAccessToken()) {
+    try {
+      const res = await jsonPost("/sync/push", { deviceId: getStoredDeviceId(), mutations: queue });
+      if (res.ok) {
+        const pushData = (await res.json()) as PushResponse;
+        const { remaining, rejected } = splitPushResults(
+          queue,
+          pushData.results,
+          new Date().toISOString(),
+        );
+        // Relê a fila: o agricultor pode ter salvo algo novo enquanto o envio estava em andamento.
+        const sentIds = new Set(queue.map((m) => m.mutationId));
+        const addedMeanwhile = getOfflineQueue().filter((m) => !sentIds.has(m.mutationId));
+        setOfflineQueue([...remaining, ...addedMeanwhile]);
+        addRejectedChanges(rejected);
+        synced = queue.length - remaining.length - rejected.length;
+        cachedPull = null;
+      }
+    } catch {
+      // Sem rede: a fila fica como está.
     }
-    setOfflineQueue([]);
-    cachedPull = null;
-    return { synced: queue.length, remaining: 0 };
-  } catch {
-    return { synced: 0, remaining: queue.length };
   }
+  // Fotos depois dos registros: o anexo só é aceito quando o registro já existe na API.
+  await syncPendingPhotos();
+  return { synced, remaining: getOfflineQueue().length };
 }
 
 if (typeof window !== "undefined") {
@@ -290,7 +409,102 @@ if (typeof window !== "undefined") {
   });
 }
 
+/**
+ * Envia as fotos guardadas no aparelho: primeiro registra o anexo (mutação "attachment"),
+ * depois manda o arquivo. Cada etapa concluída é gravada, então uma falha no meio não repete trabalho.
+ */
+export async function syncPendingPhotos(): Promise<void> {
+  let photos: PendingPhoto[];
+  try {
+    photos = await listPendingPhotos();
+  } catch {
+    return; // IndexedDB indisponível (ex.: navegação anônima antiga)
+  }
+  const recordsNotSentYet = new Set(
+    getOfflineQueue()
+      .filter((m) => m.entity === "record")
+      .map((m) => m.entityId),
+  );
+  for (const photo of photos) {
+    if (recordsNotSentYet.has(photo.recordId)) continue;
+    try {
+      const done = await sendPendingPhoto(photo);
+      if (done) await deletePendingPhoto(photo.attachmentId);
+    } catch {
+      break; // sem rede: tenta tudo de novo no próximo envio
+    }
+  }
+  notifyQueueChanged();
+}
+
+/** Envia uma foto. Devolve true quando ela pode sair da fila (enviada ou recusada de vez). */
+async function sendPendingPhoto(photo: PendingPhoto): Promise<boolean> {
+  if (!photo.registered) {
+    const mutation = {
+      mutationId: photo.mutationId,
+      entity: "attachment",
+      op: "UPSERT",
+      entityId: photo.attachmentId,
+      clientTimestamp: photo.createdAt,
+      data: {
+        id: photo.attachmentId,
+        ownerType: "RECORD",
+        ownerId: photo.recordId,
+        kind: "PHOTO",
+        contentType: photo.contentType,
+        sizeBytes: photo.sizeBytes,
+        sha256: photo.sha256,
+      },
+    };
+    const res = await jsonPost("/sync/push", {
+      deviceId: getStoredDeviceId(),
+      mutations: [mutation],
+    });
+    if (!res.ok) return false;
+    const pushData = (await res.json()) as PushResponse;
+    const { remaining, rejected } = splitPushResults(
+      [mutation],
+      pushData.results,
+      new Date().toISOString(),
+    );
+    if (rejected.length > 0) {
+      addRejectedChanges(rejected);
+      return true;
+    }
+    if (remaining.length > 0) return false;
+    await savePendingPhoto({ ...photo, registered: true });
+  }
+
+  const put = await authFetch(`/files/${photo.attachmentId}/content`, {
+    method: "PUT",
+    headers: { "Content-Type": photo.contentType },
+    body: photo.blob,
+  });
+  if (put.ok) {
+    cachedPull = null;
+    return true;
+  }
+  // 4xx (fora 401/408/429) é definitivo, ex.: CHECKSUM_MISMATCH; 5xx e os demais tentam de novo depois.
+  const retryable =
+    put.status === 401 || put.status === 408 || put.status === 429 || put.status >= 500;
+  if (retryable) return false;
+  addRejectedChanges([
+    {
+      mutationId: photo.mutationId,
+      entity: "attachment",
+      entityId: photo.attachmentId,
+      message: "A foto foi recusada pelo servidor.",
+      rejectedAt: new Date().toISOString(),
+    },
+  ]);
+  return true;
+}
+
 async function computeSha256Hex(buffer: ArrayBuffer): Promise<string> {
+  // Atenção: o navegador só expõe crypto.subtle em contexto seguro (HTTPS ou localhost).
+  if (!crypto.subtle) {
+    throw new Error("Envio de fotos indisponível: abra o app por HTTPS ou localhost.");
+  }
   const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   const bytes = new Uint8Array(hashBuffer);
   return Array.from(bytes)
@@ -299,88 +513,61 @@ async function computeSha256Hex(buffer: ArrayBuffer): Promise<string> {
 }
 
 /**
- * Faz o upload de uma foto (nota fiscal, insumo, desenvolvimento da lavoura) vinculada a um registro de manejo.
- * Segue o protocolo em duas etapas da API (doc 1 §3.6):
- * 1) Registra o metadado + SHA-256 via POST /api/v1/sync/push (entidade "attachment")
- * 2) Envia o binário via PUT /api/v1/files/{attachmentId}/content
+ * Guarda a foto de um registro de manejo no aparelho e tenta enviá-la logo (doc 1 §3.6).
+ * A foto nunca se perde por falta de rede: fica no IndexedDB até a API confirmar o recebimento.
+ * @returns queued=true se a foto ficou esperando internet (ou o registro ainda não foi enviado)
  */
-export async function uploadRecordPhoto(recordId: string, file: File): Promise<string> {
-  const token = getStoredAccessToken();
-  const authHeader = token ? `Bearer ${token}` : null;
-  const arrayBuffer = await file.arrayBuffer();
-  const sha256 = await computeSha256Hex(arrayBuffer);
-  const attachmentId = crypto.randomUUID();
-  const contentType = file.type || "image/jpeg";
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
-  }
-
-  const pushRes = await window.fetch("/api/v1/sync/push", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      deviceId: getStoredDeviceId(),
-      mutations: [
-        {
-          mutationId: crypto.randomUUID(),
-          entity: "attachment",
-          op: "UPSERT",
-          entityId: attachmentId,
-          clientTimestamp: new Date().toISOString(),
-          data: {
-            id: attachmentId,
-            ownerType: "RECORD",
-            ownerId: recordId,
-            kind: "PHOTO",
-            contentType,
-            sizeBytes: file.size,
-            sha256,
-          },
-        },
-      ],
-    }),
+export async function uploadRecordPhoto(
+  recordId: string,
+  file: File,
+): Promise<{ attachmentId: string; queued: boolean }> {
+  const sha256 = await computeSha256Hex(await file.arrayBuffer());
+  const attachmentId = generateUuid();
+  await savePendingPhoto({
+    attachmentId,
+    mutationId: generateUuid(),
+    recordId,
+    blob: file,
+    contentType: file.type || "image/jpeg",
+    sizeBytes: file.size,
+    sha256,
+    createdAt: new Date().toISOString(),
+    registered: false,
   });
+  await syncPendingPhotos();
+  const stillPending = (await listPendingPhotos()).some((p) => p.attachmentId === attachmentId);
+  return { attachmentId, queued: stillPending };
+}
 
-  if (!pushRes.ok) {
-    throw new Error("Não foi possível registrar o anexo da foto.");
+/** Fotos deste registro que ainda estão só no aparelho (vazio se o IndexedDB não estiver disponível). */
+export async function listPendingPhotosForRecord(recordId: string): Promise<PendingPhoto[]> {
+  try {
+    return (await listPendingPhotos()).filter((p) => p.recordId === recordId);
+  } catch {
+    return [];
   }
+}
 
-  const pushData = (await pushRes.json()) as PushResponse;
-  const firstResult = pushData.results?.[0];
-  if (firstResult?.status === "REJECTED") {
-    throw new Error(firstResult.error?.message ?? "Foto recusada pela validação da API.");
+/**
+ * Baixa o arquivo de um anexo. Precisa de fetch porque <img src> não envia o token Bearer.
+ * @throws Error se a API recusar ou não houver internet
+ */
+export async function fetchAttachmentContent(attachmentId: string): Promise<Blob> {
+  const response = await authFetch(`/files/${attachmentId}/content`);
+  if (!response.ok) {
+    throw new Error(`Não foi possível baixar o anexo (HTTP ${response.status}).`);
   }
-
-  const uploadHeaders: Record<string, string> = {
-    "Content-Type": contentType,
-  };
-  if (authHeader) {
-    uploadHeaders["Authorization"] = authHeader;
-  }
-
-  const binRes = await window.fetch(`/api/v1/files/${attachmentId}/content`, {
-    method: "PUT",
-    headers: uploadHeaders,
-    body: arrayBuffer,
-  });
-
-  if (!binRes.ok) {
-    throw new Error("Não foi possível enviar o arquivo de imagem.");
-  }
-
-  cachedPull = null;
-  return attachmentId;
+  return response.blob();
 }
 
 /**
  * Busca os detalhes completos de um registro de manejo (incluindo anexos e pedidos de correção)
  * a partir do espelho de sincronização do agricultor.
  */
-export async function fetchMobileRecordDetail(recordId: string): Promise<MobileRecordDetail | null> {
-  const token = getStoredAccessToken();
-  const pull = await fetchSyncSnapshot(token ? `Bearer ${token}` : null);
+export async function fetchMobileRecordDetail(
+  recordId: string,
+): Promise<MobileRecordDetail | null> {
+  const pull = await fetchSyncSnapshot();
   const rawRecords = pull.changes?.records ?? [];
   const found = rawRecords.find((r) => r.id === recordId) as RecordView | undefined;
   if (!found) return null;
@@ -415,8 +602,6 @@ export async function upsertFarmerProperty(
   propertyId: string,
   payload: PropertyWrite,
 ): Promise<void> {
-  const token = getStoredAccessToken();
-  const authHeader = token ? `Bearer ${token}` : null;
   const nowIso = new Date().toISOString();
   const dataPayload: Record<string, unknown> = {
     ...payload,
@@ -424,7 +609,7 @@ export async function upsertFarmerProperty(
   };
 
   const mutation: QueuedMutation = {
-    mutationId: crypto.randomUUID(),
+    mutationId: generateUuid(),
     entity: "property",
     op: "UPSERT",
     entityId: propertyId,
@@ -437,18 +622,9 @@ export async function upsertFarmerProperty(
     return;
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
-  }
-
-  const pushRes = await window.fetch("/api/v1/sync/push", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      deviceId: getStoredDeviceId(),
-      mutations: [mutation],
-    }),
+  const pushRes = await jsonPost("/sync/push", {
+    deviceId: getStoredDeviceId(),
+    mutations: [mutation],
   });
 
   if (!pushRes.ok) {
@@ -474,7 +650,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 async function submitRecordMutation(
   entityId: string,
   bodyData: Record<string, unknown>,
-  authHeader: string | null,
 ): Promise<Response> {
   const nowIso = new Date().toISOString();
   const recordPayload: Record<string, unknown> = {
@@ -483,18 +658,8 @@ async function submitRecordMutation(
     clientCreatedAt: (bodyData.clientCreatedAt as string | undefined) ?? nowIso,
   };
 
-  if (recordPayload.type === "HARVEST" && !recordPayload.plantingId) {
-    const pull = await fetchSyncSnapshot(authHeader);
-    const plantings = (pull.changes?.records ?? []).filter(
-      (r) => r.type === "PLANTING" && r.propertyId === recordPayload.propertyId,
-    );
-    if (plantings[0]?.id) {
-      recordPayload.plantingId = plantings[0].id;
-    }
-  }
-
   const mutation: QueuedMutation = {
-    mutationId: crypto.randomUUID(),
+    mutationId: generateUuid(),
     entity: "record",
     op: "UPSERT",
     entityId,
@@ -507,19 +672,10 @@ async function submitRecordMutation(
     return jsonResponse({ id: entityId, ...recordPayload, offlineQueued: true }, 201);
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
-  }
-
   try {
-    const pushRes = await window.fetch("/api/v1/sync/push", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        deviceId: getStoredDeviceId(),
-        mutations: [mutation],
-      }),
+    const pushRes = await jsonPost("/sync/push", {
+      deviceId: getStoredDeviceId(),
+      mutations: [mutation],
     });
 
     if (!pushRes.ok) {
@@ -557,9 +713,6 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   const url = new URL(req.url, window.location.origin);
   const path = url.pathname.replace(/^\/api\/v1/, "");
   const method = req.method.toUpperCase();
-  const authHeader =
-    req.headers.get("Authorization") ??
-    (getStoredAccessToken() ? `Bearer ${getStoredAccessToken()}` : null);
 
   // Leitura via /sync/pull
   if (method === "GET") {
@@ -575,7 +728,7 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       path === "/catalog/farm-inputs"
     ) {
       try {
-        const pull = await fetchSyncSnapshot(authHeader);
+        const pull = await fetchSyncSnapshot();
         const changes = pull.changes;
         const props = (changes?.properties ?? []).map((p) => ({
           ...p,
@@ -736,8 +889,7 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
               } else if (r.type === "HARVEST") {
                 const planting = recAny.plantingId
                   ? (recordById.get(recAny.plantingId as string) as
-                      | Record<string, unknown>
-                      | undefined)
+                      Record<string, unknown> | undefined)
                   : undefined;
                 subject =
                   (planting?.cropId ? cropById.get(planting.cropId as string) : undefined) ??
@@ -782,7 +934,11 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
           });
         }
       } catch {
-        // Se falhar, cai para a chamada normal
+        // Essas rotas são só do coordenador; repassar para a API daria 403. Sem espelho, não há o que mostrar.
+        return jsonResponse(
+          { detail: "Sem conexão e ainda sem dados guardados no aparelho. Tente com internet." },
+          503,
+        );
       }
     }
   }
@@ -790,8 +946,8 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   // Criação de manejo via /sync/push
   if (method === "POST" && path === "/records") {
     const bodyData = (await req.clone().json()) as Record<string, unknown>;
-    const entityId = (typeof bodyData.id === "string" && bodyData.id) || crypto.randomUUID();
-    return submitRecordMutation(entityId, bodyData, authHeader);
+    const entityId = (typeof bodyData.id === "string" && bodyData.id) || generateUuid();
+    return submitRecordMutation(entityId, bodyData);
   }
 
   // Edição de manejo existente via /sync/push (atende pedidos de correção e completa campos)
@@ -799,42 +955,38 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   if (method === "PUT" && recordPutMatch) {
     const entityId = recordPutMatch[1]!;
     const bodyData = (await req.clone().json()) as Record<string, unknown>;
-    return submitRecordMutation(entityId, bodyData, authHeader);
+    return submitRecordMutation(entityId, bodyData);
   }
 
   // Marcar notificações como lidas via /sync/push
   if (method === "POST" && path === "/notifications/read-all") {
-    const pull = await fetchSyncSnapshot(authHeader);
+    const pull = await fetchSyncSnapshot();
     const unread = (pull.changes?.notifications ?? []).filter((n) => !n.readAt && n.id);
     if (unread.length > 0) {
       const nowIso = new Date().toISOString();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (authHeader) {
-        headers["Authorization"] = authHeader;
-      }
-      await window.fetch("/api/v1/sync/push", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          deviceId: getStoredDeviceId(),
-          mutations: unread.map((n) => ({
-            mutationId: crypto.randomUUID(),
-            entity: "notification",
-            op: "UPSERT",
-            entityId: n.id,
-            clientTimestamp: nowIso,
-            data: { readAt: nowIso },
-          })),
-        }),
+      await jsonPost("/sync/push", {
+        deviceId: getStoredDeviceId(),
+        mutations: unread.map((n) => ({
+          mutationId: generateUuid(),
+          entity: "notification",
+          op: "UPSERT",
+          entityId: n.id,
+          clientTimestamp: nowIso,
+          data: { readAt: nowIso },
+        })),
       });
       cachedPull = null;
     }
     return new Response(null, { status: 204 });
   }
 
-  return window.fetch(req);
+  // Demais rotas: repassa à API. O body vira ArrayBuffer para poder ser reenviado após renovar o token.
+  const body = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
+  return authFetch(`${path}${url.search}`, { method, headers: req.headers, body });
 }
 
+// O token e a renovação em 401 ficam em authFetch (dentro de mobileSyncFetch). O middleware só põe o
+// token no Request: refazer a chamada aqui exigiria reenviar um body em stream, que o fetch não permite.
 const authMiddleware: Middleware = {
   async onRequest({ request }) {
     const token = getStoredAccessToken();
@@ -842,68 +994,6 @@ const authMiddleware: Middleware = {
       request.headers.set("Authorization", `Bearer ${token}`);
     }
     return request;
-  },
-
-  async onResponse({ response, request }) {
-    if (response.status !== 401) {
-      return response;
-    }
-
-    const url = new URL(request.url);
-    if (url.pathname.includes("/auth/")) {
-      return response;
-    }
-
-    const refreshToken = getStoredRefreshToken();
-    if (!refreshToken) {
-      clearSession();
-      onUnauthorizedCallback?.();
-      return response;
-    }
-
-    if (!refreshingPromise) {
-      refreshingPromise = (async () => {
-        try {
-          const deviceId = getStoredDeviceId();
-          const refreshRes = await window.fetch("/api/v1/auth/refresh", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken, deviceId }),
-          });
-
-          if (!refreshRes.ok) {
-            clearSession();
-            onUnauthorizedCallback?.();
-            return null;
-          }
-
-          const session = (await refreshRes.json()) as SessionResponse;
-          saveSession(session);
-          return session;
-        } catch {
-          clearSession();
-          onUnauthorizedCallback?.();
-          return null;
-        } finally {
-          refreshingPromise = null;
-        }
-      })();
-    }
-
-    const session = await refreshingPromise;
-    if (!session?.accessToken) {
-      return response;
-    }
-
-    const newHeaders = new Headers(request.headers);
-    newHeaders.set("Authorization", `Bearer ${session.accessToken}`);
-    return mobileSyncFetch(
-      new Request(request.url, {
-        method: request.method,
-        headers: newHeaders,
-        body: request.body,
-      }),
-    );
   },
 };
 

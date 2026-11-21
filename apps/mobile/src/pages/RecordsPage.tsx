@@ -1,3 +1,4 @@
+// Lista os registros de manejo do agricultor, com filtro por tipo e o detalhe de cada registro (fotos incluídas).
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router";
@@ -10,8 +11,14 @@ import {
   RECORD_TYPE_FARMER_LABELS,
 } from "@agrofacil/domain";
 import { api, fetchMobileRecordDetail } from "../api/client";
+import { usePendingRecordIds } from "../api/pendingRecords";
+import { onActivateKey } from "../a11y";
+import { RecordPhotos } from "../components/RecordPhotos";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 import plusIcon from "../assets/figma/plus-circle.svg";
+
+/** Selo azul de "aguardando envio": não é erro nem pendência do agricultor. */
+const PENDING_BADGE_STYLE = { backgroundColor: "#e0f2fe", color: "#075985" } as const;
 
 const FILTER_OPTIONS = [
   { label: "Todos", value: "" },
@@ -57,6 +64,9 @@ export function RecordsPage() {
   });
 
   const records = recordsQuery.data ?? [];
+  // Registros na fila offline: a completude só é calculada pela API depois do envio.
+  const pendingIds = usePendingRecordIds();
+  const selectedIsPending = Boolean(selectedRecord?.id && pendingIds.has(selectedRecord.id));
   const detail = detailQuery.data;
   const openCorrections = (detail?.correctionRequests ?? []).filter((c) => c.status === "OPEN");
 
@@ -119,13 +129,17 @@ export function RecordsPage() {
             {records.map((rec) => {
               const typeName = RECORD_TYPE_FARMER_LABELS[rec.type ?? ""] ?? rec.type ?? "Manejo";
               const isComplete = rec.completeness === "COMPLETE";
+              const isPending = Boolean(rec.id && pendingIds.has(rec.id));
               const hasCorrection = (rec.openCorrectionRequests ?? 0) > 0;
 
               return (
                 <div
                   key={rec.id}
                   className="mobile-card"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedRecord(rec)}
+                  onKeyDown={onActivateKey(() => setSelectedRecord(rec))}
                   style={{
                     marginBottom: 0,
                     cursor: "pointer",
@@ -222,13 +236,19 @@ export function RecordsPage() {
                     <div
                       style={{ marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" }}
                     >
-                      <span
-                        className={`badge-status ${
-                          isComplete ? "badge-complete" : "badge-incomplete"
-                        }`}
-                      >
-                        {isComplete ? "✓ Completo" : "⚠️ Pendente de dados"}
-                      </span>
+                      {isPending ? (
+                        <span className="badge-status" style={PENDING_BADGE_STYLE}>
+                          ⏳ Aguardando envio
+                        </span>
+                      ) : (
+                        <span
+                          className={`badge-status ${
+                            isComplete ? "badge-complete" : "badge-incomplete"
+                          }`}
+                        >
+                          {isComplete ? "✓ Completo" : "⚠️ Pendente de dados"}
+                        </span>
+                      )}
                       {hasCorrection && (
                         <span
                           className="badge-status badge-incomplete"
@@ -431,19 +451,25 @@ export function RecordsPage() {
                   Status do Registro
                 </div>
                 <div style={{ marginTop: "4px" }}>
-                  <span
-                    className={`badge-status ${
-                      selectedRecord.completeness === "COMPLETE"
-                        ? "badge-complete"
-                        : "badge-incomplete"
-                    }`}
-                  >
-                    {selectedRecord.completeness === "COMPLETE"
-                      ? "✓ Registro Completo"
-                      : "⚠️ Contém pendências ou dados incompletos"}
-                  </span>
+                  {selectedIsPending ? (
+                    <span className="badge-status" style={PENDING_BADGE_STYLE}>
+                      ⏳ Aguardando envio: será conferido quando houver internet
+                    </span>
+                  ) : (
+                    <span
+                      className={`badge-status ${
+                        selectedRecord.completeness === "COMPLETE"
+                          ? "badge-complete"
+                          : "badge-incomplete"
+                      }`}
+                    >
+                      {selectedRecord.completeness === "COMPLETE"
+                        ? "✓ Registro Completo"
+                        : "⚠️ Contém pendências ou dados incompletos"}
+                    </span>
+                  )}
                 </div>
-                {(detail?.missingFields ?? []).length > 0 && (
+                {!selectedIsPending && (detail?.missingFields ?? []).length > 0 && (
                   <div
                     style={{
                       fontSize: "12px",
@@ -460,21 +486,11 @@ export function RecordsPage() {
                 )}
               </div>
 
-              {(detail?.attachments ?? []).length > 0 && (
-                <div
-                  style={{
-                    backgroundColor: "var(--color-bg)",
-                    padding: "12px",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                    Anexos / Fotos
-                  </div>
-                  <div style={{ fontSize: "13px", fontWeight: 600, marginTop: 2 }}>
-                    📷 {(detail?.attachments ?? []).length} foto(s) anexada(s)
-                  </div>
-                </div>
+              {selectedRecord.id && (
+                <RecordPhotos
+                  recordId={selectedRecord.id}
+                  attachments={detail?.attachments ?? []}
+                />
               )}
             </div>
 

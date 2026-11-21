@@ -1,12 +1,7 @@
 // Cálculo e frases de status da certificação (doc 1 §2.3.7 e doc 3 §A.6).
 
 export type EffectiveCertificationStatus =
-  | "VALID"
-  | "EXPIRING"
-  | "EXPIRED"
-  | "SUSPENDED"
-  | "CANCELLED"
-  | "NONE";
+  "VALID" | "EXPIRING" | "EXPIRED" | "SUSPENDED" | "CANCELLED" | "NONE";
 
 export type CertificationBadgeInfo = {
   status: EffectiveCertificationStatus;
@@ -45,7 +40,10 @@ export function certificationBadgeInfo(
     case "EXPIRING":
       return {
         status: "EXPIRING",
-        shortLabel: daysToExpire !== undefined && daysToExpire !== null ? `Vence em ${daysToExpire}d` : "Vencendo",
+        shortLabel:
+          daysToExpire !== undefined && daysToExpire !== null
+            ? `Vence em ${daysToExpire}d`
+            : "Vencendo",
         figmaLabel: "Certificação regular",
         phrase:
           daysToExpire !== undefined && daysToExpire !== null
@@ -58,7 +56,9 @@ export function certificationBadgeInfo(
         status: "EXPIRED",
         shortLabel: "Vencida",
         figmaLabel: "Certificação irregular",
-        phrase: formattedDate ? `Certificação vencida desde ${formattedDate}` : "Certificação vencida",
+        phrase: formattedDate
+          ? `Certificação vencida desde ${formattedDate}`
+          : "Certificação vencida",
         tone: "danger",
       };
     case "SUSPENDED":

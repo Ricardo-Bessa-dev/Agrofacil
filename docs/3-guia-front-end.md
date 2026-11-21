@@ -1,12 +1,14 @@
 # Agrofácil: guia do front-end
 
+> **Estado (nov/2026):** a [Parte A](#parte-a-experiência-do-agricultor-ux) é a especificação de UX do app. As Partes [C](#parte-c-app-do-agricultor-pwa) e [D](#parte-d-painel-do-coordenador-vite--react) descrevem os dois apps como estão construídos: o do agricultor é um **PWA** (React + Vite), e não um app Expo como na proposta original. A [Parte E](#parte-e-estado-da-implementação-do-front) diz o que já existe e o que falta.
+
 O front tem dois apps no mesmo monorepo. Este guia está dividido assim:
 
 - **[Parte A](#parte-a-experiência-do-agricultor-ux): a experiência do agricultor (UX).** Telas, textos, acessibilidade e testes com agricultores. Define *o que* o app mostra.
 - **[Parte B](#parte-b-comum): o que é comum.** O monorepo, os tipos gerados da API e o pacote `domain`, com as regras compartilhadas.
-- **[Parte C](#parte-c-app-do-agricultor-expo): o app do agricultor.** Expo / React Native, offline-first.
+- **[Parte C](#parte-c-app-do-agricultor-pwa): o app do agricultor.** PWA (React + Vite), offline-first.
 - **[Parte D](#parte-d-painel-do-coordenador-vite--react): o painel do coordenador.** Vite / React, desktop-first.
-- **[Parte E](#parte-e-ordem-de-implementação-do-front): a ordem de implementação.**
+- **[Parte E](#parte-e-estado-da-implementação-do-front): o estado da implementação.**
 
 > **Leia antes:** o contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)) e a sincronização ([doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline), para o mobile). Depois, a [Parte A](#parte-a-experiência-do-agricultor-ux) deste guia: ela define as telas do app, e as Partes B a D mostram como construí-las.
 
@@ -16,9 +18,9 @@ O front tem dois apps no mesmo monorepo. Este guia está dividido assim:
 
 - **[Parte A: experiência do agricultor (UX)](#parte-a-experiência-do-agricultor-ux)**: [A.1 Princípios](#a1-princípios) · [A.2 Navegação](#a2-navegação) · [A.3 Primeiro acesso (ativação)](#a3-primeiro-acesso-ativação) · [A.4 Tela inicial](#a4-tela-inicial) · [A.5 Fluxos de registro](#a5-fluxos-de-registro) · [A.6 Propriedades (RF04–RF09)](#a6-propriedades-rf04rf09) · [A.7 Avisos e lembretes](#a7-avisos-e-lembretes) · [A.8 Meus dados e ajuda](#a8-meus-dados-e-ajuda) · [A.9 Vocabulário](#a9-vocabulário) · [A.10 Acessibilidade e visual](#a10-acessibilidade-e-visual) · [A.11 Painel do coordenador: princípios de UX](#a11-painel-do-coordenador-princípios-de-ux) · [A.12 Testes com agricultores](#a12-testes-com-agricultores) · [A.13 Visitas do grupo e da comissão (SPG)](#a13-visitas-do-grupo-e-da-comissão-spg)
 - **[Parte B: comum](#parte-b-comum)**: [B.1 Monorepo com pnpm](#b1-monorepo-com-pnpm) · [B.2 Qualidade de código](#b2-qualidade-de-código) · [B.3 Tipos gerados da API (`@agrofacil/api-types`)](#b3-tipos-gerados-da-api-agrofacilapi-types) · [B.4 Pacote `@agrofacil/domain`](#b4-pacote-agrofacildomain)
-- **[Parte C: app do agricultor (Expo)](#parte-c-app-do-agricultor-expo)**: [C.1 Criando o projeto](#c1-criando-o-projeto) · [C.2 Estrutura de pastas](#c2-estrutura-de-pastas) · [C.3 Tema e componentes base](#c3-tema-e-componentes-base) · [C.4 Banco local (expo-sqlite + Drizzle)](#c4-banco-local-expo-sqlite--drizzle) · [C.5 Autenticação e sessão](#c5-autenticação-e-sessão) · [C.6 Motor de sincronização](#c6-motor-de-sincronização) · [C.7 GPS, foto, áudio e voz](#c7-gps-foto-áudio-e-voz) · [C.8 O assistente de registro](#c8-o-assistente-de-registro) · [C.9 Notificações](#c9-notificações) · [C.10 Telas principais](#c10-telas-principais) · [C.11 Testes do mobile](#c11-testes-do-mobile) · [C.12 Build e distribuição](#c12-build-e-distribuição)
-- **[Parte D: painel do coordenador (Vite + React)](#parte-d-painel-do-coordenador-vite--react)**: [D.1 Criando o projeto](#d1-criando-o-projeto) · [D.2 Estrutura](#d2-estrutura) · [D.3 Autenticação no painel](#d3-autenticação-no-painel) · [D.4 Dados: TanStack Query](#d4-dados-tanstack-query) · [D.5 Rotas e menu](#d5-rotas-e-menu) · [D.6 Telas](#d6-telas) · [D.7 Padrões de UI do painel](#d7-padrões-de-ui-do-painel) · [D.8 Testes do painel](#d8-testes-do-painel) · [D.9 Build](#d9-build)
-- **[Parte E: ordem de implementação do front](#parte-e-ordem-de-implementação-do-front)**
+- **[Parte C: app do agricultor (PWA)](#parte-c-app-do-agricultor-pwa)**: [C.1 Stack e comandos](#c1-stack-e-comandos) · [C.2 Estrutura de pastas](#c2-estrutura-de-pastas) · [C.3 Tema e componentes base](#c3-tema-e-componentes-base) · [C.4 Dados guardados no aparelho](#c4-dados-guardados-no-aparelho) · [C.5 Autenticação e sessão](#c5-autenticação-e-sessão) · [C.6 Motor de sincronização](#c6-motor-de-sincronização) · [C.7 Fotos](#c7-fotos) · [C.8 Formulário de registro](#c8-formulário-de-registro) · [C.9 Avisos](#c9-avisos) · [C.10 Telas e cobertura da Parte A](#c10-telas-e-cobertura-da-parte-a) · [C.11 Testes do mobile](#c11-testes-do-mobile) · [C.12 Build e distribuição](#c12-build-e-distribuição)
+- **[Parte D: painel do coordenador (Vite + React)](#parte-d-painel-do-coordenador-vite--react)**: [D.1 Stack e comandos](#d1-stack-e-comandos) · [D.2 Estrutura](#d2-estrutura) · [D.3 Autenticação no painel](#d3-autenticação-no-painel) · [D.4 Dados: TanStack Query](#d4-dados-tanstack-query) · [D.5 Rotas e menu](#d5-rotas-e-menu) · [D.6 Telas](#d6-telas) · [D.7 Padrões de UI do painel](#d7-padrões-de-ui-do-painel) · [D.8 Testes do painel](#d8-testes-do-painel) · [D.9 Build](#d9-build)
+- **[Parte E: estado da implementação do front](#parte-e-estado-da-implementação-do-front)**
 
 ## Parte A: experiência do agricultor (UX)
 
@@ -557,7 +559,7 @@ packages:
 ```
 
 ```ini
-# .npmrc: o Metro (bundler do React Native) funciona melhor com dependências "achatadas".
+# .npmrc: dependências "achatadas" (herança da fase Expo; o Vite funciona com qualquer modo).
 node-linker=hoisted
 ```
 
@@ -578,14 +580,13 @@ node-linker=hoisted
 }
 ```
 
-Os pacotes `domain` e `api-types` são consumidos **direto do código-fonte TypeScript** (`"main": "src/index.ts"`), sem etapa de build. O Vite e o Metro do Expo entendem workspaces sozinhos nas versões atuais. Se o Metro não achar um pacote, confira a seção "Work with monorepos" da documentação do Expo.
+Os pacotes `domain` e `api-types` são consumidos **direto do código-fonte TypeScript** (`"main": "src/index.ts"`), sem etapa de build. O Vite entende workspaces sozinho.
 
 ### B.2 Qualidade de código
 
 - **TypeScript** com `"strict": true` e `"noUncheckedIndexedAccess": true` em todos os pacotes.
 - **Lint** por pacote (`pnpm lint` roda todos):
-  - painel e pacotes: **oxlint**, o padrão do template atual do Vite, com as regras de React Hooks;
-  - app: `expo lint` (ESLint com `eslint-config-expo`).
+  - painel, app e pacotes: **oxlint**, o padrão do template atual do Vite, com as regras de React Hooks.
 
   O **Prettier** cuida da formatação (`pnpm format`); o lint não opina sobre estilo.
 - **pnpm 12 via Corepack:** a versão está no `packageManager`. O pnpm bloqueia versões publicadas há pouco tempo (`minimumReleaseAge`); as exceções que ele precisou acrescentar ficam comentadas no `pnpm-workspace.yaml`.
@@ -593,8 +594,8 @@ Os pacotes `domain` e `api-types` são consumidos **direto do código-fonte Type
 - **Todo arquivo começa com um comentário de uma frase** dizendo o que faz. Funções exportadas têm JSDoc.
 - **Nomes:**
   - código em inglês;
-  - textos da interface em português, **nunca espalhados no JSX** quando se repetem: ficam em `src/i18n/pt-BR.ts` de cada app, ou nos rótulos do `domain`.
-- **Nada de números mágicos:** limites e tempos viram constantes nomeadas (`PUSH_BATCH_SIZE = 100`, `GPS_TIMEOUT_MS = 10_000`).
+  - textos da interface em português. Os que se repetem nos dois apps (rótulos de status, tipos, unidades) ficam nos rótulos do `domain`.
+- **Nada de números mágicos:** limites e tempos viram constantes nomeadas (`MAX_PAGE_SIZE = 100`, `PULL_PAGE_SIZE = 500`).
 - **CI:** `pnpm lint && pnpm typecheck && pnpm test` em todo PR.
 
 ### B.3 Tipos gerados da API (`@agrofacil/api-types`)
@@ -675,601 +676,234 @@ export function missingFields(record: RecordWrite & { hasPhoto?: boolean }): str
 
 ---
 
-## Parte C: app do agricultor (Expo)
+## Parte C: app do agricultor (PWA)
 
-### C.1 Criando o projeto
+O app do agricultor é um **PWA**: uma aplicação web (React + Vite) feita para o celular, que funciona sem internet e pode ser instalada na tela inicial. A primeira proposta era um app nativo em Expo / React Native com SQLite; ela foi trocada pelo PWA ([doc 1, ADR-19](1-arquitetura-e-contrato.md#14-registro-de-decisões-adrs)). A [Parte A](#parte-a-experiência-do-agricultor-ux) continua valendo como especificação das telas; o que dela ainda não existe no app está em [§C.10](#c10-telas-e-cobertura-da-parte-a).
 
-```bash
-cd apps
-pnpm create expo-app mobile --template default   # TypeScript + expo-router
-cd mobile
-npx expo install expo-sqlite expo-secure-store expo-local-authentication expo-location \
-  expo-image-picker expo-image-manipulator expo-file-system expo-crypto expo-audio expo-speech \
-  expo-notifications expo-background-task expo-task-manager expo-haptics expo-dev-client \
-  expo-device expo-application expo-linking @react-native-community/netinfo \
-  @shopify/flash-list react-native-svg
-pnpm add drizzle-orm openapi-fetch zod react-hook-form @hookform/resolvers zustand date-fns
-pnpm add -D drizzle-kit jest-expo @testing-library/react-native
-```
+### C.1 Stack e comandos
 
-- **Use sempre `npx expo install`** para pacotes nativos: ele escolhe a versão compatível com o SDK.
-- **Development build, não Expo Go:** push e alguns módulos nativos não funcionam no Expo Go. Rode com `npx expo run:android` (precisa do Android Studio) ou gere com o EAS ([§C.12](#c12-build-e-distribuição)).
+| Item | Escolha |
+|---|---|
+| Base | React 19 + Vite + TypeScript (`apps/mobile`) |
+| Rotas | React Router 7 |
+| Dados | TanStack Query v5 sobre um cliente `openapi-fetch` que responde do espelho local ([§C.6](#c6-motor-de-sincronização)) |
+| Tipos e regras | `@agrofacil/api-types` e `@agrofacil/domain` ([Parte B](#parte-b-comum)) |
+| Offline | service worker próprio, `localStorage` (espelho e fila) e IndexedDB (fotos) |
+| Lint e testes | oxlint e Vitest |
 
-`app.config.ts` (trechos):
+Na raiz do repositório:
 
-```ts
-// Configuração do app Expo; a URL da API vem do ambiente para trocar entre dev, túnel e produção.
-export default {
-  name: "Agrofácil",
-  slug: "agrofacil",
-  scheme: "agrofacil",
-  orientation: "portrait",
-  android: {
-    package: "br.edu.ifba.agrofacil",
-    permissions: ["ACCESS_FINE_LOCATION", "CAMERA", "RECORD_AUDIO", "USE_BIOMETRIC"],
-  },
-  plugins: [
-    "expo-router",
-    "expo-sqlite",
-    "expo-secure-store",
-    ["expo-local-authentication", { faceIDPermission: "Usar seu rosto para abrir o Agrofácil." }],
-    ["expo-location", { locationWhenInUsePermission: "Para marcar onde o registro foi feito." }],
-    ["expo-image-picker", { cameraPermission: "Para tirar fotos dos produtos e da plantação." }],
-    ["expo-audio", { microphonePermission: "Para gravar recados nos registros." }],
-    "expo-notifications",
-    "expo-background-task",
-  ],
-  extra: { apiUrl: process.env.EXPO_PUBLIC_API_URL },
-};
-```
+- `pnpm --filter @agrofacil/mobile dev --host`: servidor em http://localhost:5174. O `--host` deixa abrir no celular pelo IP do computador. O Vite repassa `/api` para a API em `localhost:8080`.
+- `pnpm --filter @agrofacil/mobile build`: gera `apps/mobile/dist/`, com o service worker.
+- `pnpm --filter @agrofacil/mobile test`, `lint` e `typecheck`.
+
+> **Contexto seguro:** `crypto.subtle` (hash das fotos) e o service worker só existem em HTTPS ou em `localhost`. Pelo IP da rede local o app abre e registra, mas não envia fotos nem funciona offline. Em produção, sirva sempre por HTTPS ([doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)).
 
 ### C.2 Estrutura de pastas
 
 ```text
 apps/mobile/
-├── app/                              # rotas (expo-router)
-│   ├── _layout.tsx                   # providers, migrações do banco, portão de autenticação
-│   ├── (onboarding)/                 # boas-vindas, cpf, codigo, termo, protecao, pronto
-│   ├── (app)/
-│   │   ├── _layout.tsx               # trava por digital + abas
-│   │   ├── (tabs)/index.tsx          # Início
-│   │   ├── (tabs)/registros.tsx
-│   │   ├── (tabs)/propriedades.tsx
-│   │   ├── registrar/[type].tsx      # assistente genérico (PLANTING, HARVEST…)
-│   │   ├── registro/[id].tsx         # detalhe
-│   │   ├── propriedade/[id].tsx
-│   │   ├── propriedade/nova.tsx
-│   │   ├── visita/[id].tsx           # detalhe (quem recebe ou quem visita)
-│   │   ├── visita/[id]/fazer.tsx     # modo visita (assistente)
-│   │   ├── avisos.tsx
-│   │   └── meus-dados.tsx
-│   └── sessao-expirada.tsx
-├── src/
-│   ├── api/          # client.ts (openapi-fetch + token), auth.ts
-│   ├── db/           # schema.ts (drizzle), client.ts, migrations/, repositories/
-│   ├── sync/         # engine.ts, push.ts, pull.ts, files.ts, triggers.ts
-│   ├── auth/         # session.ts (SecureStore), biometrics.ts
-│   ├── wizard/       # Wizard.tsx, definitions/*.ts, steps/*.tsx, drafts.ts
-│   ├── device/       # location.ts, camera.ts, audio.ts, speech.ts, notifications.ts
-│   ├── ui/           # componentes base (§C.3)
-│   ├── theme/        # cores, tamanhos, tipografia
-│   ├── i18n/         # pt-BR.ts
-│   └── config.ts     # constantes e leitura de Constants.expoConfig.extra
-└── drizzle.config.ts
+├── index.html, public/            # manifest.webmanifest, ícones do PWA (192 e 512 px)
+├── sw/sw-template.js              # modelo do service worker (o build gera o sw.js)
+├── vite.config.ts                 # proxy /api e o plugin que monta a lista de arquivos do sw
+└── src/
+    ├── main.tsx, App.tsx          # rotas, QueryClient, registro do service worker
+    ├── a11y.ts                    # teclado em elementos com role de botão
+    ├── api/
+    │   ├── client.ts              # sessão, fila offline, sincronização, fotos e o fetch local
+    │   ├── syncState.ts           # espelho do /sync/pull (aplica mudanças e exclusões)
+    │   ├── pushResults.ts         # separa as mutações aceitas, pendentes e recusadas
+    │   ├── photoQueue.ts          # fotos no IndexedDB até chegarem à API
+    │   ├── recordPhotos.ts        # junta fotos da API e do aparelho
+    │   ├── pendingRecords.ts      # registros que ainda estão na fila
+    │   └── uuid.ts                # UUID v4 mesmo fora de contexto seguro
+    ├── auth/                      # AuthContext, rota protegida, ativação
+    ├── layout/MobileShell.tsx     # banner de sincronização e recusas, termos (LGPD), menu inferior
+    ├── components/                # RecordPhotos, RecordTypeIcon
+    ├── pages/                     # Home, Propriedades, Registros, Novo registro, Perfil, Avisos, Ativação
+    └── styles/theme.css           # cores, tipografia e componentes base
 ```
 
 ### C.3 Tema e componentes base
 
-Construa um conjunto **pequeno** de componentes próprios, sem biblioteca de UI pesada, para controlar tamanho, contraste e acessibilidade ([§A.10](#a10-acessibilidade-e-visual)).
+- O tema fica em `styles/theme.css`, com variáveis CSS (`--color-primary`, `--color-surface`, `--radius-md`…) tiradas do protótipo do Figma, e classes reutilizáveis (`mobile-card`, `btn-primary`, `form-input`, `badge-status`).
+- Fonte Poppins, textos grandes e botões com no mínimo 48 px de altura ([§A.10](#a10-acessibilidade-e-visual)).
+- Imagens em WebP; os ícones dos tipos de manejo ficam no componente `RecordTypeIcon`.
+- **Acessibilidade:** todo campo tem `<label htmlFor>`. Cartões clicáveis usam `role="button"` (ou `role="radio"` na escolha do tipo de manejo), `tabIndex={0}` e respondem a Enter e espaço (`a11y.ts`).
 
-| Componente | Uso |
-|---|---|
-| `BigActionButton` | Os 5 botões da tela inicial (ícone + texto, ≥ 56 dp) |
-| `ChoiceGrid` | Grade de opções com ícone (culturas, produtos, destinos), com "Mais usados" no topo e "Outro" |
-| `ChoiceList` | Lista de cartões grandes (plantios, áreas, propriedades) |
-| `NumberStepper` | `[−] 30 [+]` com passo inteligente (1 até 20, depois 5) e toque no número para abrir o teclado |
-| `UnitChips` | Botões de unidade, filtrados pelo tipo de medida (área ou quantidade) |
-| `QuickDate` | Hoje / Ontem / Outro dia |
-| `WizardScaffold` | Cabeçalho com voltar, título e bolinhas de progresso; pergunta grande + 🔊; rodapé com Pular / Próximo |
-| `SyncBadge` | ✓ enviado / ⏱ esperando internet / ! precisa de atenção |
-| `CertificationBanner` | O aviso fixo da RN21 |
-| `Callout` | Caixa amarela de pedido de correção ou aviso |
-| `SpeakButton` | Lê um texto com `expo-speech` |
-| `ConfirmDialog` | Diálogo com frase clara e botões "Não" / "Sim, apagar" |
+### C.4 Dados guardados no aparelho
 
-```ts
-// Tokens visuais do app; tamanhos pensados para leitura no sol e dedos grandes (§A.10).
-export const theme = {
-  font: { body: 18, question: 24, title: 28, small: 15 },
-  touch: { primary: 56, secondary: 48 },
-  space: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
-  radius: { md: 12, lg: 16 },
-  color: {
-    // Copie as cores da "Identidade Visual" do Figma e confira o contraste (7:1 no texto principal).
-    text: "#1B1B1B",
-    background: "#FFFFFF",
-    primary: "<cor da marca>",
-    success: "#1E7B34",
-    warning: "#8A5A00",
-    danger: "#B3261E",
-    muted: "#5F5F5F",
-  },
-} as const;
-```
+| Onde | Chave | O quê |
+|---|---|---|
+| `localStorage` | `af_mobile_access_token`, `af_mobile_refresh_token`, `af_mobile_device_id`, `af_mobile_user` | Sessão e identificação do aparelho |
+| `localStorage` | `af_mobile_sync_state` | Espelho do `/sync/pull`: cursor e coleções (`version: 3`) |
+| `localStorage` | `af_mobile_offline_queue` | Mutações ainda não enviadas (`/sync/push`) |
+| `localStorage` | `af_mobile_rejected_changes` | Mutações que a API recusou e o agricultor ainda não viu |
+| IndexedDB `agrofacil-mobile` | `pending-photos` | Fotos (Blob) esperando envio, com hash e ids fixos |
+| Cache Storage | `agrofacil-mobile-<versão>` | Arquivos do app para abrir sem internet |
 
-- A preferência "Tamanho da letra" (Normal / Grande / Muito grande) multiplica `font.*` por 1 / 1,15 / 1,3, através de um contexto `useFontScale()`.
-- **Ícones de culturas:** SVGs em `src/ui/crop-icons/`, mapeados pela chave `crop.icon` que vem do servidor. Ícone desconhecido → ícone genérico de planta.
-
-### C.4 Banco local (expo-sqlite + Drizzle)
-
-```ts
-// Esquema do banco local: espelho dos dados do servidor + tabelas de controle da sincronização (doc 1 §4.2).
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
-
-const localSyncColumns = {
-  localStatus: text("local_status", { enum: ["SYNCED", "PENDING", "ERROR"] }).notNull().default("SYNCED"),
-  localError: text("local_error"),            // JSON
-  serverVersion: integer("server_version"),
-  deletedLocally: integer("deleted_locally", { mode: "boolean" }).notNull().default(false),
-};
-
-export const records = sqliteTable("records", {
-  id: text("id").primaryKey(),
-  type: text("type").notNull(),
-  number: integer("number"),
-  propertyId: text("property_id").notNull(),
-  plotId: text("plot_id"),
-  plantingId: text("planting_id"),             // copiado do payload para facilitar consultas
-  performedOn: text("performed_on").notNull(), // "2026-10-24"
-  completeness: text("completeness").notNull(),
-  missingFields: text("missing_fields").notNull(), // JSON array
-  cycleStatus: text("cycle_status"),           // só plantios
-  expectedHarvestOn: text("expected_harvest_on"),
-  subjectKey: text("subject_key"),             // cropId / inputId / texto "Outro", para "mais usados"
-  createdById: text("created_by_id"),
-  payload: text("payload").notNull(),          // JSON com o Record completo do contrato
-  updatedAt: text("updated_at"),
-  ...localSyncColumns,
-});
-
-export const outbox = sqliteTable("outbox", {
-  mutationId: text("mutation_id").primaryKey(),
-  entity: text("entity").notNull(),
-  entityId: text("entity_id").notNull(),
-  op: text("op", { enum: ["UPSERT", "DELETE"] }).notNull(),
-  data: text("data"),
-  baseVersion: integer("base_version"),
-  createdAt: text("created_at").notNull(),
-  attempts: integer("attempts").notNull().default(0),
-  lastError: text("last_error"),
-});
-// properties, plots, workers, certifications, attachments, correctionRequests, announcements,
-// notifications, crops, farmInputs, units, people, me, visits, visitChecklistItems, fileUploads, syncState, drafts…
-```
-
-- **Migrações locais:** `drizzle-kit generate` (com `dialect: "sqlite"` e `driver: "expo"`) gera os arquivos. O `useMigrations(db, migrations)` roda as migrações no `_layout.tsx` raiz, antes de qualquer tela.
-- **Abra o banco com `openDatabaseSync("agrofacil.db", { enableChangeListener: true })`.** Isso faz o `useLiveQuery` do Drizzle atualizar as telas sozinho quando o sync grava algo.
-- **Repositórios (`src/db/repositories/`):** cada um junta "gravar dado + gravar mutação" numa transação ([doc 1 §4.3](1-arquitetura-e-contrato.md#43-escritas-locais)). As telas **nunca** escrevem em tabela diretamente:
-
-```ts
-// Grava um registro localmente e enfileira a mutação para a sincronização, na mesma transação.
-export async function saveRecord(record: RecordWrite, ctx: SaveContext): Promise<void> {
-  const missing = missingFields({ ...record, hasPhoto: ctx.hasPhoto });
-  await db.transaction(async (tx) => {
-    await tx.insert(records).values(toRow(record, missing)).onConflictDoUpdate({
-      target: records.id,
-      set: toRow(record, missing),
-    });
-    await enqueueMutation(tx, { entity: "record", entityId: record.id, op: "UPSERT", data: record });
-  });
-  scheduleSync(); // gatilho com 2 s de espera (doc 1 §4.4.1)
-}
-```
-
-> Confira na documentação do Drizzle para `expo-sqlite`, na versão que vocês usarem, se a transação é síncrona ou assíncrona, e ajuste o padrão acima. O importante é **dado + mutação na mesma transação**.
+- **Sair do app** (`clearSession`) apaga a sessão e o espelho (LGPD), mas **mantém** a fila e as fotos pendentes, para nada se perder se o agricultor sair sem internet.
+- Nada disso é criptografado; o risco e as defesas estão no [doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd).
 
 ### C.5 Autenticação e sessão
 
-```ts
-// Cliente HTTP tipado com token de acesso em memória e renovação automática (uma de cada vez).
-import createClient, { type Middleware } from "openapi-fetch";
-import type { paths } from "@agrofacil/api-types";
-
-let accessToken: string | null = null;
-let refreshing: Promise<boolean> | null = null;
-
-export const api = createClient<paths>({ baseUrl: `${config.apiUrl}/api/v1` });
-
-const auth: Middleware = {
-  async onRequest({ request }) {
-    request.headers.set("X-Device-Id", await session.deviceId());
-    request.headers.set("X-App-Version", config.appVersion);
-    if (accessToken) request.headers.set("Authorization", `Bearer ${accessToken}`);
-    return request;
-  },
-};
-api.use(auth);
-
-/** Renova o token de acesso. Chamadas simultâneas compartilham a mesma renovação. */
-export function refreshSession(): Promise<boolean> {
-  refreshing ??= doRefresh().finally(() => (refreshing = null));
-  return refreshing;
-}
-```
-
-- O `deviceId` é gerado (`Crypto.randomUUID()`) na primeira execução e fica no **SecureStore**, assim como o `refreshToken`. O **token de acesso fica só em memória**.
-- Ao receber 401 `TOKEN_EXPIRED`, chame `refreshSession()` e repita a requisição **uma** vez. Se o refresh falhar com `REFRESH_INVALID` ou `DEVICE_REVOKED`, apague o refresh token (mas **não** o banco) e navegue para `sessao-expirada` ([doc 1 §4.6](1-arquitetura-e-contrato.md#46-sessão-expirada-ou-aparelho-revogado)).
-- **Portão de entrada** (`app/_layout.tsx`): sem refresh token → `(onboarding)`; com refresh token → `(app)`. O app **abre sem internet**, porque não depende de validar o token para mostrar dados locais.
-- **Trava por digital** (`src/auth/biometrics.ts`): se o usuário ativou, ao abrir o app ou voltar após mais de 5 min em segundo plano, chame `LocalAuthentication.authenticateAsync({ promptMessage: "Abrir o Agrofácil", fallbackLabel: "Usar a senha do celular" })`. Se falhar, tente de novo; não há outra saída, porque a digital protege os dados de quem pega o celular. Se o celular não tiver biometria nem bloqueio de tela, a opção nem aparece (`hasHardwareAsync`, `isEnrolledAsync`, `getEnrolledLevelAsync`).
+- **Ativação** ([§A.3](#a3-primeiro-acesso-ativação)): CPF + código de 6 dígitos em `POST /auth/farmer/activate`, com o `deviceId` (UUID gerado uma vez e guardado) e a plataforma (`ANDROID` ou `IOS`, pelo navegador).
+- **Tokens:** o de acesso dura 15 minutos. Toda chamada passa por `authFetch`, que põe o `Authorization` e, em 401, renova com o refresh token **uma vez** e repete a chamada. Renovações simultâneas compartilham a mesma promessa.
+- **Sem internet** a renovação falha sem derrubar a sessão: o agricultor continua trabalhando offline. A sessão só é encerrada quando a API responde 401/403 ao refresh ou ao `/me`.
+- **Termos (LGPD):** se `termsAcceptedVersion` for diferente de `currentTermsVersion`, o `MobileShell` mostra o aceite (`POST /me/terms/accept`).
 
 ### C.6 Motor de sincronização
 
-```ts
-// Orquestra o ciclo de sincronização: push da fila, upload de arquivos e pull de mudanças (doc 1 §4.4).
-const PUSH_BATCH_SIZE = 100;
-const DEBOUNCE_MS = 2_000;
+As telas usam o mesmo cliente `openapi-fetch` do painel, mas o `fetch` dele é trocado por `mobileSyncFetch`, que responde **a partir do espelho local**:
 
-let running = false;
-let rerunRequested = false;
-let debounce: ReturnType<typeof setTimeout> | undefined;
+- **Leitura:** `GET /properties`, `/properties/{id}`, `/properties/{id}/plots`, `/records`, `/records/{id}`, `/announcements`, `/notifications`, `/catalog/crops` e `/catalog/farm-inputs` são montadas do espelho, junto com os registros que ainda estão na fila. As demais rotas vão direto à API.
+- **Pull incremental:** `fetchSyncSnapshot` chama `GET /sync/pull?cursor=` página a página (500 itens, até 50 páginas) até `hasMore=false`, aplica as mudanças com `applyPull` e grava o novo cursor. `reset=true` recomeça do zero. Itens sem `id` (unidades e itens do roteiro) usam `code` como chave. Chamadas seguidas em menos de 2,5 s reaproveitam o último resultado.
+- **Escrita:** criar ou editar registro e propriedade gera uma mutação com `mutationId` e `entityId` gerados no aparelho, que entra na fila e é enviada por `/sync/push`. Mutações para o mesmo item são unificadas (vale o último estado).
+- **Envio da fila** (`flushOfflineQueue`): ao abrir o app, ao voltar a internet (evento `online`), depois de cada registro e no botão "Sincronizar". Resultado por mutação:
+  - `APPLIED`: sai da fila;
+  - `REJECTED`: sai da fila e vai para as recusas, que o `MobileShell` mostra num aviso vermelho com o motivo;
+  - sem resposta (rede ou 5xx): fica na fila para a próxima tentativa.
+- **Selo "Aguardando envio":** registros com mutação na fila aparecem assim na lista e no detalhe (`usePendingRecordIds`), porque a completude só é calculada pela API depois do envio.
 
-/** Pede uma sincronização logo após uma gravação local; agrupa vários pedidos seguidos. */
-export function scheduleSync(): void {
-  clearTimeout(debounce);
-  debounce = setTimeout(() => void requestSync(), DEBOUNCE_MS);
-}
+### C.7 Fotos
 
-/** Roda um ciclo agora; se já houver um rodando, agenda outro para quando ele terminar. */
-export async function requestSync(): Promise<void> {
-  if (running) {
-    rerunRequested = true;
-    return;
-  }
-  running = true;
-  try {
-    do {
-      rerunRequested = false;
-      await syncOnce();
-    } while (rerunRequested);
-  } catch (e) {
-    await recordSyncFailure(e);   // guarda em sync_state; a tela inicial mostra "esperando internet"
-  } finally {
-    running = false;
-  }
-}
+Fluxo em duas etapas ([doc 1, §3.6](1-arquitetura-e-contrato.md#36-arquivos-fotos-áudios-pdfs)):
 
-async function syncOnce(): Promise<void> {
-  const net = await NetInfo.fetch();
-  if (!net.isInternetReachable) return;
-  await pushAll();
-  await uploadPendingFiles();
-  await pullAll();
-}
+1. A foto é guardada no IndexedDB com `attachmentId`, `mutationId` e SHA-256 fixos.
+2. Quando o registro dela já foi enviado, o app registra o anexo (mutação `attachment`) e depois manda o arquivo (`PUT /files/{id}/content`). Cada etapa concluída é gravada, então uma queda no meio não repete trabalho.
+3. 401, 408, 429 e 5xx tentam de novo depois; outros 4xx (ex.: `CHECKSUM_MISMATCH`) vão para as recusas.
 
-async function pushAll(): Promise<void> {
-  for (;;) {
-    const batch = await outboxRepository.nextBatch(PUSH_BATCH_SIZE);
-    if (batch.length === 0) return;
-    const { data, error, response } = await api.POST("/sync/push", {
-      body: { deviceId: await session.deviceId(), mutations: batch.map(toMutation) },
-    });
-    if (error) throw new SyncHttpError(response.status, error);   // rede/5xx/401 tratados acima
-    await outboxRepository.applyResults(data.results);            // APPLIED → remove; REJECTED → marca ERROR
-  }
-}
+O detalhe do registro mostra as fotos enviadas (baixadas com o token) e as que ainda estão no aparelho, com o selo "Aguardando envio". As fotos baixadas ficam em cache só enquanto o app está aberto.
 
-async function pullAll(): Promise<void> {
-  let hasMore = true;
-  while (hasMore) {
-    const cursor = await syncStateRepository.cursor();
-    const { data, error, response } = await api.GET("/sync/pull", { params: { query: { cursor } } });
-    if (error) throw new SyncHttpError(response.status, error);
-    await mirrorRepository.applyPull(data);   // transação: upserts (pulando quem tem pendência), lápides, cursor
-    await visitsRepository.pruneOthersDoneBefore(daysAgo(30)); // RN36: resumo de outra roça sai do celular
-    hasMore = data.hasMore;
-  }
-}
-```
+### C.8 Formulário de registro
 
-**Gatilhos** (`src/sync/triggers.ts`), registrados uma vez no layout do `(app)`:
-- `NetInfo.addEventListener`, quando `isInternetReachable` passa de `false` para `true`;
-- `AppState.addEventListener("change")` para `active`;
-- **tarefa em segundo plano:**
-  1. `TaskManager.defineTask(SYNC_TASK, async () => { await requestSync(); return BackgroundTask.BackgroundTaskResult.Success; })`, **no escopo do módulo**, fora de componentes;
-  2. `BackgroundTask.registerTaskAsync(SYNC_TASK, { minimumInterval: 15 })`.
-- puxar para atualizar, na lista de registros.
+`NewRecordPage` cria e edita os 5 tipos (plantio, aplicação, colheita, compra e saída) numa tela só: primeiro o tipo, depois os campos daquele tipo, com os catálogos da associação e "Outro" em texto livre.
 
-**Espera exponencial:** guarde `nextAttemptAt` no `sync_state` depois de uma falha, e os gatilhos automáticos respeitam esse horário. O gatilho manual ignora.
+- **Vínculos:** colheita e aplicação escolhem o plantio ativo (seleção automática só quando há exatamente um); plantio pede a área (seleção automática só quando a propriedade tem uma área).
+- **Foto opcional**, tirada pela câmera (`capture="environment"`).
+- **Pedido de correção:** o registro com pedido aberto mostra a mensagem da coordenação; ao salvar, a API resolve o pedido.
+- **Tamanho da propriedade** (em `PropertyDetailPage`): o app mostra quanto as áreas ocupam e não deixa salvar um tamanho menor (RN41).
 
-### C.7 GPS, foto, áudio e voz
+### C.9 Avisos
 
-```ts
-// Captura a localização sem nunca bloquear o registro (RN26): até 10 s, senão segue sem GPS.
-const GPS_TIMEOUT_MS = 10_000;
+Os avisos ficam **só dentro do app**: a tela de avisos lista as notificações do espelho e marca todas como lidas (`POST /notifications/read-all`). A tela inicial mostra os comunicados recentes. Não há push nem lembretes locais; o envio pelo Expo fica desligado na API (`PUSH_ENABLED=false`).
 
-export async function captureLocation(): Promise<GeoPoint | null> {
-  const { status } = await Location.getForegroundPermissionsAsync();
-  if (status !== "granted") return null;
-  const position = await Promise.race([
-    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-    sleep(GPS_TIMEOUT_MS).then(() => null),
-  ]);
-  const fix = position ?? (await Location.getLastKnownPositionAsync());
-  if (!fix) return null;
-  return {
-    lat: round(fix.coords.latitude, 6),
-    lng: round(fix.coords.longitude, 6),
-    accuracyM: fix.coords.accuracy ?? undefined,
-    capturedAt: new Date(fix.timestamp).toISOString(),
-  };
-}
-```
+### C.10 Telas e cobertura da Parte A
 
-- **Quando chamar:** ao **abrir** o assistente (RF10). A promessa fica guardada no estado do assistente e é lida na hora de salvar.
-- **Permissão de localização:** peça na primeira vez que o agricultor abrir um registro, com uma tela explicativa antes do pedido do sistema ("Para mostrar à associação onde a atividade foi feita").
-- **Foto:**
-  1. `ImagePicker.launchCameraAsync({ quality: 1 })`;
-  2. `ImageManipulator`, que redimensiona o lado maior para 1600 px e salva em JPEG com compressão 0,7;
-  3. copie para `Paths.document/attachments/<uuid>.jpg` (API de arquivos do `expo-file-system`);
-  4. calcule o SHA-256 com `expo-crypto` a partir dos bytes do arquivo.
-- **Áudio:**
-  - `expo-audio` (`useAudioRecorder` com preset de alta qualidade, gera `.m4a` / `audio/mp4`);
-  - limite de **3 min** com contagem na tela e botão grande de parar;
-  - depois de gravar, o agricultor pode ouvir e regravar.
-- **Voz:** `Speech.speak(texto, { language: "pt-BR", rate: 0.95 })`. Antes de falar, pare qualquer fala anterior (`Speech.stop()`).
+| Rota | Tela |
+|---|---|
+| `/login` | Ativação (CPF + código) |
+| `/` | Início: saudação, grupo, propriedade principal, últimos manejos e comunicados |
+| `/propriedades`, `/propriedades/:id` | Propriedades, áreas, trabalhadores, edição de produção, tamanho e roteiro de acesso |
+| `/registros` | Caderno de campo com filtro por tipo e detalhe (fotos, pendências e correções) |
+| `/registros/novo`, `/registros/:id/editar` | Formulário de registro |
+| `/notificacoes` | Avisos |
+| `/perfil` | Meus dados, WhatsApp da associação e sair |
 
-### C.8 O assistente de registro
+**Ainda não implementado** em relação à [Parte A](#parte-a-experiência-do-agricultor-ux):
 
-Um componente genérico `Wizard` com uma **definição declarativa** por tipo. Isso evita 5 telas copiadas.
-
-```ts
-// Definição declarativa de um passo do assistente de registro.
-export type WizardStep<D> = {
-  id: string;
-  question: (draft: D, ctx: WizardContext) => string;        // texto grande e o que o 🔊 lê
-  isVisible?: (draft: D, ctx: WizardContext) => boolean;     // ex.: esconder "Onde?" se há uma área só
-  isOptional?: boolean;                                      // mostra "Pular"
-  Component: React.FC<StepProps<D>>;                          // ChoiceGrid, NumberStepper…
-};
-
-export type WizardDefinition<D, Out = RecordWrite> = {
-  type?: RecordWrite["type"];                                // só nos registros
-  title: string;                                             // "Colheita"
-  initialDraft: (ctx: WizardContext, preset?: Partial<D>) => D; // hoje, última unidade, plantio do lembrete…
-  steps: WizardStep<D>[];
-  toWrite: (draft: D, ctx: WizardContext) => Out;            // valida com o esquema zod do domain
-};
-```
-
-```ts
-// Assistente de colheita (§A.5.3).
-export const harvestWizard: WizardDefinition<HarvestDraft> = {
-  type: "HARVEST",
-  title: "Colheita",
-  initialDraft: (ctx, preset) => ({ performedOn: ctx.today, isFinal: false, ...preset }),
-  steps: [
-    { id: "planting", question: () => "Colheu qual plantação?", Component: PlantingPickerStep },
-    { id: "date", question: () => "Quando você colheu?", Component: QuickDateStep },
-    {
-      id: "quantity",
-      question: () => "Quanto você colheu?",
-      isOptional: true,
-      Component: QuantityStep,
-    },
-    { id: "final", question: (d, ctx) => `Terminou de colher ${ctx.plantingLabel(d.plantingId)}?`, Component: YesNoStep },
-    { id: "extras", question: () => "Quer acrescentar algo?", isOptional: true, Component: ExtrasStep },
-  ],
-  toWrite: (d, ctx) => harvestWriteSchema.parse({ ...d, id: ctx.recordId, type: "HARVEST", propertyId: ctx.propertyOf(d.plantingId) }),
-};
-```
-
-O `Wizard`:
-- calcula os passos visíveis;
-- mostra o progresso;
-- salva o rascunho na tabela `drafts` a cada mudança;
-- no fim, mostra a **confirmação** com `describeRecord` (pacote `domain`);
-- chama `saveRecord` e vai para a tela de sucesso, com `Haptics.notificationAsync(Success)`.
-
-**Rotas:**
-- `registrar/[type]?preset=<json>` permite abrir já preenchido. É assim que funcionam o lembrete "Já colheu?", o "Registrar de novo" e o "+ Colheita" no detalhe do plantio.
-- **Editar** usa o mesmo assistente, começando na lista de respostas da confirmação.
-- **Completar** mostra só os passos dos `missingFields`.
-
-**Modo visita:** reaproveita o `Wizard` com passos **montados a partir do roteiro** que veio do servidor (`visit_checklist_items`). Generalize a definição para que a saída não seja só um `RecordWrite`:
-
-```ts
-// Monta o assistente da visita: um passo por pergunta ativa do roteiro, mais os passos fixos (doc 3 §A.13.3).
-export function buildVisitWizard(visit: Visit, items: VisitChecklistItem[]): WizardDefinition<VisitDraft, VisitResultWrite> {
-  const questions = items
-    .filter((i) => i.active && (i.appliesTo === "BOTH" || i.appliesTo === visit.type))
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-  return {
-    title: `Visita · ${visit.property.name}`,
-    initialDraft: (ctx) => ({ doneOn: ctx.today, attended: visitorIds(visit), answers: {} }),
-    steps: [
-      { id: "attended", question: () => "Quem foi na visita?", Component: PeoplePickerStep },
-      ...questions.map((q) => ({ id: q.code, question: () => q.question, Component: ChecklistAnswerStep })),
-      { id: "issues", question: () => "Encontraram algo que precisa melhorar?", Component: IssuesStep },
-      { id: "advice", question: () => "Quer deixar alguma recomendação?", isOptional: true, Component: TextOrAudioStep },
-      { id: "photos", question: () => "Quer tirar fotos da visita?", isOptional: true, Component: PhotosStep },
-    ],
-    toWrite: (d) => visitResultSchema.parse(toVisitResult(d, questions)),
-  };
-}
-```
-
-- **Gravar:** `saveVisitResult` grava na tabela `visits` e enfileira a mutação `visit` **na mesma transação**, como o `saveRecord`.
-- **Rascunho:** fica na mesma tabela `drafts`, com a chave `visit:<id>`.
-- **Quem pode abrir:** a rota `visita/[id]/fazer` só abre se o usuário for o `recorderId`. Os outros veem o aviso da [§A.13.2](#a132-quem-vai-visitar).
-
-**"Mais usados":** uma consulta local agrupa `records.subjectKey` dos últimos 180 dias por tipo, ordena pela contagem e pega os 6 primeiros.
-
-### C.9 Notificações
-
-- **Push:**
-  1. ao entrar no `(app)`, peça permissão com uma explicação antes;
-  2. obtenha `Notifications.getExpoPushTokenAsync({ projectId })`;
-  3. envie em `PUT /me/device`.
-
-  Repita a cada abertura, porque o token pode mudar.
-- **Ao tocar numa notificação** (`addNotificationResponseReceivedListener`), leia o `data.type` e navegue: registro → `registro/[id]`, certificação → `propriedade/[id]`, visita → `visita/[id]`, comunicado → `avisos`.
-- **Lembretes locais** ([§A.7](#a7-avisos-e-lembretes)), com `Notifications.scheduleNotificationAsync`:
-  - **colheita prevista:** gatilho de data às 7h do `expectedHarvestOn`. O identificador é o id do plantio, para reagendar ou cancelar ao editar, ao encerrar o plantio ou ao apagar;
-  - **semanal:** gatilho semanal; ao disparar, o app não tem como verificar antes, então o texto é genérico. Ao abrir, se já houver registro na semana, nada acontece;
-  - **categorias com botões** (`setNotificationCategoryAsync`): "Sim, registrar" e "Ainda não".
-- Crie o canal Android `default` com importância alta na inicialização.
-
-### C.10 Telas principais
-
-| Tela | Fonte de dados (sempre local) | Observações |
-|---|---|---|
-| Início | `useLiveQuery` de lembretes, últimos registros, status da fila e certificações | [§A.4](#a4-tela-inicial) |
-| Registros | `records` com filtros por tipo, agrupados por mês, em `FlashList` | Puxar para atualizar dispara o sync |
-| Detalhe do registro | `records` + `attachments` + `correctionRequests` + `people` | Fotos lidas do arquivo local; se ainda não existir, baixe com `/files/{id}/content` |
-| Propriedades | `properties` + `certifications` (status calculado com o `domain`) | |
-| Detalhe da propriedade | `plots`, `workers`, `certifications`, plantios ativos | Mapa estático: `react-native-maps` só se a equipe quiser; para o MVP basta o botão "Abrir no mapa" com `geo:lat,lng` |
-| Avisos | `notifications` + `announcements` | Ao abrir, marca como lido (mutação `notification`) |
-| Meus dados | `me` | A edição exige internet, com aviso claro |
-| Detalhe da visita | `visits` (com o `brief`) + `people` | [§A.13](#a13-visitas-do-grupo-e-da-comissão-spg). "Ligar" usa `tel:`; "Abrir no mapa" usa `geo:lat,lng` |
-| Modo visita | `visits` + `visitChecklistItems` | Assistente gerado pelo `buildVisitWizard` (§C.8) |
+- GPS da propriedade e dos registros (RF10), áudio e registro por voz;
+- assistente passo a passo (hoje é um formulário por tipo);
+- lembretes e notificações fora do app (push);
+- entrada por digital;
+- visitas do SPG no app ([§A.13](#a13-visitas-do-grupo-e-da-comissão-spg)): cartões, resumo da propriedade visitada e resultado pelo visitador;
+- cadastro e exclusão de propriedade pelo agricultor (o app só edita).
 
 ### C.11 Testes do mobile
 
-| Tipo | Ferramenta | O que testar |
-|---|---|---|
-| Unitário | Jest (`jest-expo`) | Repositórios (com SQLite em memória ou mock), compactação da fila, aplicação do pull, definições do assistente |
-| Componentes | React Native Testing Library | `NumberStepper`, `ChoiceGrid`, `Wizard` (navegar, pular, voltar, confirmar) |
-| Ponta a ponta | **Maestro** (fluxos YAML) | Os 9 roteiros da [§A.12](#a12-testes-com-agricultores), incluindo o modo avião (a visita feita sem internet) |
+Vitest, sem navegador, nas partes que têm regra: `syncState` (aplicação do pull), `pushResults` (separação dos resultados), `recordPhotos`, `pendingRecords`, `uuid`, ativação e o cliente HTTP. Os testes rodam com `pnpm --filter @agrofacil/mobile test` e no CI.
 
 ### C.12 Build e distribuição
-- **EAS Build** com o perfil `preview` (`"android": { "buildType": "apk" }`) gera um APK para instalar direto nos celulares, sem Play Store.
-- **Variáveis:** `EXPO_PUBLIC_API_URL` por perfil (`development` → IP da máquina na rede local; `preview` → URL do túnel HTTPS, [doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)).
-- **Versão:** `version` no `app.config.ts`. Suba a `app.min-mobile-version` da API só quando uma mudança quebrar a compatibilidade.
-- **Atualizações sem reinstalar:** o `expo-updates` (OTA) é opcional e pode vir depois do MVP.
 
----
+- `pnpm --filter @agrofacil/mobile build` gera `apps/mobile/dist/`. Um plugin do `vite.config.ts` monta o `sw.js` a partir de `sw/sw-template.js`, com a lista de todos os arquivos do build e uma versão calculada pelo hash deles.
+- **Service worker:** guarda os arquivos na instalação; navegação com rede primeiro (até 4 s) e o `index.html` guardado como reserva; demais arquivos do cache primeiro (com `ignoreVary`, porque o servidor manda `Vary: Origin`). Ao publicar uma versão nova, o cache antigo é apagado.
+- **Publicação:** sirva `dist/` por HTTPS no mesmo domínio da API (o cliente usa `/api/v1` relativo). O agricultor abre o endereço no navegador e usa "Adicionar à tela inicial".
 
 ## Parte D: painel do coordenador (Vite + React)
 
-### D.1 Criando o projeto
+### D.1 Stack e comandos
 
-```bash
-cd apps
-pnpm create vite web --template react-ts
-cd web
-pnpm add @mantine/core @mantine/hooks @mantine/dates @mantine/charts @mantine/notifications @mantine/modals \
-  mantine-datatable recharts dayjs @tanstack/react-query react-router openapi-fetch \
-  react-hook-form @hookform/resolvers zod leaflet react-leaflet @tabler/icons-react
-pnpm add -D vitest @testing-library/react @testing-library/user-event jsdom msw @playwright/test @types/leaflet
-```
+| Item | Escolha |
+|---|---|
+| Base | React 19 + Vite + TypeScript (`apps/web`) |
+| Rotas | React Router 7 |
+| Dados | TanStack Query v5 + `openapi-fetch` com os tipos de `@agrofacil/api-types` |
+| Visual | CSS próprio com a identidade do Figma (`index.css` e `App.css`, classes `af-*`) |
+| Lint e testes | oxlint e Vitest |
 
-`vite.config.ts`: o proxy evita CORS no desenvolvimento.
-
-```ts
-// Configuração do Vite: repassa /api para a API local, para que painel e API fiquem na mesma origem.
-export default defineConfig({
-  plugins: [react()],
-  server: { proxy: { "/api": "http://localhost:8080" } },
-});
-```
+- `pnpm --filter @agrofacil/web dev`: painel em http://localhost:5173. O proxy do `vite.config.ts` repassa `/api` para `localhost:8080`, então painel e API ficam na mesma origem e não há CORS.
+- `pnpm --filter @agrofacil/web build`, `test`, `lint` e `typecheck`.
 
 ### D.2 Estrutura
 
 ```text
 apps/web/src/
-├── main.tsx                 # MantineProvider (locale pt-BR do dayjs), QueryClientProvider, RouterProvider
-├── router.tsx               # tabela de rotas (§D.5)
+├── main.tsx, App.tsx          # QueryClient (com avisos de erro), rotas e RequireCoordinator
+├── index.css, App.css         # tema e classes af-* (cartões, tabelas, formulários, badges, alertas)
 ├── api/
-│   ├── client.ts            # openapi-fetch + token em memória + refresh por cookie
-│   └── queries/             # hooks por recurso: useFarmers, useFarmer, useCreateFarmer…
-├── auth/                    # AuthProvider, RequireAuth, telas de login/2FA/convite/senha
-├── layout/                  # AppShell com menu lateral, cabeçalho com sino de notificações
-├── features/
-│   ├── dashboard/
-│   ├── farmers/
-│   ├── properties/
-│   ├── records/
-│   ├── certifications/
-│   ├── groups/
-│   ├── announcements/
-│   ├── catalog/
-│   ├── reports/
-│   ├── visits/              # planejamento, agenda, marcar visita (sugestão), detalhe, resultado
-│   ├── documents/           # gerar, listar, cópia assinada, conferir código
-│   ├── spg-people/          # colaboradores, Comissão, impedimentos
-│   └── settings/
-├── components/              # DataTableWithFilters, StatusBadge, ConfirmDelete, MapPicker, FileDownloadButton
-├── i18n/pt-BR.ts
-└── test/                    # handlers do MSW e utilitários
+│   ├── client.ts              # openapi-fetch, token em memória, refresh por cookie, unwrap e ApiError
+│   ├── pagination.ts          # fetchAllPages: junta todas as páginas para menus de seleção
+│   └── municipalities.ts      # busca na API com a lista local da Bahia como reserva
+├── auth/                      # AuthContext e telas de login, 2FA, senha e convite
+├── layout/AppLayout.tsx       # menu lateral em três grupos, cabeçalho com sino de notificações
+├── components/                # Logo, StatusBadge, Pagination, AttachmentGallery, Toaster
+└── features/
+    ├── dashboard/             # painel inicial
+    ├── farmers/               # lista, cadastro e ficha com abas
+    ├── properties/            # lista (cartões, tabela, coordenadas), detalhe com áreas e trabalhadores
+    ├── records/               # lista, registrar pelo agricultor, detalhe com fotos e pedidos de correção
+    ├── certifications/        # lista, emitir, editar e renovar
+    ├── groups/
+    ├── spg/                   # visitas, documentos D1–D8, pessoas do SPG
+    └── management/            # comunicados, catálogo, relatórios e configurações
 ```
 
 ### D.3 Autenticação no painel
 
-- **Token de acesso em memória** (variável de módulo), nunca no `localStorage`. O refresh token está no cookie `HttpOnly`, que o JavaScript não lê.
-- **Ao carregar a página:** `POST /api/v1/auth/refresh` com `credentials: "include"` e `X-Requested-With: agrofacil-web`.
-  - Deu certo: o usuário está logado (busca `/me`).
-  - Deu 401: vai para `/entrar`.
-- O middleware do `openapi-fetch`:
-  - põe o `Authorization`;
-  - em `TOKEN_EXPIRED`, faz um refresh único (mesmo padrão do mobile, [§C.5](#c5-autenticação-e-sessão)) e repete a requisição;
-  - se o refresh falhar, limpa o cache do TanStack Query e vai para `/entrar?voltar=<rota atual>`.
-- **Telas de autenticação:**
+- **Token de acesso em memória** (variável de módulo), nunca no `localStorage`. O refresh token está no cookie `HttpOnly` `af_refresh`, que o JavaScript não lê.
+- **Ao carregar a página:** `POST /api/v1/auth/refresh` com `credentials: "include"` e `X-Requested-With: agrofacil-web`. Deu certo: busca `/me`. Deu 401: vai para o login.
+- O middleware do `openapi-fetch` põe o `Authorization` e, em 401, faz **uma** renovação (compartilhada entre chamadas simultâneas) e repete a requisição.
+- **Telas:**
 
 | Rota | Tela |
 |---|---|
-| `/entrar` | E-mail e senha |
-| `/entrar/codigo` | 6 caixas para o código, "Reenviar" com contador de 60 s e a dica `emailHint` |
+| `/entrar` (ou `/login`) | E-mail e senha |
+| `/entrar/codigo` (ou `/login/verificar`) | Código de 2 etapas enviado por e-mail |
 | `/esqueci-senha` | Pede o e-mail |
 | `/redefinir-senha?token=` | Nova senha |
-| `/convite?token=` | Nome e senha |
-
-- **Logout:** `POST /auth/logout`, depois limpe o cache e vá para `/entrar`.
+| `/convite?token=` | Nome e senha do coordenador convidado |
 
 ### D.4 Dados: TanStack Query
 
-```ts
-// Hooks de consulta e mutação de agricultores; as chaves seguem [recurso, filtros].
-export function useFarmers(filters: FarmerFilters) {
-  return useQuery({
-    queryKey: ["farmers", filters],
-    queryFn: () => unwrap(api.GET("/farmers", { params: { query: filters } })),
-    placeholderData: keepPreviousData,      // a tabela não "pisca" ao trocar de página
-  });
-}
-
-export function useCreateAccessCode(farmerId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => unwrap(api.POST("/farmers/{id}/access-codes", { params: { path: { id: farmerId } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["farmers", farmerId] }),
-  });
-}
-```
-
-- `unwrap` transforma a resposta de erro do `openapi-fetch` numa exceção `ApiError` com `code`, `detail` e `errors[]`.
-- **Formulários:** um utilitário `applyServerErrors(form, apiError)` faz o `setError` de cada `errors[].field` no react-hook-form. Erros sem campo viram notificação (`@mantine/notifications`).
-- **`VERSION_CONFLICT`:** mostre um modal "Alguém alterou este item. Recarregar?", que invalida a consulta.
-- **Filtros na URL:** os filtros das listas são lidos e escritos com `useSearchParams`. Eles são a chave da consulta.
+- **Padrões do `QueryClient`:** `staleTime` de 15 s, uma nova tentativa e sem recarregar ao voltar para a aba.
+- **`unwrap`** transforma a resposta de erro do `openapi-fetch` num `ApiError` com `status`, `code`, `detail` e `errors[]` (Problem Details, RFC 9457).
+- **Erros de ações:** o `MutationCache` mostra um aviso no canto da tela (`Toaster`) com a mensagem da API sempre que uma mutação falha sem tratar o próprio erro. Para silenciar, use `onError` na mutação ou `meta: { silentError: true }`. Formulários com erro por campo (ex.: áreas da propriedade) mostram a mensagem junto do campo.
+- **Listas** paginam no servidor (`page`, `size`, `sort`) e usam o componente `Pagination`. **Menus de seleção** que precisam da lista inteira usam `fetchAllPages` (páginas de 100, o máximo da API), com chaves de cache próprias (ex.: `["farmers", "all-select", "ACTIVE"]`).
+- **Binários** (fotos, PDFs, CSV) são baixados com `fetch` + token, porque `<img src>` e links não enviam o `Authorization`.
 
 ### D.5 Rotas e menu
 
+O menu lateral tem três grupos: **Operação**, **Certificação Participativa (SPG)** e **Gestão da Associação**.
+
 | Menu | Rota | Tela |
 |---|---|---|
-| Painel | `/` | Dashboard |
-| Agricultores | `/agricultores`, `/agricultores/novo`, `/agricultores/:id` | Lista, cadastro, detalhe com abas |
-| Propriedades | `/propriedades`, `/propriedades/:id` | Lista com alternância Tabela/Mapa; detalhe |
-| Registros | `/registros`, `/registros/novo`, `/registros/:id` | Lista com filtros, registrar pelo agricultor, detalhe + histórico |
-| Certificações | `/certificacoes`, `/certificacoes/nova`, `/certificacoes/:id` | |
-| Grupos | `/grupos`, `/grupos/:id` | |
-| Visitas | `/visitas`, `/visitas/agenda`, `/visitas/:id` | Planejamento, agenda e detalhe |
+| Início | `/` | Painel inicial |
+| Agricultores | `/agricultores`, `/agricultores/novo`, `/agricultores/:id` | Lista, cadastro, ficha com abas |
+| Propriedades | `/propriedades`, `/propriedades/:id` | Cartões, tabela ou coordenadas; detalhe |
+| Registros de manejo | `/registros`, `/registros/novo`, `/registros/:id` | Lista com filtros, registrar pelo agricultor, detalhe |
+| Certificações | `/certificacoes` | Lista, emitir, editar e renovar |
+| Grupos do SPG | `/grupos` | |
+| Visitas do SPG | `/visitas` | Situação do ciclo e visitas (abas) |
 | Documentos | `/documentos` | Gerar, listar, cópia assinada, conferir código |
-| Pessoas do SPG | `/spg/colaboradores`, `/spg/comissao`, `/spg/impedimentos` | |
-| Comunicados | `/comunicados` | Lista + modal de novo comunicado |
-| Catálogo | `/catalogo/culturas`, `/catalogo/insumos`, `/catalogo/unidades`, `/catalogo/roteiro`, `/catalogo/sem-catalogo` | |
-| Relatórios | `/relatorios` | |
-| Configurações | `/configuracoes` (associação), `/configuracoes/coordenadores` | |
+| Pessoas e impedimentos | `/spg` | Comissão, colaboradores e impedimentos (abas) |
+| Comunicados | `/comunicados` | |
+| Catálogos e roteiro | `/catalogo` | Culturas, insumos, unidades, roteiro e itens sem catálogo |
+| Relatórios | `/relatorios` | PDF e CSV |
+| Configurações | `/configuracoes` | Associação e coordenadores |
 
 ### D.6 Telas
+
+> Especificação das telas. No painel atual: o painel inicial não tem gráficos (só indicadores e listas); visitas, pessoas do SPG, catálogo e configurações são abas numa rota só; as ações de exclusão ainda não pedem confirmação.
 
 **Painel (`/`)**, a partir de `GET /dashboard/summary`, atualizado a cada 60 s com `refetchInterval` e `refetchIntervalInBackground: false`:
 - **Linha de indicadores:**
@@ -1429,41 +1063,43 @@ Sugestão de visitadores                        (a escolha final é sua, depois 
 - coordenadores: lista, convidar e desativar.
 
 ### D.7 Padrões de UI do painel
-- **Tabelas:** use o `mantine-datatable` com paginação do servidor (`page`, `size`, `sort` vão para a URL e para a consulta). A ordenação só vale em colunas que a API ordena.
-- **Badges de status:** **as mesmas cores e frases do app** ([§A.6](#a6-propriedades-rf04rf09)), tiradas de `certificationPhrase` e `labels` do `domain`.
-- **Datas:** dayjs com o locale `pt-br`. Exiba `20/11/2026` e use datas relativas só em "último envio" ("há 2 dias").
-- **Confirmações:** `modals.openConfirmModal` com o texto do que vai acontecer e o botão de perigo em vermelho.
-- **Carregamento:** `Skeleton` nas tabelas e cartões. Nunca uma tela branca.
-- **Segurança:** nunca use `dangerouslySetInnerHTML`. O texto dos comunicados é exibido como texto puro, com `white-space: pre-line`. Links externos levam `rel="noopener noreferrer"`.
+
+- **Classes `af-*`** (em `index.css`): `af-card`, `af-table`, `af-btn`, `af-field` / `af-label` / `af-input`, `af-badge`, `af-alert`, `af-modal`, `af-pagination`. Novas telas usam essas classes antes de criar estilos novos.
+- **Badges de status:** as mesmas cores e frases do app, tiradas dos rótulos do `domain` (`StatusBadge`).
+- **Datas e números:** `formatDatePtBr`, `formatArea` e `formatQuantity` do `domain` (`20/11/2026`, `2,5 hectares`).
+- **Formulários:** todo campo tem `<label htmlFor>` ligado ao `id`. Grupos de opções (botões ou caixas de seleção) usam `role="group"` com `aria-labelledby`.
+- **Carregamento e vazio:** `af-empty-state` com o texto do que está acontecendo. Nunca uma tela branca.
+- **Segurança:** nada de `dangerouslySetInnerHTML`. O texto dos comunicados é exibido como texto puro (`white-space: pre-wrap`).
 
 ### D.8 Testes do painel
 
-| Tipo | Ferramenta | O que testar |
+| Tipo | Ferramenta | O que existe |
 |---|---|---|
-| Unitário / componentes | Vitest + Testing Library + **MSW** (respostas falsas da API) | Formulários (validação + erros do servidor), filtros na URL, modal do código |
-| Ponta a ponta | Playwright, com a API rodando de verdade via Docker Compose | Login com 2FA (o código é lido da API do Mailpit), cadastrar agricultor, gerar código, criar certificação, registrar pelo agricultor, marcar visita com a sugestão, digitar o resultado e gerar o documento de aprovação |
+| Unitário | Vitest | Cliente HTTP (`ApiError`, telefone E.164, renovação da sessão), `fetchAllPages` |
+| Regras | Vitest em `@agrofacil/domain` | CPF, áreas (RN41), completude, certificação, datas, WhatsApp, municípios |
 
-Os handlers do MSW também permitem **desenvolver o painel antes da API ficar pronta**. Escreva-os a partir dos exemplos do [doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front).
+**Ainda falta:** testes de componentes (Testing Library) e ponta a ponta (Playwright, com a API real) dos fluxos principais: login com 2FA, cadastrar agricultor e gerar código, registrar pelo agricultor, emitir e renovar certificação, marcar visita e gerar documento.
 
 ### D.9 Build
-`pnpm --filter @agrofacil/web build` gera `apps/web/dist/`, que o nginx serve ([doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)). A URL da API é relativa (`/api/v1`), então o mesmo build funciona em qualquer endereço.
+
+`pnpm --filter @agrofacil/web build` gera `apps/web/dist/`, que o nginx serve ([doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)). A URL da API é a mesma origem da página (`/api/v1`), então o mesmo build funciona em qualquer endereço.
 
 ---
 
-## Parte E: ordem de implementação do front
+## Parte E: estado da implementação do front
 
-| Marco | Mobile | Web |
+A ordem original (marcos F0 a F8) foi seguida com o app como PWA. Situação em novembro de 2026:
+
+| Marco | App do agricultor (PWA) | Painel |
 |---|---|---|
-| F0 | Monorepo, lint, `domain` com testes, `api-types` gerado | idem |
-| F1 | Tema, componentes base, navegação com dados falsos | Layout, rotas, login + 2FA (contra MSW ou a API M2) |
-| F2 | Banco local, repositórios, assistentes dos 5 tipos **offline** (sem API) | Agricultores, código de acesso, grupos |
-| F3 | Ativação, sessão, digital | Propriedades, áreas, trabalhadores, mapa |
-| F4 | Motor de sync (push, pull, arquivos) contra a API M6 | Registros: lista, detalhe, histórico, registrar pelo agricultor, pedidos de correção |
-| F5 | Lembretes locais, push, avisos, certificação na tela inicial | Certificações, comunicados, notificações |
-| F6 | Propriedades (cadastro e detalhe), Meus dados, voz | Painel inicial, catálogo, relatórios, configurações |
-| F7 | Testes com agricultores ([§A.12](#a12-testes-com-agricultores)) e ajustes | Testes com o coordenador e ajustes |
-| F8 | Visitas: cartões na tela inicial, detalhe com o resumo e modo visita offline (contra a API M10) | Planejamento, marcar visita com sugestão, agenda, resultado, documentos, pessoas do SPG, roteiro |
+| F0 | Feito: monorepo, lint, `domain` com testes, `api-types` gerado | Feito |
+| F1 | Feito: tema e navegação | Feito: layout, rotas, login com 2FA |
+| F2 | Feito: formulários dos 5 tipos, funcionando offline | Feito: agricultores, código de acesso, grupos |
+| F3 | Feito: ativação e sessão. **Falta:** digital | Feito: propriedades, áreas (RN41), trabalhadores, coordenadas |
+| F4 | Feito: sincronização incremental, fila, recusas, fotos | Feito: registros, detalhe com fotos, pedidos de correção |
+| F5 | Feito: avisos no app e comunicados. **Fora por decisão:** push e lembretes locais | Feito: certificações (emitir, editar, renovar com aviso da RN39), comunicados, notificações |
+| F6 | Feito: propriedades (edição), Meus dados. **Falta:** voz e GPS | Feito: painel inicial, catálogo, relatórios, configurações |
+| F7 | **Falta:** testes com agricultores ([§A.12](#a12-testes-com-agricultores)) | **Falta:** testes com o coordenador |
+| F8 | **Falta:** visitas no app (cartões, resumo, resultado pelo visitador) | Feito: situação do ciclo, marcar visita com sugestão, resultado, documentos D1–D8, pessoas do SPG |
 
-O F8 pode começar antes da API M10 com o MSW e um `brief` de exemplo. Teste o modo visita com um grupo de verdade antes de fechar o roteiro.
-
-O F2 do mobile não depende da API: com o banco local e os assistentes prontos, já dá para **testar a usabilidade com agricultores** cedo, que é o maior risco do projeto.
+O maior risco continua sendo a usabilidade com os agricultores (F7): teste o app com eles antes de acrescentar funções.

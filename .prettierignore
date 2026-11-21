@@ -2,7 +2,7 @@
 pnpm-lock.yaml
 packages/api-types/openapi.json
 packages/api-types/src/schema.ts
-documentacao/
+docs/
 api/
 apps/mobile/android/
 apps/mobile/ios/

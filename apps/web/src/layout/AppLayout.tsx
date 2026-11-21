@@ -6,7 +6,7 @@ import { formatDateTimePtBr } from "@agrofacil/domain";
 import { api, unwrap } from "../api/client";
 import { useAuth } from "../auth/useAuth";
 import { Logo } from "../components/Logo";
-import headerHills from "../assets/figma/header-hills.png";
+import headerHills from "../assets/figma/header-hills.webp";
 import sunSvg from "../assets/figma/sun.svg";
 import bellSvg from "../assets/figma/bell.svg";
 import plusCircleSvg from "../assets/figma/plus-circle.svg";

@@ -4,7 +4,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react
 import { api, ApiError, unwrap } from "../api/client";
 import { useAuth } from "./useAuth";
 import { Logo } from "../components/Logo";
-import loginIllustration from "../assets/figma/login-illustration.png";
+import loginIllustration from "../assets/figma/login-illustration.webp";
 import cornerLeaves from "../assets/figma/corner-leaves.png";
 import emailBadgedSvg from "../assets/figma/email-badged.svg";
 

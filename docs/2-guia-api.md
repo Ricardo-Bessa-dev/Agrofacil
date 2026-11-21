@@ -1,5 +1,7 @@
 # Agrofácil: guia da API
 
+> **Estado (nov/2026):** o app do agricultor é um **PWA** ([doc 1, ADR-19](1-arquitetura-e-contrato.md#adr-19-app-do-agricultor-como-pwa)): não há APK nem build nativo, e o push pelo Expo fica desligado (`PUSH_ENABLED=false`). A Parte 3 já descreve a publicação do PWA.
+
 Este guia leva do projeto vazio até a API completa do contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)) e depois até ela rodando, com HTTPS e backup. Ele assume que a equipe conhece Java e o básico de Spring. O que é específico do Agrofácil vem com código.
 
 > **Antes de começar:** leia o modelo e as RNs ([doc 1, Parte 2](1-arquitetura-e-contrato.md#parte-2-modelo-de-domínio-e-regras-de-negócio)), o contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)), a sincronização ([doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline)) e a segurança e LGPD ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)). Este guia mostra *como* implementar; o *quê* está lá.
@@ -10,7 +12,7 @@ Este guia leva do projeto vazio até a API completa do contrato ([doc 1, Parte 3
 
 - **[Parte 1. Construção da API (Spring Boot)](#parte-1-construção-da-api-spring-boot)**: [1.1 Pré-requisitos](#11-pré-requisitos) · [1.2 Criando o projeto](#12-criando-o-projeto) · [1.3 Configuração](#13-configuração) · [1.4 Estrutura de pacotes](#14-estrutura-de-pacotes) · [1.5 Banco e migrações (Flyway)](#15-banco-e-migrações-flyway) · [1.6 Entidades JPA](#16-entidades-jpa) · [1.7 Segurança e autenticação](#17-segurança-e-autenticação) · [1.8 Validação e erros](#18-validação-e-erros) · [1.9 Padrão de um recurso REST (exemplo: agricultores)](#19-padrão-de-um-recurso-rest-exemplo-agricultores) · [1.10 Registros de manejo](#110-registros-de-manejo) · [1.11 Sincronização](#111-sincronização) · [1.12 Rotinas, notificações, push e e-mail](#112-rotinas-notificações-push-e-e-mail) · [1.13 Arquivos](#113-arquivos) · [1.14 Relatórios](#114-relatórios) · [1.15 Visitas e documentos do SPG](#115-visitas-e-documentos-do-spg) · [1.16 OpenAPI e geração de tipos](#116-openapi-e-geração-de-tipos) · [1.17 Testes](#117-testes) · [1.18 Ordem de implementação sugerida](#118-ordem-de-implementação-sugerida) · [1.19 Checklist antes de cada PR](#119-checklist-antes-de-cada-pr)
 - **[Parte 2. DDL de referência (migração V1)](#parte-2-ddl-de-referência-migração-v1)**
-- **[Parte 3. Ambiente e implantação](#parte-3-ambiente-e-implantação)**: [3.1 Visão dos ambientes](#31-visão-dos-ambientes) · [3.2 Desenvolvimento local](#32-desenvolvimento-local) · [3.3 Demonstração: Docker Compose completo](#33-demonstração-docker-compose-completo) · [3.4 nginx: painel + API na mesma origem](#34-nginx-painel--api-na-mesma-origem) · [3.5 HTTPS para os celulares no campo: túnel](#35-https-para-os-celulares-no-campo-túnel) · [3.6 Backup e restauração](#36-backup-e-restauração) · [3.7 Distribuição do app (APK)](#37-distribuição-do-app-apk) · [3.8 Caminho para produção real](#38-caminho-para-produção-real) · [3.9 Variáveis de ambiente (`infra/.env.example`)](#39-variáveis-de-ambiente-infraenvexample)
+- **[Parte 3. Ambiente e implantação](#parte-3-ambiente-e-implantação)**: [3.1 Visão dos ambientes](#31-visão-dos-ambientes) · [3.2 Desenvolvimento local](#32-desenvolvimento-local) · [3.3 Demonstração: Docker Compose completo](#33-demonstração-docker-compose-completo) · [3.4 nginx: painel, app e API](#34-nginx-painel-app-e-api) · [3.5 HTTPS para os celulares no campo: túnel](#35-https-para-os-celulares-no-campo-túnel) · [3.6 Backup e restauração](#36-backup-e-restauração) · [3.7 Distribuição do app (PWA)](#37-distribuição-do-app-pwa) · [3.8 Caminho para produção real](#38-caminho-para-produção-real) · [3.9 Variáveis de ambiente (`infra/.env.example`)](#39-variáveis-de-ambiente-infraenvexample)
 
 ## Parte 1. Construção da API (Spring Boot)
 
@@ -154,6 +156,7 @@ app:
     refresh-max-ttl: P7D
   storage.dir: ${STORAGE_DIR:./data/files}
   mail.from: ${MAIL_FROM:Agrofácil <nao-responda@agrofacil.app>}
+  push.enabled: ${PUSH_ENABLED:false}      # desligado: o PWA mostra os avisos só dentro do app
   push.expo-access-token: ${EXPO_ACCESS_TOKEN:}
   bootstrap.coordinator-email: ${BOOTSTRAP_COORDINATOR_EMAIL:}
 
@@ -755,7 +758,7 @@ Habilite `@EnableScheduling` numa classe de configuração. Como há uma só ins
 
 #### 1.12.2 Notificações e push
 - `NotificationService.notify(userIds, type, title, body, data)` grava as linhas de `notification` e publica um evento `NotificationsCreated`.
-- O `ExpoPushSender` escuta com `@TransactionalEventListener(phase = AFTER_COMMIT)` + `@Async`. Ele busca os `push_token` dos aparelhos ativos e envia em lotes de até 100 para `POST https://exp.host/--/api/v2/push/send`:
+- O `ExpoPushSender` só existe com `app.push.enabled=true` (padrão: `false`, avisos só no app). Ele escuta com `@TransactionalEventListener(phase = AFTER_COMMIT)` + `@Async`. Ele busca os `push_token` dos aparelhos ativos e envia em lotes de até 100 para `POST https://exp.host/--/api/v2/push/send`:
 
 ```json
 [{ "to": "ExponentPushToken[xxxx]", "title": "Sua certificação vence em 30 dias",
@@ -1042,7 +1045,7 @@ Cada marco termina com testes passando e o contrato atualizado. O front pode com
 | M4 | Propriedades (com a área principal), áreas, trabalhadores, municípios, catálogos (leitura) |
 | M5 | Registros no painel: CRUD, completude, conversões, plantio e colheita final, histórico |
 | M6 | Sincronização: push, pull, lápides, arquivos. Os 10 testes do [doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline) |
-| M7 | Certificações, status, renovação, rotina de alertas, notificações, push (Expo) e e-mail |
+| M7 | Certificações, status, renovação, rotina de alertas, notificações, push (Expo, desligado por padrão) e e-mail |
 | M8 | Comunicados, pedidos de correção, gestão de catálogos, itens sem catálogo |
 | M9 | Painel inicial (dashboard), relatórios PDF e CSV |
 | M10 | SPG: colaboradores, Comissão e impedimentos; roteiro (catálogo); situação das visitas; sugestão de visitadores; visitas (painel e mutação do app); rotina de avisos; documentos D1–D8 ([§1.15](#115-visitas-e-documentos-do-spg)) |
@@ -1726,8 +1729,8 @@ Por enquanto o sistema roda **num computador da equipe**, para testes e apresent
 
 | Ambiente | Onde | API | Painel | App |
 |---|---|---|---|---|
-| **Desenvolvimento** | Máquina de cada membro | `./mvnw spring-boot:run` (perfil `dev`) | `pnpm --filter @agrofacil/web dev` (Vite, porta 5173, com proxy `/api`) | Development build apontando para o **IP da máquina na rede local** (`http://192.168.x.x:8080`) |
-| **Demonstração / testes de campo** | O computador "servidor" da equipe, via Docker Compose | Container `api` | Container `web` (nginx) | APK `preview` apontando para a **URL HTTPS do túnel** |
+| **Desenvolvimento** | Máquina de cada membro | `./mvnw spring-boot:run` (perfil `dev`) | `pnpm --filter @agrofacil/web dev` (Vite, porta 5173, com proxy `/api`) | `pnpm --filter @agrofacil/mobile dev --host` (porta 5174, com proxy `/api`), aberto no celular pelo **IP da máquina na rede local** |
+| **Demonstração / testes de campo** | O computador "servidor" da equipe, via Docker Compose | Container `api` | Container `web` (nginx) | O mesmo container `web` serve o PWA num segundo endereço HTTPS do túnel |
 
 ### 3.2 Desenvolvimento local
 
@@ -1755,11 +1758,9 @@ Primeiro uso:
 1. `cp api/.env.example api/.env` e preencha o `JWT_SECRET` (`openssl rand -base64 48`) e o `BOOTSTRAP_COORDINATOR_EMAIL`.
 2. `cd api && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. O suporte a Docker Compose do Spring Boot sobe o Postgres e o Mailpit sozinho (o `docker compose -f infra/docker-compose.dev.yml up -d` continua valendo para subir à mão). O Flyway cria o banco, e o convite do primeiro coordenador aparece no Mailpit.
 3. `corepack pnpm install` na raiz (ou `corepack enable` uma vez e depois só `pnpm`), depois `pnpm gen:api` e `pnpm --filter @agrofacil/web dev`.
-4. Mobile:
-   1. copie `apps/mobile/.env.example` para `apps/mobile/.env` e defina `EXPO_PUBLIC_API_URL=http://<seu IP>:8080`;
-   2. rode `npx expo run:android` com o celular em modo desenvolvedor ou num emulador.
+4. Mobile (PWA): `pnpm --filter @agrofacil/mobile dev --host` e abra `http://<seu IP>:5174` no celular. O Vite repassa `/api` para a API. Para enviar fotos, o celular precisa de contexto seguro (HTTPS ou `localhost`).
 
-> **Android e HTTP:** o Android bloqueia HTTP sem TLS por padrão. No perfil de desenvolvimento, libere o tráfego em texto claro **só no build de desenvolvimento**, com o plugin `expo-build-properties` (`android.usesCleartextTraffic: true`). Os builds `preview` usam sempre HTTPS.
+> **Contexto seguro:** pelo IP da rede local (HTTP) o app abre e registra, mas o navegador não libera o service worker nem o `crypto.subtle` (hash das fotos). Para testar fotos e o modo offline no celular, use o túnel HTTPS ([§3.5](#35-https-para-os-celulares-no-campo-túnel)) ou `localhost` no próprio computador.
 
 ### 3.3 Demonstração: Docker Compose completo
 
@@ -1806,7 +1807,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       MAIL_FROM: ${MAIL_FROM}
       APP_PUBLIC_URL: ${PUBLIC_URL}
-      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN}
+      PUSH_ENABLED: "false"
       BOOTSTRAP_COORDINATOR_EMAIL: ${BOOTSTRAP_COORDINATOR_EMAIL}
       STORAGE_DIR: /data/files
       TZ: America/Bahia
@@ -1856,19 +1857,22 @@ ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
 `apps/web/Dockerfile`:
 
 ```dockerfile
-# Imagem do painel: compila o React no monorepo e serve os arquivos estáticos com nginx.
+# Imagem do front: compila o painel e o app (PWA) no monorepo e serve os dois com nginx.
 FROM node:22-alpine AS build
 WORKDIR /repo
 RUN corepack enable
 COPY . .
-RUN pnpm install --frozen-lockfile && pnpm --filter @agrofacil/web build
+RUN pnpm install --frozen-lockfile \
+  && pnpm --filter @agrofacil/web build \
+  && pnpm --filter @agrofacil/mobile build
 
 FROM nginx:1.27-alpine
 COPY infra/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
+COPY --from=build /repo/apps/mobile/dist /usr/share/nginx/app
 ```
 
-### 3.4 nginx: painel + API na mesma origem
+### 3.4 nginx: painel, app e API
 
 ```nginx
 # Serve o painel (SPA) e repassa /api para a API; aplica cabeçalhos de segurança.
@@ -1881,7 +1885,7 @@ server {
   add_header Referrer-Policy "no-referrer" always;
   add_header X-Frame-Options "DENY" always;
   add_header Strict-Transport-Security "max-age=31536000" always;
-  add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+  add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 
   location /api/ {
     proxy_pass http://api:8080;
@@ -1903,22 +1907,33 @@ server {
 }
 ```
 
-> `'unsafe-inline'` em `style-src` é necessário porque o Mantine usa atributos `style`. Scripts continuam bloqueados para qualquer origem que não seja a própria.
+> `'unsafe-inline'` em `style-src` é necessário porque as telas usam atributos `style`. A fonte Poppins vem do Google Fonts (`fonts.googleapis.com` e `fonts.gstatic.com`). Scripts continuam bloqueados para qualquer origem que não seja a própria.
+
+**O app (PWA) num segundo endereço.** O app e o painel têm rotas com o mesmo nome (`/registros`, `/propriedades`), então cada um fica no seu endereço, ex.: `app.agrofacil.<dominio>`. Repita o bloco `server` acima com o `server_name` do app, `root /usr/share/nginx/app`, os mesmos cabeçalhos e o mesmo `location /api/`, mais:
+
+```nginx
+  # O service worker precisa ser conferido a cada abertura, senão a versão nova não chega.
+  location = /sw.js {
+    add_header Cache-Control "no-cache";
+  }
+```
+
+O `sw.js` muda o nome do cache a cada build, então os celulares trocam os arquivos guardados sozinhos.
 
 ### 3.5 HTTPS para os celulares no campo: túnel
 
-O app no celular precisa alcançar a API pela internet e **com HTTPS**. Sem abrir portas no roteador, há duas opções:
+O app no celular precisa alcançar a API pela internet e **com HTTPS** (sem HTTPS o PWA não funciona offline nem envia fotos). Sem abrir portas no roteador, há duas opções:
 
 | Opção | Endereço | Prós | Contras |
 |---|---|---|---|
 | **Cloudflare Tunnel com nome** (recomendado) | `https://agrofacil.<seu-dominio>` | Endereço fixo, HTTPS automático, gratuito | Precisa de um domínio na Cloudflare (alguns reais por ano) |
 | **ngrok com domínio estático gratuito** | `https://<nome>.ngrok-free.app` | Sem domínio próprio, endereço fixo | Limites do plano gratuito; o painel do ngrok mostra um aviso no navegador na primeira visita |
 
-**O endereço precisa ser fixo:** ele vai "embutido" no APK (`EXPO_PUBLIC_API_URL`). Um túnel com endereço aleatório (como o "quick tunnel") obriga a gerar um APK novo a cada reinício. Evite.
+**O endereço precisa ser fixo:** o app instalado na tela inicial, os dados guardados no aparelho e a sessão ficam presos ao endereço. Um túnel com endereço aleatório (como o "quick tunnel") obriga cada agricultor a ativar o app de novo a cada reinício. Evite.
 
 Para configurar a Cloudflare:
 1. crie o túnel no painel Zero Trust, que gera o `TUNNEL_TOKEN`;
-2. aponte o hostname público para `http://web:80`;
+2. aponte os dois hostnames públicos (painel e app) para `http://web:80`;
 3. coloque o token no `infra/.env`.
 
 ### 3.6 Backup e restauração
@@ -1955,12 +1970,12 @@ rclone copy "$DEST" remoto:agrofacil-backups --max-age 48h
 
 > Os backups contêm dados pessoais. Proteja-os: disco criptografado ou `rclone crypt` ([doc 1 §5.2](1-arquitetura-e-contrato.md#52-ameaças-e-controles)).
 
-### 3.7 Distribuição do app (APK)
+### 3.7 Distribuição do app (PWA)
 
-1. `eas build --profile preview --platform android`, com `EXPO_PUBLIC_API_URL=https://agrofacil.<dominio>`.
-2. O EAS devolve um link de download do APK. Gere um QR Code para o coordenador instalar nos celulares durante a ativação.
-3. No celular, permita "Instalar apps desconhecidos" para o navegador e instale.
-4. **Versão nova:** gere outro APK e instale por cima. Os dados locais são mantidos. Se a mudança quebrar o contrato, suba `APP_MIN_MOBILE_VERSION` na API **depois** que todos tiverem a versão nova, ou deixe a tela "Atualize o app" orientar.
+1. Publique o app num endereço HTTPS fixo ([§3.4](#34-nginx-painel-app-e-api) e [§3.5](#35-https-para-os-celulares-no-campo-túnel)).
+2. Gere um QR Code com o endereço para o coordenador mostrar na ativação.
+3. No celular, o agricultor abre o endereço no navegador (Chrome no Android, Safari no iPhone) e toca em **"Adicionar à tela inicial"** (ou "Instalar app").
+4. **Versão nova:** publique o build novo. O app troca os arquivos na próxima abertura com internet; os dados do aparelho e a fila são mantidos. Se a mudança quebrar o contrato, suba `APP_MIN_MOBILE_VERSION` na API.
 
 ### 3.8 Caminho para produção real
 
@@ -1969,7 +1984,7 @@ O computador próprio serve para testes e apresentações. Antes de a associaç�
 | Item | Por quê |
 |---|---|
 | Servidor sempre ligado: VPS pequena (2 vCPU, 2–4 GB de RAM) ou um servidor do IFBA | RNF07: disponibilidade. O mesmo `docker-compose.yml` funciona lá |
-| Domínio próprio + HTTPS (Let's Encrypt via Caddy ou o próprio túnel) | URL fixa para o APK |
+| Domínio próprio + HTTPS (Let's Encrypt via Caddy ou o próprio túnel) | Endereço fixo para o app instalado nos celulares |
 | Backup fora do servidor, com restauração testada | Os registros são prova da certificação |
 | Monitoramento simples: UptimeRobot no `/actuator/health` | Saber da queda antes dos agricultores |
 | E-mail transacional com domínio próprio (SPF/DKIM) | Os e-mails de 2FA e de alertas não podem cair no spam |
@@ -1988,7 +2003,7 @@ SMTP_PORT=587
 SMTP_USER=
 SMTP_PASSWORD=
 MAIL_FROM="Agrofácil <nao-responda@exemplo.org>"
-EXPO_ACCESS_TOKEN=               # opcional; reforça a segurança do envio de push
+PUSH_ENABLED=false               # avisos só dentro do app (PWA)
 BOOTSTRAP_COORDINATOR_EMAIL=     # usado só na primeira subida
 CLOUDFLARE_TUNNEL_TOKEN=
 APP_MIN_MOBILE_VERSION=1.0.0

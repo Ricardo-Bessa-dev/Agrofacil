@@ -1,8 +1,10 @@
 // Roteador principal e provedores (QueryClient + AuthProvider) do painel do coordenador AgroFácil (apps/web) com Code Splitting (React.lazy).
 import { lazy, Suspense, type ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { AuthProvider } from "./auth/AuthContext";
+import { Toaster } from "./components/Toaster";
+import { showToast } from "./components/toastStore";
 import { useAuth } from "./auth/useAuth";
 import {
   AcceptInvitePage,
@@ -77,6 +79,18 @@ const SettingsPage = lazy(() =>
 );
 
 const queryClient = new QueryClient({
+  // Toda ação (renovar, suspender, salvar…) que falhar mostra o motivo, em vez de não acontecer nada.
+  // Mutações que tratam o próprio erro (onError) ou pedem silêncio (meta.silentError) ficam de fora.
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      if (mutation.options.onError || mutation.meta?.silentError) return;
+      showToast(
+        error instanceof Error && error.message
+          ? error.message
+          : "Não foi possível concluir a operação. Tente novamente.",
+      );
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 15_000,
@@ -179,6 +193,7 @@ export function App() {
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
+          <Toaster />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

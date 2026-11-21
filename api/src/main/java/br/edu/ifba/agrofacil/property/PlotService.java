@@ -1,4 +1,5 @@
-// Áreas das propriedades: só o coordenador cria, edita e exclui (RN08).
+// Áreas das propriedades: só o coordenador cria, edita e exclui (RN08), dentro do tamanho dela
+// (RN41).
 package br.edu.ifba.agrofacil.property;
 
 import br.edu.ifba.agrofacil.association.AssociationService;
@@ -51,9 +52,9 @@ public class PlotService {
   /** Cria uma área na propriedade. O nome não pode repetir na mesma propriedade. */
   @Transactional
   public PlotView create(CurrentUser user, UUID propertyId, PlotWrite write) {
-    properties.findVisible(user, propertyId);
+    var property = properties.findVisible(user, propertyId);
     var plot = new Plot(propertyId, null, null, write.status());
-    apply(user, plot, write);
+    apply(user, property, plot, write);
     return PlotView.of(plots.saveAndFlush(plot));
   }
 
@@ -62,7 +63,7 @@ public class PlotService {
     var plot = findVisible(user, id);
     var write = jsonPatch.merge(PlotView.of(plot).toWrite(), body, PlotWrite.class);
     VersionCheck.ensure(body, write.version(), plot.getVersion());
-    apply(user, plot, write);
+    apply(user, properties.findVisible(user, plot.getPropertyId()), plot, write);
     return PlotView.of(plots.saveAndFlush(plot));
   }
 
@@ -88,9 +89,24 @@ public class PlotService {
     return plot;
   }
 
-  private void apply(CurrentUser user, Plot plot, PlotWrite write) {
+  private void apply(CurrentUser user, Property property, Plot plot, PlotWrite write) {
     var errors = new ArrayList<FieldErrorItem>();
     MeasureRules.checkArea("area", write.area()).ifPresent(errors::add);
+    var tarefaM2 = associations.get(user.associationId()).getTarefaM2();
+    if (errors.isEmpty()) {
+      var otherPlotsM2 =
+          PlotAreaLimit.sumM2(
+              plots.findByPropertyIdAndDeletedAtIsNullOrderByName(property.getId()).stream()
+                  .filter(other -> !other.getId().equals(plot.getId()))
+                  .map(Plot::getArea)
+                  .toList());
+      PlotAreaLimit.checkPlot(
+              property.getTotalArea(),
+              otherPlotsM2,
+              AreaValue.from(write.area(), tarefaM2),
+              tarefaM2)
+          .ifPresent(errors::add);
+    }
     if (write.conversionEndsOn() != null && write.status() != PlotStatus.IN_CONVERSION) {
       errors.add(
           new FieldErrorItem(
@@ -105,7 +121,6 @@ public class PlotService {
     if (plots.nameInUse(plot.getPropertyId(), name, plot.getId())) {
       throw new ApiException(ErrorCode.PLOT_NAME_IN_USE);
     }
-    var tarefaM2 = associations.get(user.associationId()).getTarefaM2();
     plot.update(
         name,
         AreaValue.from(write.area(), tarefaM2),

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { formatCpf, isValidCpf, onlyDigits } from "@agrofacil/domain";
 import { useAuth } from "../auth/useAuth";
-import loginIllustration from "../assets/figma/login-illustration.png";
+import loginIllustration from "../assets/figma/login-illustration.webp";
 import logoMark from "../assets/figma/logo-mark.png";
 import logoText from "../assets/figma/logo-text.png";
 

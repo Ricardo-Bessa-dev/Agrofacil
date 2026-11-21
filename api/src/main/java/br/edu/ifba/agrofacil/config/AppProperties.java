@@ -90,10 +90,12 @@ public record AppProperties(
   public record Mail(@NotBlank String from) {}
 
   /**
+   * @param enabled false (padrão): os avisos ficam só dentro do app, que é um PWA e não registra
+   *     token de push do Expo
    * @param expoAccessToken token opcional do Expo para o envio de push
    * @param expoUrl endereço do serviço de push do Expo
    */
-  public record Push(String expoAccessToken, @NotBlank String expoUrl) {}
+  public record Push(boolean enabled, String expoAccessToken, @NotBlank String expoUrl) {}
 
   /**
    * @param coordinatorEmail e-mail que recebe o convite do primeiro coordenador (opcional)

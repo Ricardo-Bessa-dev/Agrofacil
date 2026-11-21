@@ -2,22 +2,29 @@
 import React, { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PlotView } from "@agrofacil/api-types";
 import {
   AREA_UNIT_LABELS,
+  DEFAULT_TAREFA_M2,
   formatArea,
   formatDatePtBr,
+  freePropertyAreaM2,
+  fromSquareMeters,
+  plotFitsInProperty,
   PLOT_STATUS_LABELS,
   VISIT_CYCLE_STATE_LABELS,
   WORKER_RELATIONSHIP_LABELS,
 } from "@agrofacil/domain";
 import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
+import { fetchAllPages } from "../../api/pagination";
 import { fetchMunicipalities } from "../../api/municipalities";
 import { CertificationStatusBadge } from "../../components/StatusBadge";
-import propertyImg1 from "../../assets/figma/property-placeholder-1.png";
-import propertyImg2 from "../../assets/figma/property-placeholder-2.png";
+import propertyImg1 from "../../assets/figma/property-placeholder-1.webp";
+import propertyImg2 from "../../assets/figma/property-placeholder-2.webp";
 import iconMapPin from "../../assets/figma/icon-map-pin.svg";
 import iconFarm from "../../assets/figma/icon-farm.svg";
 import iconArrowRight from "../../assets/figma/icon-arrow-right.svg";
+import { Pagination } from "../../components/Pagination";
 
 export function PropertiesListPage() {
   const [searchParams] = useSearchParams();
@@ -345,30 +352,8 @@ export function PropertiesListPage() {
         </div>
       )}
 
-      {meta && (meta.totalPages ?? 1) > 1 && viewMode !== "map" && (
-        <div className="af-pagination" style={{ marginTop: 16 }}>
-          <span>
-            Página {(meta.number ?? 0) + 1} de {meta.totalPages} ({meta.totalElements} propriedades)
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="af-btn af-btn--outline af-btn--sm"
-              disabled={page <= 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              className="af-btn af-btn--outline af-btn--sm"
-              disabled={page + 1 >= (meta.totalPages ?? 1)}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
+      {viewMode !== "map" && (
+        <Pagination meta={meta} onPageChange={setPage} itemsLabel="propriedades" />
       )}
 
       {showCreateModal && (
@@ -401,15 +386,12 @@ function CreatePropertyModal({
   const [saving, setSaving] = useState(false);
 
   const farmersQuery = useQuery({
-    queryKey: ["farmers", "all-select"],
+    queryKey: ["farmers", "all-select", "ACTIVE"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/farmers", {
           params: {
-            query: {
-              filter: { status: "ACTIVE" },
-              pageable: { page: 0, size: 100, sort: ["name,asc"] },
-            },
+            query: { filter: { status: "ACTIVE" }, pageable: { ...pageable, sort: ["name,asc"] } },
           },
         }),
       ),
@@ -473,15 +455,18 @@ function CreatePropertyModal({
           )}
           <form className="af-form-grid" onSubmit={handleSubmit}>
             <div className="af-field">
-              <label className="af-label">Agricultor responsável *</label>
+              <label htmlFor="prop-agricultor-responsavel" className="af-label">
+                Agricultor responsável *
+              </label>
               <select
+                id="prop-agricultor-responsavel"
                 className="af-select"
                 value={farmerId}
                 onChange={(e) => setFarmerId(e.target.value)}
                 required
               >
                 <option value="">Selecione o agricultor</option>
-                {(farmersQuery.data?.content ?? []).map((f) => (
+                {(farmersQuery.data ?? []).map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.name} ({f.cpfMasked})
                   </option>
@@ -490,8 +475,11 @@ function CreatePropertyModal({
             </div>
 
             <div className="af-field">
-              <label className="af-label">Nome da propriedade / sítio *</label>
+              <label htmlFor="prop-nome-da-propriedade-sitio" className="af-label">
+                Nome da propriedade / sítio *
+              </label>
               <input
+                id="prop-nome-da-propriedade-sitio"
                 className="af-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -502,8 +490,11 @@ function CreatePropertyModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Área total</label>
+                <label htmlFor="prop-area-total" className="af-label">
+                  Área total
+                </label>
                 <input
+                  id="prop-area-total"
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -514,8 +505,11 @@ function CreatePropertyModal({
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Unidade de medida</label>
+                <label htmlFor="prop-unidade-de-medida" className="af-label">
+                  Unidade de medida
+                </label>
                 <select
+                  id="prop-unidade-de-medida"
                   className="af-select"
                   value={areaUnit}
                   onChange={(e) => setAreaUnit(e.target.value as typeof areaUnit)}
@@ -531,8 +525,11 @@ function CreatePropertyModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">UF</label>
+                <label htmlFor="prop-uf" className="af-label">
+                  UF
+                </label>
                 <select
+                  id="prop-uf"
                   className="af-select"
                   value={uf}
                   onChange={(e) => {
@@ -547,8 +544,11 @@ function CreatePropertyModal({
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Município</label>
+                <label htmlFor="prop-municipio" className="af-label">
+                  Município
+                </label>
                 <select
+                  id="prop-municipio"
                   className="af-select"
                   value={municipalityId}
                   onChange={(e) => setMunicipalityId(e.target.value)}
@@ -562,8 +562,11 @@ function CreatePropertyModal({
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Comunidade / Povoado</label>
+                <label htmlFor="prop-comunidade-povoado" className="af-label">
+                  Comunidade / Povoado
+                </label>
                 <input
+                  id="prop-comunidade-povoado"
                   className="af-input"
                   value={locality}
                   onChange={(e) => setLocality(e.target.value)}
@@ -574,8 +577,11 @@ function CreatePropertyModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Latitude (opcional)</label>
+                <label htmlFor="prop-latitude-opcional" className="af-label">
+                  Latitude (opcional)
+                </label>
                 <input
+                  id="prop-latitude-opcional"
                   type="number"
                   step="any"
                   className="af-input"
@@ -585,8 +591,11 @@ function CreatePropertyModal({
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Longitude (opcional)</label>
+                <label htmlFor="prop-longitude-opcional" className="af-label">
+                  Longitude (opcional)
+                </label>
                 <input
+                  id="prop-longitude-opcional"
                   type="number"
                   step="any"
                   className="af-input"
@@ -598,8 +607,11 @@ function CreatePropertyModal({
             </div>
 
             <div className="af-field">
-              <label className="af-label">Descrição da produção</label>
+              <label htmlFor="prop-descricao-da-producao" className="af-label">
+                Descrição da produção
+              </label>
               <input
+                id="prop-descricao-da-producao"
                 className="af-input"
                 value={productionDescription}
                 onChange={(e) => setProductionDescription(e.target.value)}
@@ -608,8 +620,11 @@ function CreatePropertyModal({
             </div>
 
             <div className="af-field">
-              <label className="af-label">Roteiro de acesso</label>
+              <label htmlFor="prop-roteiro-de-acesso" className="af-label">
+                Roteiro de acesso
+              </label>
               <textarea
+                id="prop-roteiro-de-acesso"
                 className="af-textarea"
                 value={accessDirections}
                 onChange={(e) => setAccessDirections(e.target.value)}
@@ -637,7 +652,9 @@ export function PropertyDetailPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"plots" | "workers" | "certifications" | "visits">("plots");
 
-  // Formulário rápido de novo talhão
+  // Formulário de área (talhão/canteiro): cria uma nova ou edita a escolhida na tabela.
+  const [editingPlot, setEditingPlot] = useState<PlotView | null>(null);
+  const [plotError, setPlotError] = useState<string | null>(null);
   const [plotName, setPlotName] = useState("");
   const [plotArea, setPlotArea] = useState("");
   const [plotUnit, setPlotUnit] = useState<"TAREFA" | "HECTARE" | "SQUARE_METER">("TAREFA");
@@ -664,22 +681,60 @@ export function PropertyDetailPage() {
       unwrap(api.GET("/properties/{id}/visit-status", { params: { path: { id: id! } } })),
   });
 
-  const createPlotMutation = useMutation({
-    mutationFn: () =>
-      unwrap(
-        api.POST("/properties/{id}/plots", {
-          params: { path: { id: id! } },
-          body: {
-            name: plotName.trim(),
-            area: plotArea ? { value: Number(plotArea), unit: plotUnit } : undefined,
-            status: plotStatus,
-          },
-        }),
-      ),
+  // Tamanho da tarefa da associação, para converter o que foi digitado e conferir se cabe (RN41).
+  const assocQuery = useQuery({
+    queryKey: ["association"],
+    queryFn: () => unwrap(api.GET("/association")),
+  });
+  const tarefaM2 = assocQuery.data?.tarefaM2 ?? DEFAULT_TAREFA_M2;
+
+  const resetPlotForm = () => {
+    setEditingPlot(null);
+    setPlotError(null);
+    setPlotName("");
+    setPlotArea("");
+    setPlotStatus("ORGANIC");
+  };
+
+  const startEditingPlot = (plot: PlotView) => {
+    setEditingPlot(plot);
+    setPlotError(null);
+    setPlotName(plot.name ?? "");
+    setPlotArea(plot.area?.value !== undefined ? String(plot.area.value) : "");
+    setPlotUnit((plot.area?.unit as typeof plotUnit | undefined) ?? "TAREFA");
+    setPlotStatus(plot.status ?? "NOT_DEFINED");
+  };
+
+  const savePlotMutation = useMutation({
+    mutationFn: () => {
+      const body = {
+        name: plotName.trim(),
+        area: plotArea ? { value: Number(plotArea), unit: plotUnit } : undefined,
+        status: plotStatus,
+      };
+      if (editingPlot?.id) {
+        return unwrap(
+          api.PATCH("/plots/{id}", {
+            params: { path: { id: editingPlot.id } },
+            body: {
+              ...body,
+              // Sem tamanho: null apaga o tamanho (no PATCH, campo ausente mantém o valor antigo).
+              area: body.area ?? (null as unknown as undefined),
+              version: editingPlot.version,
+            },
+          }),
+        );
+      }
+      return unwrap(api.POST("/properties/{id}/plots", { params: { path: { id: id! } }, body }));
+    },
     onSuccess: () => {
-      setPlotName("");
-      setPlotArea("");
+      resetPlotForm();
       queryClient.invalidateQueries({ queryKey: ["properties", id] });
+    },
+    onError: (error) => {
+      const fieldMessage =
+        error instanceof ApiProblemError ? error.errors.find((e) => e.message)?.message : undefined;
+      setPlotError(fieldMessage ?? error.message);
     },
   });
 
@@ -714,6 +769,16 @@ export function PropertyDetailPage() {
   });
 
   const prop = propQuery.data;
+  const freeM2 = prop
+    ? freePropertyAreaM2(prop.totalArea, prop.plots ?? [], editingPlot?.id)
+    : null;
+  const totalUnit = (prop?.totalArea?.unit as typeof plotUnit | undefined) ?? "TAREFA";
+  const typedArea = Number(plotArea);
+  const plotTooBig =
+    freeM2 !== null &&
+    plotArea !== "" &&
+    typedArea > 0 &&
+    !plotFitsInProperty(freeM2, typedArea, plotUnit, tarefaM2);
   if (propQuery.isLoading) {
     return <div className="af-empty-state">Carregando propriedade...</div>;
   }
@@ -870,15 +935,24 @@ export function PropertyDetailPage() {
                             {pl.status ? PLOT_STATUS_LABELS[pl.status] : "—"}
                           </span>
                         </td>
-                        <td style={{ textAlign: "right" }}>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           {pl.id && (
-                            <button
-                              type="button"
-                              className="af-btn af-btn--ghost af-btn--sm"
-                              onClick={() => deletePlotMutation.mutate(pl.id!)}
-                            >
-                              Excluir
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                className="af-btn af-btn--ghost af-btn--sm"
+                                onClick={() => startEditingPlot(pl)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className="af-btn af-btn--ghost af-btn--sm"
+                                onClick={() => deletePlotMutation.mutate(pl.id!)}
+                              >
+                                Excluir
+                              </button>
+                            </>
                           )}
                         </td>
                       </tr>
@@ -890,19 +964,30 @@ export function PropertyDetailPage() {
           </div>
 
           <div className="af-card">
-            <h2 className="af-card-title" style={{ marginBottom: 12 }}>
-              Adicionar Área / Talhão
+            <h2 className="af-card-title" style={{ marginBottom: 4 }}>
+              {editingPlot ? `Editar área: ${editingPlot.name}` : "Adicionar Área / Talhão"}
             </h2>
+            <p className="af-card-subtitle" style={{ marginBottom: 12 }}>
+              {freeM2 === null
+                ? "A propriedade não tem tamanho cadastrado, então as áreas não têm limite."
+                : `Livre na propriedade: ${formatArea({
+                    value: fromSquareMeters(freeM2, totalUnit, tarefaM2),
+                    unit: totalUnit,
+                  })} de ${formatArea(prop.totalArea)}.`}
+            </p>
             <form
               className="af-form-grid"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (plotName.trim()) createPlotMutation.mutate();
+                if (plotName.trim() && !plotTooBig) savePlotMutation.mutate();
               }}
             >
               <div className="af-field">
-                <label className="af-label">Identificação da área *</label>
+                <label className="af-label" htmlFor="plot-name">
+                  Identificação da área *
+                </label>
                 <input
+                  id="plot-name"
                   className="af-input"
                   value={plotName}
                   onChange={(e) => setPlotName(e.target.value)}
@@ -912,8 +997,13 @@ export function PropertyDetailPage() {
               </div>
               <div className="af-form-row">
                 <div className="af-field">
-                  <label className="af-label">Tamanho</label>
+                  <label className="af-label" htmlFor="plot-area">
+                    Tamanho
+                  </label>
                   <input
+                    id="plot-area"
+                    aria-invalid={plotTooBig}
+                    aria-describedby={plotTooBig ? "plot-area-error" : undefined}
                     type="number"
                     step="0.01"
                     min="0.01"
@@ -924,8 +1014,11 @@ export function PropertyDetailPage() {
                   />
                 </div>
                 <div className="af-field">
-                  <label className="af-label">Unidade</label>
+                  <label className="af-label" htmlFor="plot-unit">
+                    Unidade
+                  </label>
                   <select
+                    id="plot-unit"
                     className="af-select"
                     value={plotUnit}
                     onChange={(e) => setPlotUnit(e.target.value as typeof plotUnit)}
@@ -938,9 +1031,27 @@ export function PropertyDetailPage() {
                   </select>
                 </div>
               </div>
+              {plotTooBig && freeM2 !== null && (
+                <div id="plot-area-error" className="af-alert af-alert--danger" role="alert">
+                  Não cabe na propriedade: só restam{" "}
+                  {formatArea({
+                    value: fromSquareMeters(freeM2, plotUnit, tarefaM2),
+                    unit: plotUnit,
+                  })}
+                  . Diminua outra área antes, se precisar.
+                </div>
+              )}
+              {plotError && !plotTooBig && (
+                <div className="af-alert af-alert--danger" role="alert">
+                  {plotError}
+                </div>
+              )}
               <div className="af-field">
-                <label className="af-label">Situação orgânica</label>
+                <label className="af-label" htmlFor="plot-status">
+                  Situação orgânica
+                </label>
                 <select
+                  id="plot-status"
                   className="af-select"
                   value={plotStatus}
                   onChange={(e) => setPlotStatus(e.target.value as typeof plotStatus)}
@@ -952,13 +1063,24 @@ export function PropertyDetailPage() {
                   ))}
                 </select>
               </div>
-              <button
-                type="submit"
-                className="af-btn af-btn--primary af-btn--sm"
-                disabled={createPlotMutation.isPending}
-              >
-                + Salvar talhão
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="submit"
+                  className="af-btn af-btn--primary af-btn--sm"
+                  disabled={savePlotMutation.isPending || plotTooBig}
+                >
+                  {editingPlot ? "Salvar alterações" : "+ Salvar talhão"}
+                </button>
+                {editingPlot && (
+                  <button
+                    type="button"
+                    className="af-btn af-btn--ghost af-btn--sm"
+                    onClick={resetPlotForm}
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
             </form>
           </div>
         </div>
@@ -1018,8 +1140,11 @@ export function PropertyDetailPage() {
               }}
             >
               <div className="af-field">
-                <label className="af-label">Nome completo *</label>
+                <label htmlFor="prop-nome-completo" className="af-label">
+                  Nome completo *
+                </label>
                 <input
+                  id="prop-nome-completo"
                   className="af-input"
                   value={workerName}
                   onChange={(e) => setWorkerName(e.target.value)}
@@ -1028,8 +1153,11 @@ export function PropertyDetailPage() {
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Vínculo com a unidade familiar</label>
+                <label htmlFor="prop-vinculo-com-a-unidade" className="af-label">
+                  Vínculo com a unidade familiar
+                </label>
                 <select
+                  id="prop-vinculo-com-a-unidade"
                   className="af-select"
                   value={workerRelation}
                   onChange={(e) => setWorkerRelation(e.target.value as typeof workerRelation)}

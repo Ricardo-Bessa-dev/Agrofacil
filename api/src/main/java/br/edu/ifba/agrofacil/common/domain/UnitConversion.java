@@ -30,13 +30,28 @@ public final class UnitConversion {
    * @throws IllegalArgumentException se a unidade não for de área
    */
   public static BigDecimal toSquareMeters(BigDecimal value, String unit, BigDecimal tarefaM2) {
-    BigDecimal factor =
-        switch (unit) {
-          case HECTARE -> M2_PER_HECTARE;
-          case SQUARE_METER -> BigDecimal.ONE;
-          case TAREFA -> tarefaM2;
-          case null, default -> throw new IllegalArgumentException("Unidade de área inválida");
-        };
-    return value.multiply(factor).setScale(M2_SCALE, RoundingMode.HALF_UP);
+    return value
+        .multiply(squareMetersPerUnit(unit, tarefaM2))
+        .setScale(M2_SCALE, RoundingMode.HALF_UP);
+  }
+
+  /**
+   * Caminho inverso de {@link #toSquareMeters}, para mostrar ao usuário na unidade que ele usa.
+   *
+   * @param m2 área em m²
+   * @return a área na unidade pedida, com 2 casas
+   * @throws IllegalArgumentException se a unidade não for de área
+   */
+  public static BigDecimal fromSquareMeters(BigDecimal m2, String unit, BigDecimal tarefaM2) {
+    return m2.divide(squareMetersPerUnit(unit, tarefaM2), M2_SCALE, RoundingMode.HALF_UP);
+  }
+
+  private static BigDecimal squareMetersPerUnit(String unit, BigDecimal tarefaM2) {
+    return switch (unit) {
+      case HECTARE -> M2_PER_HECTARE;
+      case SQUARE_METER -> BigDecimal.ONE;
+      case TAREFA -> tarefaM2;
+      case null, default -> throw new IllegalArgumentException("Unidade de área inválida");
+    };
   }
 }

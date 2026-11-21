@@ -1,6 +1,7 @@
+// Perfil do agricultor: dados pessoais, contato com a coordenação (WhatsApp) e saída do app.
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { maskCpf, onlyDigits } from "@agrofacil/domain";
+import { maskCpf, whatsappLink } from "@agrofacil/domain";
 import { useAuth } from "../auth/useAuth";
 
 export function ProfilePage() {
@@ -19,9 +20,7 @@ export function ProfilePage() {
     }
   };
 
-  const associationWhatsapp = user?.association?.whatsapp
-    ? onlyDigits(user.association.whatsapp)
-    : "";
+  const associationWhatsappUrl = whatsappLink(user?.association?.whatsapp);
 
   const initials = user?.name
     ? user.name
@@ -152,9 +151,9 @@ export function ProfilePage() {
             Fale diretamente com a coordenação.
           </p>
 
-          {associationWhatsapp ? (
+          {associationWhatsappUrl ? (
             <a
-              href={`https://wa.me/55${associationWhatsapp}`}
+              href={associationWhatsappUrl}
               target="_blank"
               rel="noreferrer"
               className="btn-primary"

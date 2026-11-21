@@ -168,8 +168,11 @@ export function GroupsPage() {
             }}
           >
             <div className="af-field">
-              <label className="af-label">Nome do grupo *</label>
+              <label htmlFor="group-nome-do-grupo" className="af-label">
+                Nome do grupo *
+              </label>
               <input
+                id="group-nome-do-grupo"
                 className="af-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -180,8 +183,11 @@ export function GroupsPage() {
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">UF</label>
+                <label htmlFor="group-uf" className="af-label">
+                  UF
+                </label>
                 <select
+                  id="group-uf"
                   className="af-select"
                   value={uf}
                   onChange={(e) => {
@@ -195,8 +201,11 @@ export function GroupsPage() {
                 </select>
               </div>
               <div className="af-field">
-                <label className="af-label">Município de referência</label>
+                <label htmlFor="group-municipio-de-referencia" className="af-label">
+                  Município de referência
+                </label>
                 <select
+                  id="group-municipio-de-referencia"
                   className="af-select"
                   value={municipalityId}
                   onChange={(e) => setMunicipalityId(e.target.value)}
@@ -212,8 +221,11 @@ export function GroupsPage() {
             </div>
 
             <div className="af-field">
-              <label className="af-label">Observações</label>
+              <label htmlFor="group-observacoes" className="af-label">
+                Observações
+              </label>
               <textarea
+                id="group-observacoes"
                 className="af-textarea"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

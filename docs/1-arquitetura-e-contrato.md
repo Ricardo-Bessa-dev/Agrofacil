@@ -1,8 +1,10 @@
 # Agrofácil: arquitetura, domínio e contrato API-front
 
+> **Estado (nov/2026):** o app do agricultor foi construído como **PWA** (React + Vite), e não em Expo / React Native ([ADR-19](#adr-19-app-do-agricultor-como-pwa)). A [§4.0](#40-implementação-no-pwa) mostra como a sincronização offline foi adaptada, e a [§5.3](#53-dados-no-celular), como os dados ficam no aparelho. Os avisos ao agricultor aparecem só dentro do app.
+
 O Agrofácil é o caderno de campo digital dos agricultores orgânicos de uma cooperativa que certifica pelo Sistema Participativo de Garantia (SPG), como núcleo regional de um OPAC. Ele tem duas partes:
 
-- **um app Android para o agricultor**, que registra o manejo exigido pela Portaria MAPA 52/2021 e funciona sem internet;
+- **um app para o celular do agricultor** (PWA: abre no navegador e pode ser instalado na tela inicial), que registra o manejo exigido pela Portaria MAPA 52/2021 e funciona sem internet;
 - **um painel web para o coordenador da associação**, que acompanha agricultores, propriedades, registros e certificações e organiza as visitas da certificação participativa (SPG).
 
 > **Princípio que orienta todas as decisões:** registrar tem que ser o mais fácil possível para alguém com pouquíssima afinidade com tecnologia. Se uma escolha técnica deixa o registro mais difícil para o agricultor, ela está errada, mesmo que seja "mais correta" para o sistema.
@@ -13,7 +15,7 @@ O Agrofácil é o caderno de campo digital dos agricultores orgânicos de uma co
 |---|---|---|---|
 | 1 | **este** | Toda a equipe | Arquitetura e decisões (ADRs), modelo de domínio e regras de negócio, **contrato API-front**, sincronização offline, segurança e LGPD, **certificação participativa (visitas e documentos)** |
 | 2 | [2-guia-api.md](2-guia-api.md) | Back-end | Construção da API em Spring Boot, DDL de referência, ambiente, implantação e backup |
-| 3 | [3-guia-front-end.md](3-guia-front-end.md) | Front-end e design | UX do agricultor tela a tela, monorepo, app Expo e painel web |
+| 3 | [3-guia-front-end.md](3-guia-front-end.md) | Front-end e design | UX do agricultor tela a tela, monorepo, app do agricultor (PWA) e painel web |
 
 Material de apoio que já existia:
 - os documentos originais: Documento de Visão v3, diagramas de casos de uso e de classes, Guia de Estrutura e o protótipo no Figma.
@@ -35,7 +37,7 @@ Material de apoio que já existia:
 - **[Parte 1. Arquitetura e decisões](#parte-1-arquitetura-e-decisões)**: [1.1 Visão geral](#11-visão-geral) · [1.2 Stack](#12-stack) · [1.3 Estrutura do repositório](#13-estrutura-do-repositório) · [1.4 Registro de decisões (ADRs)](#14-registro-de-decisões-adrs) · [1.5 Rastreabilidade dos requisitos (Documento de Visão v3)](#15-rastreabilidade-dos-requisitos-documento-de-visão-v3) · [1.6 O que mudou em relação ao diagrama de classes original](#16-o-que-mudou-em-relação-ao-diagrama-de-classes-original) · [1.7 Fora do escopo do MVP](#17-fora-do-escopo-do-mvp) · [1.8 Pendências **[confirmar]** com a associação](#18-pendências-confirmar-com-a-associação)
 - **[Parte 2. Modelo de domínio e regras de negócio](#parte-2-modelo-de-domínio-e-regras-de-negócio)**: [2.1 Glossário (português → código)](#21-glossário-português--código) · [2.2 Diagrama entidade-relacionamento](#22-diagrama-entidade-relacionamento) · [2.3 Entidades](#23-entidades) · [2.4 Regras de negócio (RN)](#24-regras-de-negócio-rn) · [2.5 Completude dos registros](#25-completude-dos-registros) · [2.6 Ciclos de vida](#26-ciclos-de-vida) · [2.7 Índices e desempenho](#27-índices-e-desempenho)
 - **[Parte 3. Contrato API-front](#parte-3-contrato-api-front)**: [3.1 Convenções gerais](#31-convenções-gerais) · [3.2 Formatos comuns](#32-formatos-comuns) · [3.3 Autenticação](#33-autenticação) · [3.4 Perfil (`/me`)](#34-perfil-me) · [3.5 Sincronização (app do agricultor)](#35-sincronização-app-do-agricultor) · [3.6 Arquivos (fotos, áudios, PDFs)](#36-arquivos-fotos-áudios-pdfs) · [3.7 Associação, coordenadores, grupos, agricultores e aparelhos (painel)](#37-associação-coordenadores-grupos-agricultores-e-aparelhos-painel) · [3.8 Propriedades, áreas e trabalhadores](#38-propriedades-áreas-e-trabalhadores) · [3.9 Registros de manejo](#39-registros-de-manejo) · [3.10 Certificações](#310-certificações) · [3.11 Painel inicial (RF19)](#311-painel-inicial-rf19) · [3.12 Comunicados e notificações](#312-comunicados-e-notificações) · [3.13 Catálogos e municípios](#313-catálogos-e-municípios) · [3.14 Relatórios](#314-relatórios) · [3.15 Visitas do SPG](#315-visitas-do-spg) · [3.16 Documentos gerados](#316-documentos-gerados) · [3.17 Matriz de permissões](#317-matriz-de-permissões) · [3.18 Códigos de erro (`code`)](#318-códigos-de-erro-code) · [3.19 Exemplo completo: colheita registrada no campo](#319-exemplo-completo-colheita-registrada-no-campo)
-- **[Parte 4. Sincronização offline](#parte-4-sincronização-offline)**: [4.1 Modelo mental](#41-modelo-mental) · [4.2 Banco local (SQLite)](#42-banco-local-sqlite) · [4.3 Escritas locais](#43-escritas-locais) · [4.4 O ciclo de sincronização](#44-o-ciclo-de-sincronização) · [4.5 Estados que o agricultor vê](#45-estados-que-o-agricultor-vê) · [4.6 Sessão expirada ou aparelho revogado](#46-sessão-expirada-ou-aparelho-revogado) · [4.7 Servidor: como o push é processado](#47-servidor-como-o-push-é-processado) · [4.8 Servidor: como o pull é calculado](#48-servidor-como-o-pull-é-calculado) · [4.9 Casos de teste obrigatórios](#49-casos-de-teste-obrigatórios)
+- **[Parte 4. Sincronização offline](#parte-4-sincronização-offline)**: [4.0 Implementação no PWA](#40-implementação-no-pwa) · [4.1 Modelo mental](#41-modelo-mental) · [4.2 Banco local (SQLite)](#42-banco-local-sqlite) · [4.3 Escritas locais](#43-escritas-locais) · [4.4 O ciclo de sincronização](#44-o-ciclo-de-sincronização) · [4.5 Estados que o agricultor vê](#45-estados-que-o-agricultor-vê) · [4.6 Sessão expirada ou aparelho revogado](#46-sessão-expirada-ou-aparelho-revogado) · [4.7 Servidor: como o push é processado](#47-servidor-como-o-push-é-processado) · [4.8 Servidor: como o pull é calculado](#48-servidor-como-o-pull-é-calculado) · [4.9 Casos de teste obrigatórios](#49-casos-de-teste-obrigatórios)
 - **[Parte 5. Segurança e LGPD](#parte-5-segurança-e-lgpd)**: [5.1 O que estamos protegendo](#51-o-que-estamos-protegendo) · [5.2 Ameaças e controles](#52-ameaças-e-controles) · [5.3 Dados no celular](#53-dados-no-celular) · [5.4 Logs](#54-logs) · [5.5 Termo de uso e aviso de privacidade (RNF06)](#55-termo-de-uso-e-aviso-de-privacidade-rnf06) · [5.6 Mapa de dados pessoais (LGPD art. 37)](#56-mapa-de-dados-pessoais-lgpd-art-37) · [5.7 Retenção, eliminação e anonimização](#57-retenção-eliminação-e-anonimização) · [5.8 Direitos dos titulares (art. 18): como atender](#58-direitos-dos-titulares-art-18-como-atender) · [5.9 Incidentes de segurança](#59-incidentes-de-segurança) · [5.10 Papéis](#510-papéis) · [5.11 Riscos residuais](#511-riscos-residuais) · [5.12 Checklist de segurança antes de usar com dados reais](#512-checklist-de-segurança-antes-de-usar-com-dados-reais)
 - **[Parte 6. Certificação participativa (SPG): visitas e documentos](#parte-6-certificação-participativa-spg-visitas-e-documentos)**: [6.1 Como o SPG funciona](#61-como-o-spg-funciona) · [6.2 Princípios](#62-princípios) · [6.3 Ciclo de avaliação e período de visitas](#63-ciclo-de-avaliação-e-período-de-visitas) · [6.4 Sugestão de visitadores](#64-sugestão-de-visitadores) · [6.5 Registro da visita: papel ou app](#65-registro-da-visita-papel-ou-app) · [6.6 Roteiro da visita (modelo `IN19-v1`)](#66-roteiro-da-visita-modelo-in19-v1) · [6.7 Documentos gerados: regras comuns](#67-documentos-gerados-regras-comuns) · [6.8 Modelos dos documentos (`IN19-v1`)](#68-modelos-dos-documentos-in19-v1) · [6.9 Fora da 1ª versão](#69-fora-da-1ª-versão)
 
@@ -46,18 +48,17 @@ Material de apoio que já existia:
 ```mermaid
 flowchart LR
     subgraph Campo["No campo (muitas vezes sem internet)"]
-        APP["App do agricultor<br/>React Native + Expo<br/>SQLite local"]
+        APP["App do agricultor<br/>PWA (React + Vite)<br/>dados no navegador"]
     end
     subgraph Escritorio["Na associação"]
         WEB["Painel do coordenador<br/>React + Vite"]
     end
     subgraph Servidor["Servidor (Docker Compose)"]
-        NGINX["nginx<br/>serve o painel e<br/>repassa /api"]
+        NGINX["nginx<br/>serve o painel e o app<br/>e repassa /api"]
         API["API REST<br/>Spring Boot (Java 21)"]
         DB[("PostgreSQL")]
         FILES[("Arquivos<br/>fotos, áudios, PDFs")]
     end
-    EXPO["Expo Push Service"]
     SMTP["Servidor de e-mail (SMTP)"]
 
     APP -- "HTTPS: /api/v1/sync (push/pull)" --> NGINX
@@ -65,7 +66,6 @@ flowchart LR
     NGINX --> API
     API --> DB
     API --> FILES
-    API -- notificações --> EXPO --> APP
     API -- "2FA, alertas" --> SMTP
 ```
 
@@ -73,10 +73,10 @@ Os dois clientes são diferentes de propósito:
 
 | | App do agricultor | Painel do coordenador |
 |---|---|---|
-| Plataforma | Android (React Native + Expo); iOS fica possível mais tarde | Navegador no computador (desktop-first) |
+| Plataforma | Navegador do celular (PWA), em Android ou iPhone | Navegador no computador (desktop-first) |
 | Conectividade | **Offline-first**: tudo é salvo no celular e sincronizado depois | Online: consulta a API direto |
-| Fonte dos dados na tela | O banco **local** (SQLite) | A API (com cache do TanStack Query) |
-| Login | CPF + código de acesso uma vez por aparelho; depois digital ou bloqueio de tela opcional | E-mail + senha + código por e-mail (2FA) |
+| Fonte dos dados na tela | O espelho **local** (no navegador), atualizado pelo pull | A API (com cache do TanStack Query) |
+| Login | CPF + código de acesso uma vez por aparelho | E-mail + senha + código por e-mail (2FA) |
 | Como fala com a API | `/sync/push` e `/sync/pull`, mais autenticação e upload de arquivos | Endpoints REST de cada recurso |
 
 ### 1.2 Stack
@@ -89,11 +89,11 @@ Os dois clientes são diferentes de propósito:
 | Segurança | Spring Security, JWT de acesso + refresh token opaco e rotativo, Argon2id | Ver [Parte 5](#parte-5-segurança-e-lgpd) |
 | Documentação da API | springdoc-openapi (Swagger UI) | Gera o `openapi.json`, de onde saem os tipos TypeScript |
 | Relatórios | Thymeleaf + openhtmltopdf (PDF); CSV gerado à mão | Caderno de campo em PDF e planilhas que abrem no Excel |
-| App mobile | **Expo (SDK estável mais recente) + React Native + TypeScript** | Um código só, acesso fácil a câmera, GPS, digital, notificações e SQLite |
-| Banco local | expo-sqlite + Drizzle ORM | Consultas tipadas, migrações locais e `useLiveQuery` para a tela se atualizar sozinha |
-| Painel web | **React + Vite + TypeScript**, Mantine UI, TanStack Query, React Router | O Mantine já traz tabela, formulário, datas, gráficos e notificações prontos para desktop |
-| Formulários (ambos) | react-hook-form + zod | Os mesmos esquemas de validação nos dois apps |
-| Mapas (web) | Leaflet + react-leaflet + OpenStreetMap | Gratuito e sem chave de API |
+| App mobile | **PWA: React + Vite + TypeScript** | As mesmas ferramentas do painel, sem loja de apps, em Android e iPhone (ADR-19) |
+| Dados no aparelho | `localStorage` (espelho e fila), IndexedDB (fotos) e service worker | Sem dependências; basta para o volume de um agricultor ([§4.0](#40-implementação-no-pwa)) |
+| Painel web | **React + Vite + TypeScript**, TanStack Query, React Router, CSS próprio | Poucas dependências e o visual do protótipo do Figma |
+| Validação (ambos) | Regras do `@agrofacil/domain` nas telas; a API valida tudo de novo | A API é a fonte da verdade e devolve `422` com o erro de cada campo |
+| Mapas (web) | Ainda não há mapa: a tela de propriedades lista as coordenadas. Leaflet + OpenStreetMap estão previstos (gratuitos, sem chave) | |
 | Monorepo JS | pnpm 12 workspaces (via Corepack) | Compartilha tipos e regras entre o mobile e o web |
 | Infra | Docker Compose (API, Postgres, nginx, Mailpit em dev) + túnel HTTPS | Roda no computador da equipe. Ver [doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação) |
 
@@ -105,16 +105,14 @@ agrofacil/
 │   ├── pom.xml
 │   └── src/...
 ├── apps/
-│   ├── mobile/               # Expo / React Native (app do agricultor)
+│   ├── mobile/               # PWA React + Vite (app do agricultor)
 │   └── web/                  # Vite / React (painel do coordenador)
 ├── packages/
 │   ├── api-types/            # tipos gerados do openapi.json (não editar à mão)
-│   └── domain/               # regras puras compartilhadas: completude, unidades, rótulos pt-BR, esquemas zod
+│   └── domain/               # regras puras compartilhadas: completude, unidades, áreas, rótulos pt-BR, municípios
 ├── infra/
-│   ├── docker-compose.yml
-│   ├── nginx/
-│   └── backup/
-├── documentacao/             # estes arquivos .md e a pesquisa de certificação
+│   └── docker-compose.dev.yml  # Postgres e Mailpit para o desenvolvimento
+├── docs/                     # estes arquivos .md
 ├── .github/workflows/ci.yml  # CI: ./mvnw verify + lint, typecheck e testes do pnpm
 ├── .editorconfig
 ├── pnpm-workspace.yaml
@@ -132,15 +130,15 @@ Cada ADR tem **contexto → decisão → consequências**. Os antigos nunca são
 
 #### ADR-02: App do agricultor offline-first
 - **Contexto:** a internet no campo, na região atendida, é instável. Se o registro falhar uma vez por falta de sinal, o agricultor desiste.
-- **Decisão:** o app grava **tudo primeiro no SQLite**, com UUID gerado no aparelho, e uma fila envia depois (`/sync/push`). As telas leem só o banco local. Os dados do servidor chegam por `/sync/pull`.
+- **Decisão:** o app grava **tudo primeiro no aparelho**, com UUID gerado nele, e uma fila envia depois (`/sync/push`). As telas leem o espelho local. Os dados do servidor chegam por `/sync/pull`. No PWA, o espelho e a fila ficam no `localStorage` e as fotos no IndexedDB ([§4.0](#40-implementação-no-pwa)).
 - **Consequências:** o app nunca mostra "erro de conexão" ao salvar. É preciso tratar idempotência e conflitos ([Parte 4](#parte-4-sincronização-offline)). O painel web continua online, o que é mais simples.
 
 #### ADR-03: Login do agricultor por CPF + código de acesso, sem senha
 - **Contexto:** senha é a maior barreira para o público. O protótipo tinha e-mail e senha, auto-cadastro e recuperação por e-mail. Muitos agricultores não usam e-mail.
 - **Decisão:**
   - O coordenador cadastra o agricultor e gera um **código de 6 dígitos**: uso único, válido por 72 h, bloqueado após 5 erros.
-  - O agricultor digita CPF + código **uma vez por aparelho**. O aparelho recebe um refresh token de longa duração (renovação deslizante de 180 dias), guardado no SecureStore.
-  - A digital, ou o bloqueio de tela do próprio celular, é **opcional** para abrir o app.
+  - O agricultor digita CPF + código **uma vez por aparelho**. O aparelho recebe um refresh token de longa duração (renovação deslizante de 180 dias), guardado no aparelho ([§5.3](#53-dados-no-celular)).
+  - A digital, ou o bloqueio de tela do próprio celular, é **opcional** para abrir o app (ainda não implementada no PWA).
   - Saiu do app ou trocou de celular? Pede um novo código.
 - **Consequências:**
   - Somem as telas de cadastro, senha e "esqueci a senha" do app.
@@ -266,6 +264,17 @@ Cada ADR tem **contexto → decisão → consequências**. Os antigos nunca são
   - Funciona na reunião sem internet, porque é papel.
   - A assinatura eletrônica (gov.br) pode vir depois sem mudar o modelo de dados.
 
+#### ADR-19: App do agricultor como PWA
+- **Contexto:** o plano era um app nativo em Expo / React Native com SQLite. Na construção, a equipe fez o app como aplicação web (React + Vite), com as mesmas ferramentas do painel.
+- **Decisão:** o app do agricultor é um **PWA**: abre no navegador do celular, pode ser instalado na tela inicial e funciona offline com service worker, `localStorage` (espelho e fila) e IndexedDB (fotos). Os avisos ficam só dentro do app; o push pelo Expo fica desligado na API (`app.push.enabled=false`).
+- **Consequências:**
+  - Não há loja de apps, APK nem build nativo; uma atualização chega ao abrir o app.
+  - Funciona em Android e iPhone com o mesmo código.
+  - Precisa de **HTTPS** em produção: sem contexto seguro não há service worker nem `crypto.subtle` (hash das fotos).
+  - Sem tarefa em segundo plano: a sincronização acontece com o app aberto.
+  - Os dados no aparelho ficam no armazenamento do navegador, sem a proteção do Keystore ([§5.3](#53-dados-no-celular)).
+  - Ficam para depois: GPS, áudio, voz, digital e as visitas do SPG no app ([doc 3, §C.10](3-guia-front-end.md#c10-telas-e-cobertura-da-parte-a)).
+
 ### 1.5 Rastreabilidade dos requisitos (Documento de Visão v3)
 
 | Req. | Como é atendido | Onde |
@@ -274,15 +283,15 @@ Cada ADR tem **contexto → decisão → consequências**. Os antigos nunca são
 | RF02 | **Reinterpretado:** a recuperação é um novo código pedido ao coordenador. Para coordenadores, há link de redefinição por e-mail | [§3.3](#33-autenticação) |
 | RF03 | 2FA por código no e-mail para coordenadores | ADR-04, [§3.3](#33-autenticação) |
 | RF04–RF09 | O agricultor cria, edita e exclui (logicamente) propriedades no app; o coordenador também, no painel. A exclusão pede confirmação | [§2.4](#24-regras-de-negócio-rn) RN06–RN08, [doc 3 §A.6](3-guia-front-end.md#a6-propriedades-rf04rf09) |
-| RF10 | GPS capturado ao abrir qualquer formulário de registro (opcional se negado) | [§2.4](#24-regras-de-negócio-rn) RN26, [doc 3 §C.7](3-guia-front-end.md#c7-gps-foto-áudio-e-voz) |
-| RF11 | Validação no app (zod) **e** na API (Bean Validation + regras de negócio) | [§3.2.5](#325-erros), [doc 2 §1.8](2-guia-api.md#18-validação-e-erros) |
+| RF10 | GPS capturado ao abrir qualquer formulário de registro (opcional se negado). **Ainda não implementado no PWA** | [§2.4](#24-regras-de-negócio-rn) RN26, [doc 3 §C.10](3-guia-front-end.md#c10-telas-e-cobertura-da-parte-a) |
+| RF11 | Validação no app (regras do `domain`) **e** na API (Bean Validation + regras de negócio) | [§3.2.5](#325-erros), [doc 2 §1.8](2-guia-api.md#18-validação-e-erros) |
 | RF12 | Registro "Usei adubo ou remédio" (`INPUT_APPLICATION`) | [Parte 2](#parte-2-modelo-de-domínio-e-regras-de-negócio), [doc 3 §A.5](3-guia-front-end.md#a5-fluxos-de-registro) |
-| RF13–RF14 | SQLite local + sincronização automática | [Parte 4](#parte-4-sincronização-offline) |
+| RF13–RF14 | Espelho local + fila de envio + sincronização automática | [Parte 4](#parte-4-sincronização-offline) |
 | RF15–RF17 | Telas de Agricultores, Propriedades e Certificações do painel | [doc 3 §D](3-guia-front-end.md#parte-d-painel-do-coordenador-vite--react) |
-| RF18 | Rotina diária de alertas (60/30/15 dias e no vencimento) por push, aviso no app e e-mail | [§2.4](#24-regras-de-negócio-rn) RN20, [doc 2 §1.12](2-guia-api.md#112-rotinas-notificações-push-e-e-mail) |
-| RF19 | Painel inicial com gráficos de status, atualizado a cada minuto | [§3.11](#311-painel-inicial-rf19), [doc 3 §D](3-guia-front-end.md#parte-d-painel-do-coordenador-vite--react) |
+| RF18 | Rotina diária de alertas (60/30/15 dias e no vencimento) por aviso no app e e-mail (push desligado, ADR-19) | [§2.4](#24-regras-de-negócio-rn) RN20, [doc 2 §1.12](2-guia-api.md#112-rotinas-notificações-push-e-e-mail) |
+| RF19 | Painel inicial com indicadores de status, atualizado a cada minuto | [§3.11](#311-painel-inicial-rf19), [doc 3 §D](3-guia-front-end.md#parte-d-painel-do-coordenador-vite--react) |
 | RNF01, RNF10 | Segurança e LGPD | [Parte 5](#parte-5-segurança-e-lgpd) |
-| RNF03 | Telas do app leem SQLite local; o painel pagina tudo; índices no banco | [§2.7](#27-índices-e-desempenho), [doc 2](2-guia-api.md) |
+| RNF03 | Telas do app leem o espelho local; o painel pagina tudo; índices no banco | [§2.7](#27-índices-e-desempenho), [doc 2](2-guia-api.md) |
 | RNF04, RNF08, RNF12 | Guia de UX | [doc 3, Parte A](3-guia-front-end.md#parte-a-experiência-do-agricultor-ux) |
 | RNF05, RNF13 | Postgres + exclusão lógica + histórico + backup | ADR-10, [doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação) |
 | RNF06 | Termo de uso e aviso de privacidade na ativação do app | [§5.5](#55-termo-de-uso-e-aviso-de-privacidade-rnf06) |
@@ -320,7 +329,7 @@ Cada ADR tem **contexto → decisão → consequências**. Os antigos nunca são
 - Plano de Manejo Orgânico estruturado: no MVP, é só um PDF anexado à propriedade.
 - Produção animal e apicultura.
 - Módulos financeiros.
-- App para iOS. O código Expo permite gerar depois.
+- App nativo para iOS. Como o app é um PWA, ele já abre no navegador do iPhone.
 - Chat dentro do app.
 
 ### 1.8 Pendências **[confirmar]** com a associação
@@ -597,6 +606,7 @@ Cite o número no código e nos testes, por exemplo `// RN12`.
 - **RN06:** o agricultor e o coordenador podem criar e editar propriedades. Ao criar uma propriedade, o sistema cria uma Área "Área principal", com a mesma área total e status `NOT_DEFINED`.
 - **RN07:** excluir uma propriedade é exclusão lógica, sempre com confirmação (RF09). Fica **bloqueado** se houver certificação `VALID` ou `EXPIRING` (erro `PROPERTY_HAS_ACTIVE_CERTIFICATION`). Os registros continuam guardados e visíveis ao coordenador.
 - **RN08:** só o coordenador cria, edita e exclui Áreas e define o status de conversão. Uma propriedade tem sempre pelo menos uma Área ativa. Área com registros só pode ser excluída logicamente.
+- **RN41:** a soma das Áreas com tamanho não pode passar do tamanho total da propriedade (folga de 1 m² para arredondamento). Áreas sem tamanho e propriedades sem tamanho não têm limite. A propriedade também não pode ficar menor que a soma das Áreas. Enquanto a "Área principal" (RN06) for a única Área e tiver o tamanho da propriedade, ela acompanha as mudanças desse tamanho. Erros: `422` com `EXCEEDS_PROPERTY_AREA` em `area` ou `SMALLER_THAN_PLOTS` em `totalArea`.
 
 **Registros de manejo**
 - **RN09:** cada tipo de registro tem campos obrigatórios para salvar e campos recomendados ([§2.5](#25-completude-dos-registros)). A completude é recalculada a cada escrita.
@@ -898,7 +908,7 @@ O **refresh token** é opaco (256 bits aleatórios, base64url) e rotativo: cada 
 
 | Cliente | Onde fica o refresh token |
 |---|---|
-| Mobile | SecureStore, enviado no corpo |
+| Mobile | Armazenamento do aparelho (`localStorage` no PWA, [§5.3](#53-dados-no-celular)), enviado no corpo |
 | Web | Cookie `af_refresh`: `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` |
 
 #### 3.3.1 Agricultor: ativar aparelho
@@ -910,7 +920,7 @@ O **refresh token** é opaco (256 bits aleatórios, base64url) e rotativo: cada 
   cpf: string;            // 11 dígitos; o app tira a máscara
   code: string;           // 6 dígitos
   device: {
-    id: uuid;             // gerado na instalação e guardado no SecureStore
+    id: uuid;             // gerado na instalação e guardado no aparelho
     name?: string;        // "Samsung Galaxy A15"
     platform: "ANDROID" | "IOS";
     appVersion: string;
@@ -1538,7 +1548,7 @@ type Notification = {
 | POST | `/notifications/{id}/read` | Coord. | `204` |
 | POST | `/notifications/read-all` | Coord. | `204` |
 
-**Push (Expo):** os dados (`data`) seguem o formato `{ type, ...ids }`. O app usa esses dados para abrir a tela certa: o registro, a certificação, a visita ou a lista de avisos.
+**Push (Expo), desligado por padrão (`app.push.enabled=false`, ADR-19):** os dados (`data`) seguem o formato `{ type, ...ids }`. O app usa esses dados para abrir a tela certa: o registro, a certificação, a visita ou a lista de avisos.
 
 ---
 
@@ -1910,6 +1920,23 @@ A versão completa do registro, com `number`, `completeness` e `plotId` copiado 
 
 Os formatos das requisições estão na [§3.5](#35-sincronização-app-do-agricultor). Esta parte explica o comportamento dos dois lados.
 
+### 4.0 Implementação no PWA
+
+O app foi construído como PWA ([ADR-19](#adr-19-app-do-agricultor-como-pwa)). O lado do servidor (§4.7 e §4.8) vale como está. Do lado do app, o desenho das seções 4.1 a 4.6 foi adaptado assim:
+
+| Desenho original | No PWA |
+|---|---|
+| SQLite + Drizzle como fonte da tela | Espelho do pull no `localStorage` (`af_mobile_sync_state`, com o cursor), lido por um `fetch` local que responde às rotas que o app usa |
+| Dado e mutação na mesma transação | A mutação entra na fila (`af_mobile_offline_queue`) e a tela lê espelho + fila. Mutações do mesmo item são unificadas (vale o último estado) |
+| Gatilhos: salvou, voltou a rede, app em primeiro plano, a cada 15 min, puxar para atualizar | Salvou, voltou a rede (evento `online`), abriu o app e o botão "Sincronizar". Não há tarefa em segundo plano |
+| Espera exponencial depois de erro | A mutação fica na fila e volta no próximo gatilho |
+| Mutação recusada marcada no banco | Sai da fila e vai para as recusas, mostradas num aviso com o motivo |
+| Anexos na pasta privada do app | Fotos no IndexedDB até o `PUT /files/{id}/content` |
+| `useLiveQuery` atualiza a tela | TanStack Query, atualizado depois de cada sincronização |
+| Sair só apaga o banco sem pendências | Sair apaga a sessão e o espelho, mas mantém a fila e as fotos pendentes |
+
+O código está descrito no [doc 3, §C.6 e §C.7](3-guia-front-end.md#c6-motor-de-sincronização).
+
 ### 4.1 Modelo mental
 
 ```mermaid
@@ -2156,7 +2183,7 @@ limit :limit;
 
 ### 4.9 Casos de teste obrigatórios
 
-Os testes ficam no back (Testcontainers) e no mobile (Jest com SQLite em memória).
+Os testes ficam no back (Testcontainers) e no mobile (Vitest nas funções do espelho, da fila e das fotos).
 
 1. Criar 3 registros offline, ligar a rede → os 3 chegam, em ordem, com `number`.
 2. Reenviar o mesmo push (simulando timeout depois do commit) → não duplica e devolve as mesmas respostas.
@@ -2193,7 +2220,7 @@ As referências são o **OWASP Top 10**, o **OWASP ASVS nível 1** como base mí
 |---|---|---|
 | Alguém pede um código se passando pelo agricultor | O código é entregue **pessoalmente** ou enviado pelo WhatsApp **ao número já cadastrado**, nunca a um número informado na hora. Quando um aparelho novo é ativado, os outros aparelhos do agricultor recebem a notificação "Seu acesso foi ativado em outro celular. Se não foi você, fale com a associação", e o coordenador vê o aparelho na lista | Processo da associação + `DEVICE_ACTIVATED` + tela de aparelhos |
 | Adivinhar o código de acesso | 6 dígitos, válido por 72 h, uso único, 5 tentativas por código, limite por CPF e por IP, mesma mensagem de erro para CPF inexistente | RN03, [doc 2 §1.7.3](2-guia-api.md#173-ativação-do-agricultor) |
-| Celular perdido ou roubado | O coordenador **revoga o aparelho**. Digital ou bloqueio de tela opcional para abrir o app. O refresh token fica no Keystore (SecureStore) | RN04, [doc 3 §C.5](3-guia-front-end.md#c5-autenticação-e-sessão) |
+| Celular perdido ou roubado | O coordenador **revoga o aparelho**. Bloqueio de tela do celular. Tokens de acesso curtos ([§5.3](#53-dados-no-celular)) | RN04, [doc 3 §C.5](3-guia-front-end.md#c5-autenticação-e-sessão) |
 | Roubo do refresh token | Rotação a cada uso + detecção de reutilização (revoga a família) + vínculo com o `deviceId` | [doc 2 §1.7.4](2-guia-api.md#174-tokens) |
 | Senha fraca ou vazada do coordenador | Argon2id, mínimo de 10 caracteres, bloqueio das senhas mais comuns, **2FA por e-mail** | RN05 |
 | Força bruta no login do coordenador | Limite por e-mail e por IP, tempo de resposta constante | [doc 2 §1.7.5](2-guia-api.md#175-login-do-coordenador-com-2fa) |
@@ -2214,14 +2241,16 @@ As referências são o **OWASP Top 10**, o **OWASP ASVS nível 1** como base mí
 
 ### 5.3 Dados no celular
 
-- **Refresh token e `deviceId`:** SecureStore (Android Keystore).
-- **Token de acesso:** só em memória.
-- **Banco SQLite e anexos:** ficam na área privada do app, inacessível a outros apps em um Android não modificado. **Não são criptografados** no MVP.
-  - Risco residual: um celular com root ou desbloqueado pode ter esses dados lidos.
-  - Mitigações: bloqueio de tela, digital opcional e revogação remota.
-  - Se a associação exigir mais, o `expo-sqlite` aceita SQLCipher por configuração (`useSQLCipher`), com a chave guardada no SecureStore.
-- **Digital:** o app **não recebe nem guarda biometria**. O Android só responde "autenticou ou não". Por isso não há tratamento de dado biométrico (dado sensível) pelo Agrofácil.
-- **Sair do app:** apaga o refresh token. O banco local só é apagado se não houver pendências ([§4.6](#46-sessão-expirada-ou-aparelho-revogado)).
+No PWA ([ADR-19](#adr-19-app-do-agricultor-como-pwa)), tudo fica no armazenamento do navegador, separado por site:
+
+- **Tokens e `deviceId`:** `localStorage`. O token de acesso dura 15 minutos; o refresh token, até ser revogado ou expirar.
+- **Espelho, fila e recusas:** `localStorage`. **Fotos pendentes:** IndexedDB. **Arquivos do app:** Cache Storage.
+- **Nada é criptografado.** Outros sites não leem esses dados, mas:
+  - um script malicioso no próprio app (XSS) poderia ler os tokens. Por isso o app não usa `dangerouslySetInnerHTML` e só carrega código do próprio domínio;
+  - quem tiver o celular desbloqueado nas mãos pode abrir o app.
+- **Mitigações:** bloqueio de tela do celular, revogação remota do aparelho pelo coordenador e tokens de acesso curtos.
+- **Digital:** ainda não implementada. Quando existir, o app **não receberá nem guardará biometria**: o sistema só responde "autenticou ou não".
+- **Sair do app:** apaga a sessão e o espelho, mas mantém a fila e as fotos que ainda não foram enviadas ([§4.0](#40-implementação-no-pwa)).
 
 ### 5.4 Logs
 
@@ -2248,7 +2277,7 @@ Mostre o resumo na ativação ([doc 3 §A.3](3-guia-front-end.md#a3-primeiro-ace
 4. **Com quem os dados são compartilhados:**
    - o OPAC responsável pela certificação e o MAPA, quando a certificação exigir;
    - os membros do SPG escolhidos para visitar a propriedade, que recebem um resumo dos registros só durante a visita (IN 19/2009, arts. 79 e 81);
-   - serviços usados pelo sistema: o provedor de e-mail, o serviço de notificações da Expo (que recebe só o título e o texto do aviso) e o WhatsApp, quando você toca em "Fale com a associação" (a conversa acontece no WhatsApp).
+   - serviços usados pelo sistema: o provedor de e-mail e o WhatsApp, quando você toca em "Fale com a associação" (a conversa acontece no WhatsApp).
 5. **Por quanto tempo:** a [§5.7](#57-retenção-eliminação-e-anonimização).
 6. **Seus direitos:** confirmar, acessar, corrigir, saber com quem compartilhamos e pedir a eliminação do que não for exigido por lei, pelo canal da associação.
 7. **Segurança:** resumo da [§5.2](#52-ameaças-e-controles).
@@ -2265,15 +2294,15 @@ Mostre o resumo na ativação ([doc 3 §A.3](3-guia-front-end.md#a3-primeiro-ace
 | Nome, CPF | Agricultor | Identificar o produtor no SPG e no cadastro de produtores orgânicos | II (obrigação regulatória: IN 19/2009 e Portaria 52/2021) e V (vínculo com a cooperativa) | Postgres | Coordenadores; o próprio |
 | Telefone, e-mail | Agricultor | Contato e avisos | V | Postgres | Coordenadores; o próprio |
 | Endereço, nº do CAF | Agricultor | Cadastro do produtor (modelo do Anexo VI da IN 19) | II | Postgres | Coordenadores; o próprio |
-| Localização da propriedade (GPS), roteiro de acesso | Agricultor | Visitas de verificação e de pares; croqui do plano de manejo | II | Postgres; SQLite no celular | Coordenadores; o próprio |
-| Registros de manejo, compras e vendas | Agricultor | Rastreabilidade exigida pela Portaria 52, art. 11 | II | Postgres; SQLite | Coordenadores; o próprio |
-| GPS dos registros | Agricultor | Comprovar onde a atividade foi feita (RF10) | IX (legítimo interesse) + transparência no aviso. **É opcional** | Postgres; SQLite | Coordenadores; o próprio |
+| Localização da propriedade (GPS), roteiro de acesso | Agricultor | Visitas de verificação e de pares; croqui do plano de manejo | II | Postgres; navegador do celular | Coordenadores; o próprio |
+| Registros de manejo, compras e vendas | Agricultor | Rastreabilidade exigida pela Portaria 52, art. 11 | II | Postgres; navegador do celular | Coordenadores; o próprio |
+| GPS dos registros | Agricultor | Comprovar onde a atividade foi feita (RF10) | IX (legítimo interesse) + transparência no aviso. **É opcional** | Postgres; navegador do celular | Coordenadores; o próprio |
 | Fotos e áudios | Agricultor (e eventualmente terceiros que apareçam) | Comprovar e detalhar os registros | V / IX | Disco do servidor; celular | Coordenadores; o próprio |
 | Nomes dos trabalhadores / família | Trabalhadores | Listar as pessoas vinculadas no certificado | II | Postgres | Coordenadores; o agricultor responsável |
 | Aparelho (modelo, versão, token de push), último acesso | Agricultor | Segurança e envio de notificações | IX | Postgres | Coordenadores |
 | Nome, e-mail, telefone, senha (hash) | Coordenador | Acesso ao painel | V | Postgres | Coordenadores |
 | IP e horário de acesso (logs) | Todos | Segurança | IX | Logs do servidor | Equipe técnica |
-| Resumo dos registros da propriedade visitada (`brief`), telefone do visitado | Agricultor visitado | Preparar e fazer as visitas de pares e de verificação | II (IN 19, arts. 77–81) | Postgres; SQLite do visitador até 30 dias depois da visita | Coordenadores; participantes daquela visita |
+| Resumo dos registros da propriedade visitada (`brief`), telefone do visitado | Agricultor visitado | Preparar e fazer as visitas de pares e de verificação | II (IN 19, arts. 77–81) | Postgres; aparelho do visitador até 30 dias depois da visita (quando as visitas chegarem ao app) | Coordenadores; participantes daquela visita |
 | Resultado das visitas, fotos e áudios da visita | Agricultor visitado e visitadores | Avaliação da conformidade no SPG | II | Postgres; disco do servidor | Coordenadores; o visitado; o responsável pelo registro |
 | Nome, telefone e organização dos colaboradores | Colaborador | Participação no SPG (art. 70 §1º, II) | V (adesão ao grupo) **[jurídico]** | Postgres | Coordenadores; nome visível aos participantes da visita |
 | Impedimentos entre membros (parentesco, mesma casa, sociedade) | Agricultores | Imparcialidade das visitas (art. 79 §1º, II) | IX (legítimo interesse) **[jurídico]** | Postgres | **Só coordenadores** |
@@ -2346,7 +2375,7 @@ Contatos para incidente (preencher): responsável técnico: …; coordenação: 
 |---|---|---|---|---|
 | 1 | Código entregue a quem se passa pelo agricultor | **Média** | Processo de entrega do código | Entregar pessoalmente ou só ao número cadastrado; aviso aos outros aparelhos; revogação rápida |
 | 2 | Servidor num computador pessoal: disco sem criptografia, indisponibilidade, perda física | **Alta** (se houver dados reais) | Infra ([doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)) | Criptografia de disco (LUKS / BitLocker), backup fora da máquina, migrar para servidor ou nuvem antes do uso real |
-| 3 | SQLite do celular sem criptografia | Baixa | App | Bloqueio de tela, revogação remota; SQLCipher se exigido |
+| 3 | Dados do app sem criptografia no navegador do celular, tokens no `localStorage` | Média | App | Bloqueio de tela, revogação remota, tokens de acesso curtos, nenhum HTML vindo de dados (contra XSS) |
 | 4 | URL do túnel pública | Média | Infra | HTTPS, limite de tentativas, Swagger desligado em produção, nenhum endpoint de administração exposto |
 | 5 | 2FA por e-mail depende da segurança do e-mail do coordenador | Média | Login do coordenador | Orientar o uso de 2FA na própria conta de e-mail; TOTP (aplicativo autenticador) como evolução futura |
 | 6 | Fotos podem mostrar terceiros | Baixa | Anexos | Orientação no aviso de privacidade; o coordenador pode apagar anexos |
@@ -2358,7 +2387,7 @@ Contatos para incidente (preencher): responsável técnico: …; coordenação: 
 - [ ] `JWT_SECRET` forte e exclusivo do ambiente; `.env` fora do git.
 - [ ] Swagger desligado no perfil `prod`.
 - [ ] Testes de escopo (IDOR) e de limite de tentativas passando.
-- [ ] Cabeçalhos de segurança no nginx ([doc 2 §3.4](2-guia-api.md#34-nginx-painel--api-na-mesma-origem)).
+- [ ] Cabeçalhos de segurança no nginx ([doc 2 §3.4](2-guia-api.md#34-nginx-painel-app-e-api)).
 - [ ] Backup diário rodando e **uma restauração testada**.
 - [ ] Disco do servidor criptografado.
 - [ ] Aviso de privacidade e termo revisados **[jurídico]** e publicados no app e no painel.

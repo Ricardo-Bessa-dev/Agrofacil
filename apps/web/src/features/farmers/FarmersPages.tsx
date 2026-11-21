@@ -10,11 +10,16 @@ import {
   onlyDigits,
   RECORD_TYPE_LABELS,
   USER_STATUS_LABELS,
+  whatsappLink,
 } from "@agrofacil/domain";
 import type { AccessCodeResponse } from "@agrofacil/api-types";
 import { api, ApiProblemError, normalizePhoneE164, unwrap } from "../../api/client";
 import { fetchMunicipalities } from "../../api/municipalities";
+import { Pagination } from "../../components/Pagination";
 import { CertificationStatusBadge, RecordTypeAvatar } from "../../components/StatusBadge";
+
+/** Registros por página na ficha do agricultor. */
+const FARMER_RECORDS_PAGE_SIZE = 20;
 
 function AccessCodeModal({
   farmerName,
@@ -41,14 +46,10 @@ function AccessCodeModal({
     }
   };
 
-  const phoneDigits = onlyDigits(farmerPhone ?? "");
-  const whatsappPhone =
-    phoneDigits.startsWith("55") && phoneDigits.length >= 12 ? phoneDigits : `55${phoneDigits}`;
-  const whatsappUrl = phoneDigits
-    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
-        `Olá, ${farmerName}! Seu código de acesso ao aplicativo AgroFácil é: *${code}* (válido até ${formatDateTimePtBr(codeData.expiresAt)}).`,
-      )}`
-    : null;
+  const whatsappUrl = whatsappLink(
+    farmerPhone,
+    `Olá, ${farmerName}! Seu código de acesso ao aplicativo AgroFácil é: *${code}* (válido até ${formatDateTimePtBr(codeData.expiresAt)}).`,
+  );
 
   return (
     <div className="af-modal-backdrop" onClick={onClose}>
@@ -358,32 +359,7 @@ export function FarmersListPage() {
           </div>
         )}
 
-        {meta && (meta.totalPages ?? 1) > 1 && (
-          <div className="af-pagination">
-            <span>
-              Página {(meta.number ?? 0) + 1} de {meta.totalPages} ({meta.totalElements}{" "}
-              agricultores)
-            </span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                className="af-btn af-btn--outline af-btn--sm"
-                disabled={page <= 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                className="af-btn af-btn--outline af-btn--sm"
-                disabled={page + 1 >= (meta.totalPages ?? 1)}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Próxima
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination meta={meta} onPageChange={setPage} itemsLabel="agricultores" />
       </div>
 
       {activeCodeModal && (
@@ -774,6 +750,7 @@ export function FarmerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"info" | "properties" | "records" | "devices">("info");
+  const [recordsPage, setRecordsPage] = useState(0);
   const [codeModal, setCodeModal] = useState<AccessCodeResponse | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -795,7 +772,7 @@ export function FarmerDetailPage() {
   });
 
   const recordsQuery = useQuery({
-    queryKey: ["records", { farmerId: id }],
+    queryKey: ["records", { farmerId: id, page: recordsPage }],
     enabled: Boolean(id) && tab === "records",
     queryFn: () =>
       unwrap(
@@ -803,7 +780,11 @@ export function FarmerDetailPage() {
           params: {
             query: {
               filter: { farmerId: id },
-              pageable: { page: 0, size: 20, sort: ["performedOn,desc"] },
+              pageable: {
+                page: recordsPage,
+                size: FARMER_RECORDS_PAGE_SIZE,
+                sort: ["performedOn,desc"],
+              },
             },
           },
         }),
@@ -1041,6 +1022,11 @@ export function FarmerDetailPage() {
               ))}
             </div>
           )}
+          <Pagination
+            meta={recordsQuery.data?.page}
+            onPageChange={setRecordsPage}
+            itemsLabel="registros"
+          />
         </div>
       )}
 
@@ -1185,8 +1171,11 @@ function FarmerEditCard({
       <form className="af-form-grid" onSubmit={handleSave}>
         <div className="af-form-row">
           <div className="af-field">
-            <label className="af-label">Nome completo</label>
+            <label htmlFor="farmer-nome-completo" className="af-label">
+              Nome completo
+            </label>
             <input
+              id="farmer-nome-completo"
               className="af-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -1194,8 +1183,11 @@ function FarmerEditCard({
             />
           </div>
           <div className="af-field">
-            <label className="af-label">CPF</label>
+            <label htmlFor="farmer-cpf" className="af-label">
+              CPF
+            </label>
             <input
+              id="farmer-cpf"
               className="af-input"
               value={cpf}
               onChange={(e) => setCpf(formatCpf(e.target.value))}
@@ -1206,16 +1198,33 @@ function FarmerEditCard({
 
         <div className="af-form-row">
           <div className="af-field">
-            <label className="af-label">Telefone / WhatsApp</label>
-            <input className="af-input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <label htmlFor="farmer-telefone-whatsapp" className="af-label">
+              Telefone / WhatsApp
+            </label>
+            <input
+              id="farmer-telefone-whatsapp"
+              className="af-input"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </div>
           <div className="af-field">
-            <label className="af-label">E-mail</label>
-            <input className="af-input" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label htmlFor="farmer-e-mail" className="af-label">
+              E-mail
+            </label>
+            <input
+              id="farmer-e-mail"
+              className="af-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div className="af-field">
-            <label className="af-label">Grupo SPG</label>
+            <label htmlFor="farmer-grupo-spg" className="af-label">
+              Grupo SPG
+            </label>
             <select
+              id="farmer-grupo-spg"
               className="af-select"
               value={groupId}
               onChange={(e) => setGroupId(e.target.value)}
@@ -1232,16 +1241,22 @@ function FarmerEditCard({
 
         <div className="af-form-row">
           <div className="af-field">
-            <label className="af-label">CAF / DAP</label>
+            <label htmlFor="farmer-caf-dap" className="af-label">
+              CAF / DAP
+            </label>
             <input
+              id="farmer-caf-dap"
               className="af-input"
               value={cafNumber}
               onChange={(e) => setCafNumber(e.target.value)}
             />
           </div>
           <div className="af-field">
-            <label className="af-label">Comunidade / Localidade</label>
+            <label htmlFor="farmer-comunidade-localidade" className="af-label">
+              Comunidade / Localidade
+            </label>
             <input
+              id="farmer-comunidade-localidade"
               className="af-input"
               value={locality}
               onChange={(e) => setLocality(e.target.value)}
@@ -1250,8 +1265,11 @@ function FarmerEditCard({
         </div>
 
         <div className="af-field">
-          <label className="af-label">Observações</label>
+          <label htmlFor="farmer-observacoes" className="af-label">
+            Observações
+          </label>
           <textarea
+            id="farmer-observacoes"
             className="af-textarea"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
