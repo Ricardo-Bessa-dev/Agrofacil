@@ -597,6 +597,7 @@ Cite o número no código e nos testes, por exemplo `// RN12`.
 - **RN06:** o agricultor e o coordenador podem criar e editar propriedades. Ao criar uma propriedade, o sistema cria uma Área "Área principal", com a mesma área total e status `NOT_DEFINED`.
 - **RN07:** excluir uma propriedade é exclusão lógica, sempre com confirmação (RF09). Fica **bloqueado** se houver certificação `VALID` ou `EXPIRING` (erro `PROPERTY_HAS_ACTIVE_CERTIFICATION`). Os registros continuam guardados e visíveis ao coordenador.
 - **RN08:** só o coordenador cria, edita e exclui Áreas e define o status de conversão. Uma propriedade tem sempre pelo menos uma Área ativa. Área com registros só pode ser excluída logicamente.
+- **RN41:** a soma das Áreas com tamanho não pode passar do tamanho total da propriedade (folga de 1 m² para arredondamento). Áreas sem tamanho e propriedades sem tamanho não têm limite. A propriedade também não pode ficar menor que a soma das Áreas. Enquanto a "Área principal" (RN06) for a única Área e tiver o tamanho da propriedade, ela acompanha as mudanças desse tamanho. Erros: `422` com `EXCEEDS_PROPERTY_AREA` em `area` ou `SMALLER_THAN_PLOTS` em `totalArea`.
 
 **Registros de manejo**
 - **RN09:** cada tipo de registro tem campos obrigatórios para salvar e campos recomendados ([§2.5](#25-completude-dos-registros)). A completude é recalculada a cada escrita.

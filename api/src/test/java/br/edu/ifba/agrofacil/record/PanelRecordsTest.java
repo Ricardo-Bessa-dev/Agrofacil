@@ -226,6 +226,49 @@ class PanelRecordsTest extends IntegrationTest {
   }
 
   @Test
+  void plotsMustFitInTheProperty_andALoneMainPlotFollowsItsSize_RN41() throws Exception {
+    String plotsPath = "/properties/" + propertyId + "/plots";
+    // Sozinha e do tamanho da propriedade, a "Área principal" acompanha a correção do tamanho.
+    call(
+            HttpMethod.PATCH,
+            "/properties/" + propertyId,
+            coordinator.accessToken(),
+            "{\"totalArea\": {\"value\": 4, \"unit\": \"TAREFA\"}, \"version\": 0}")
+        .andExpect(status().isOk());
+    var plots =
+        call(HttpMethod.GET, plotsPath, coordinator.accessToken(), null)
+            .andExpect(jsonPath("$[0].area.value").value(4));
+    Integer mainVersion = read(plots, "$[0].version");
+
+    String newPlot =
+        "{\"name\": \"Roça de baixo\", \"status\": \"ORGANIC\","
+            + " \"area\": {\"value\": 1, \"unit\": \"TAREFA\"}}";
+    call(HttpMethod.POST, plotsPath, coordinator.accessToken(), newPlot)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors[0].field").value("area"))
+        .andExpect(jsonPath("$.errors[0].code").value("EXCEEDS_PROPERTY_AREA"));
+
+    call(
+            HttpMethod.PATCH,
+            "/plots/" + plotId,
+            coordinator.accessToken(),
+            "{\"area\": {\"value\": 3, \"unit\": \"TAREFA\"}, \"version\": %d}"
+                .formatted(mainVersion))
+        .andExpect(status().isOk());
+    call(HttpMethod.POST, plotsPath, coordinator.accessToken(), newPlot)
+        .andExpect(status().isCreated());
+
+    // Com duas áreas ocupando 4 tarefas, a propriedade não pode encolher para 3.
+    call(
+            HttpMethod.PATCH,
+            "/properties/" + propertyId,
+            coordinator.accessToken(),
+            "{\"totalArea\": {\"value\": 3, \"unit\": \"TAREFA\"}, \"version\": 1}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors[0].code").value("SMALLER_THAN_PLOTS"));
+  }
+
+  @Test
   void property_patchNeedsCurrentVersion_andLastPlotCannotBeDeleted_RN08() throws Exception {
     call(
             HttpMethod.PATCH,

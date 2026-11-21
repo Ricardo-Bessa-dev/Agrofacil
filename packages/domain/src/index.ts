@@ -6,3 +6,4 @@ export * from "./completeness";
 export * from "./certification";
 export * from "./dates";
 export * from "./whatsapp";
+export * from "./plotArea";
