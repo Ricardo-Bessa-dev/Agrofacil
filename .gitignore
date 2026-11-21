@@ -7,13 +7,6 @@ coverage/
 .env.*
 !.env.example
 
-# Expo / React Native
-.expo/
-apps/mobile/android/
-apps/mobile/ios/
-*.jks
-*.keystore
-
 # Playwright
 test-results/
 playwright-report/

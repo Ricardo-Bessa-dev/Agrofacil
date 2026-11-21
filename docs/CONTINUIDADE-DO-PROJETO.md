@@ -110,6 +110,8 @@ Todas as melhorias previstas no backlog técnico foram implementadas e validadas
 - **RN41:** a soma das áreas não pode passar do tamanho da propriedade (API, painel e app).
 - **Painel:** listas paginadas com o componente [`Pagination`](../apps/web/src/components/Pagination.tsx), avisos de erro das ações ([`Toaster`](../apps/web/src/components/Toaster.tsx)) e menus de seleção que buscam todas as páginas ([`pagination.ts`](../apps/web/src/api/pagination.ts)).
 - **Municípios da Bahia** ficam em `@agrofacil/domain`, usados pelos dois apps.
+- **Sessão do painel:** quando o token de acesso (15 min) expira, o cliente renova pelo cookie e repete a chamada, sem erro para o coordenador.
+- **Documentação:** o doc 3 (Partes C, D e E) descreve os apps como estão; o doc 1 ganhou o ADR-19 (PWA) e a §4.0; o doc 2 descreve a publicação do PWA.
 
 ## 4. Como Rodar e Validar o Projeto no Novo Ambiente
 
