@@ -1,3 +1,4 @@
+// Sessão do agricultor no aparelho: ativação, perfil (/me) e saída. Offline, mantém o perfil salvo.
 import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Me } from "@agrofacil/api-types";
 import { onlyDigits } from "@agrofacil/domain";
@@ -28,15 +29,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     try {
-      const { data, error } = await api.GET("/me");
-      if (error || !data) {
-        throw new Error("Falha ao carregar perfil.");
+      const { data, response } = await api.GET("/me");
+      if (data) {
+        setUser(data);
+        saveSession({ user: data });
+      } else if (response.status === 401 || response.status === 403) {
+        // Sessão recusada mesmo após tentar renovar o token: volta para a ativação.
+        clearSession();
+        setUser(null);
       }
-      setUser(data);
-      saveSession({ user: data });
+      // Outros erros (API fora do ar, 5xx): mantém o perfil salvo no aparelho.
     } catch {
-      clearSession();
-      setUser(null);
+      // Sem internet: o app é offline-first, então o agricultor continua com o perfil salvo.
     }
   }, []);
 

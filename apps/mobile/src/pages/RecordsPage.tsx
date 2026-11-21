@@ -1,3 +1,4 @@
+// Lista os registros de manejo do agricultor, com filtro por tipo e o detalhe de cada registro (fotos incluídas).
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router";
@@ -10,6 +11,7 @@ import {
   RECORD_TYPE_FARMER_LABELS,
 } from "@agrofacil/domain";
 import { api, fetchMobileRecordDetail } from "../api/client";
+import { RecordPhotos } from "../components/RecordPhotos";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 import plusIcon from "../assets/figma/plus-circle.svg";
 
@@ -460,21 +462,11 @@ export function RecordsPage() {
                 )}
               </div>
 
-              {(detail?.attachments ?? []).length > 0 && (
-                <div
-                  style={{
-                    backgroundColor: "var(--color-bg)",
-                    padding: "12px",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <div style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                    Anexos / Fotos
-                  </div>
-                  <div style={{ fontSize: "13px", fontWeight: 600, marginTop: 2 }}>
-                    📷 {(detail?.attachments ?? []).length} foto(s) anexada(s)
-                  </div>
-                </div>
+              {selectedRecord.id && (
+                <RecordPhotos
+                  recordId={selectedRecord.id}
+                  attachments={detail?.attachments ?? []}
+                />
               )}
             </div>
 

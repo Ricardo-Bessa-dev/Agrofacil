@@ -10,6 +10,7 @@ import {
   onlyDigits,
   RECORD_TYPE_LABELS,
   USER_STATUS_LABELS,
+  whatsappLink,
 } from "@agrofacil/domain";
 import type { AccessCodeResponse } from "@agrofacil/api-types";
 import { api, ApiProblemError, normalizePhoneE164, unwrap } from "../../api/client";
@@ -41,14 +42,10 @@ function AccessCodeModal({
     }
   };
 
-  const phoneDigits = onlyDigits(farmerPhone ?? "");
-  const whatsappPhone =
-    phoneDigits.startsWith("55") && phoneDigits.length >= 12 ? phoneDigits : `55${phoneDigits}`;
-  const whatsappUrl = phoneDigits
-    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
-        `Olá, ${farmerName}! Seu código de acesso ao aplicativo AgroFácil é: *${code}* (válido até ${formatDateTimePtBr(codeData.expiresAt)}).`,
-      )}`
-    : null;
+  const whatsappUrl = whatsappLink(
+    farmerPhone,
+    `Olá, ${farmerName}! Seu código de acesso ao aplicativo AgroFácil é: *${code}* (válido até ${formatDateTimePtBr(codeData.expiresAt)}).`,
+  );
 
   return (
     <div className="af-modal-backdrop" onClick={onClose}>

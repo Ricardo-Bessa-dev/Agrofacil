@@ -1,9 +1,11 @@
-// Telas de Certificações do painel do coordenador: listagem, emissão (RN18), renovação (RN21), suspensão, reativação e cancelamento (RN19).
+// Telas de Certificações do painel do coordenador: listagem, emissão e edição (RN18), renovação com aviso de visita (RN39), suspensão, reativação e cancelamento (RN19).
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addOneYearIso, formatDatePtBr, todayIso } from "@agrofacil/domain";
+import type { CertificationView, CropView } from "@agrofacil/api-types";
 import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
+import { fetchAllPages } from "../../api/pagination";
 import { CertificationStatusBadge } from "../../components/StatusBadge";
 
 export function CertificationsPage() {
@@ -15,7 +17,10 @@ export function CertificationsPage() {
   >((searchParams.get("status") as "" | "VALID" | "EXPIRING" | "EXPIRED") ?? "");
   const [currentOnly, setCurrentOnly] = useState(true);
   const [page, setPage] = useState(0);
-  const [showIssueModal, setShowIssueModal] = useState(Boolean(initialPropertyId));
+  const [formModal, setFormModal] = useState<{
+    mode: CertificationFormMode;
+    certification?: CertificationView;
+  } | null>(initialPropertyId ? { mode: "create" } : null);
   const [reasonModal, setReasonModal] = useState<{
     id: string;
     action: "suspend" | "cancel";
@@ -44,24 +49,16 @@ export function CertificationsPage() {
       ),
   });
 
-  const renewMutation = useMutation({
-    mutationFn: (certId: string) => {
-      const issuedOn = todayIso();
-      return unwrap(
-        api.POST("/certifications/{id}/renew", {
-          params: { path: { id: certId } },
-          body: {
-            issuedOn,
-            expiresOn: addOneYearIso(issuedOn),
-          },
-        }),
-      );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["certifications"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
+  const cropsQuery = useQuery({
+    queryKey: ["catalog", "crops"],
+    queryFn: () => unwrap(api.GET("/catalog/crops")),
   });
+  const cropNameById = new Map((cropsQuery.data ?? []).map((crop) => [crop.id, crop.name]));
+  const productNames = (c: CertificationView) =>
+    (c.products ?? [])
+      .map((p) => (p.cropId ? cropNameById.get(p.cropId) : undefined) ?? p.productName)
+      .filter(Boolean)
+      .join(", ");
 
   const reactivateMutation = useMutation({
     mutationFn: (certId: string) =>
@@ -123,7 +120,7 @@ export function CertificationsPage() {
           <button
             type="button"
             className="af-btn af-btn--primary af-btn--sm"
-            onClick={() => setShowIssueModal(true)}
+            onClick={() => setFormModal({ mode: "create" })}
           >
             + Emitir certificação
           </button>
@@ -205,6 +202,11 @@ export function CertificationsPage() {
                         {c.property?.farmerName ?? ""}
                         {c.scope ? ` • ${c.scope}` : ""}
                       </div>
+                      {productNames(c) && (
+                        <div style={{ fontSize: "0.78rem", color: "var(--af-text-muted)" }}>
+                          Produtos: {productNames(c)}
+                        </div>
+                      )}
                     </td>
                     <td style={{ fontWeight: 600 }}>{c.number ?? "S/N"}</td>
                     <td>{formatDatePtBr(c.issuedOn)}</td>
@@ -223,10 +225,19 @@ export function CertificationsPage() {
                           <button
                             type="button"
                             className="af-btn af-btn--secondary af-btn--sm"
-                            onClick={() => renewMutation.mutate(c.id!)}
-                            title="Renovar por mais 1 ano (RN21)"
+                            onClick={() => setFormModal({ mode: "renew", certification: c })}
+                            title="Abre a renovação para conferir datas, produtos e a visita do ciclo (RN39)"
                           >
-                            Renovar +1 ano
+                            Renovar
+                          </button>
+                        )}
+                        {c.id && c.status !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            className="af-btn af-btn--outline af-btn--sm"
+                            onClick={() => setFormModal({ mode: "edit", certification: c })}
+                          >
+                            Editar
                           </button>
                         )}
                         {c.id &&
@@ -307,10 +318,12 @@ export function CertificationsPage() {
         )}
       </div>
 
-      {showIssueModal && (
-        <IssueCertificationModal
+      {formModal && (
+        <CertificationFormModal
+          mode={formModal.mode}
+          certification={formModal.certification}
           defaultPropertyId={initialPropertyId}
-          onClose={() => setShowIssueModal(false)}
+          onClose={() => setFormModal(null)}
         />
       )}
 
@@ -372,37 +385,96 @@ export function CertificationsPage() {
   );
 }
 
-function IssueCertificationModal({
-  defaultPropertyId,
-  onClose,
-}: {
+type CertificationFormMode = "create" | "edit" | "renew";
+
+type CertificationFormModalProps = {
+  mode: CertificationFormMode;
+  /** Certificação editada ou renovada (obrigatória nesses modos). */
+  certification?: CertificationView;
   defaultPropertyId?: string;
   onClose: () => void;
-}) {
+};
+
+const FORM_TITLES: Record<CertificationFormMode, string> = {
+  create: "Emitir Nova Certificação (RN18)",
+  edit: "Editar Certificação",
+  renew: "Renovar Certificação",
+};
+
+const SUBMIT_LABELS: Record<CertificationFormMode, [idle: string, saving: string]> = {
+  create: ["Emitir certificação", "Emitindo..."],
+  edit: ["Salvar alterações", "Salvando..."],
+  renew: ["Renovar certificação", "Renovando..."],
+};
+
+/** Formulário único para emitir, editar e renovar (a renovação cria uma nova com previousId). */
+function CertificationFormModal({
+  mode,
+  certification,
+  defaultPropertyId,
+  onClose,
+}: CertificationFormModalProps) {
   const queryClient = useQueryClient();
-  const [propertyId, setPropertyId] = useState(defaultPropertyId ?? "");
-  const [number, setNumber] = useState("");
-  const [issuedOn, setIssuedOn] = useState(todayIso());
-  const [expiresOn, setExpiresOn] = useState(addOneYearIso(todayIso()));
-  const [scope, setScope] = useState("Produção Primária Vegetal");
-  const [notes, setNotes] = useState("");
+  const isCreate = mode === "create";
+  // Na renovação, a nova emissão começa hoje; na edição, mantém as datas atuais.
+  const initialIssuedOn = mode === "edit" ? (certification?.issuedOn ?? todayIso()) : todayIso();
+  const initialProducts = certification?.products ?? [];
+
+  const [propertyId, setPropertyId] = useState(
+    certification?.propertyId ?? certification?.property?.id ?? defaultPropertyId ?? "",
+  );
+  const [number, setNumber] = useState(mode === "edit" ? (certification?.number ?? "") : "");
+  const [issuedOn, setIssuedOn] = useState(initialIssuedOn);
+  const [expiresOn, setExpiresOn] = useState(
+    mode === "edit" ? (certification?.expiresOn ?? "") : addOneYearIso(initialIssuedOn),
+  );
+  const [scope, setScope] = useState(certification?.scope ?? DEFAULT_SCOPE);
+  const [notes, setNotes] = useState(mode === "edit" ? (certification?.notes ?? "") : "");
+  const [cropIds, setCropIds] = useState<string[]>(
+    initialProducts.flatMap((p) => (p.cropId ? [p.cropId] : [])),
+  );
+  const [otherProducts, setOtherProducts] = useState<string[]>(
+    initialProducts.flatMap((p) => (!p.cropId && p.productName ? [p.productName] : [])),
+  );
+  const [workerIds, setWorkerIds] = useState<string[]>(certification?.workerIds ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const propertiesQuery = useQuery({
     queryKey: ["properties", "all-select"],
+    enabled: isCreate,
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/properties", {
-          params: {
-            query: {
-              filter: {},
-              pageable: { page: 0, size: 100, sort: ["name,asc"] },
-            },
-          },
+          params: { query: { filter: {}, pageable: { ...pageable, sort: ["name,asc"] } } },
         }),
       ),
   });
+
+  const cropsQuery = useQuery({
+    queryKey: ["catalog", "crops"],
+    queryFn: () => unwrap(api.GET("/catalog/crops")),
+  });
+
+  const workersQuery = useQuery({
+    queryKey: ["properties", propertyId, "workers"],
+    enabled: Boolean(propertyId),
+    queryFn: () =>
+      unwrap(api.GET("/properties/{id}/workers", { params: { path: { id: propertyId } } })),
+  });
+
+  // RN39: antes de renovar, avisa se falta a visita de verificação do ciclo (a API não bloqueia).
+  const visitStatusQuery = useQuery({
+    queryKey: ["properties", propertyId, "visit-status"],
+    enabled: mode === "renew" && Boolean(propertyId),
+    queryFn: () =>
+      unwrap(api.GET("/properties/{id}/visit-status", { params: { path: { id: propertyId } } })),
+  });
+  const verification = visitStatusQuery.data?.verification;
+  const missingVerification =
+    mode === "renew" &&
+    verification !== undefined &&
+    (verification.done ?? 0) < (verification.required ?? 1);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -410,37 +482,65 @@ function IssueCertificationModal({
       setError("Selecione a propriedade.");
       return;
     }
+    // RN18: a certificação cobre ao menos um produto (cultura do catálogo ou nome livre).
+    if (cropIds.length === 0 && otherProducts.length === 0) {
+      setError("Informe ao menos um produto certificado.");
+      return;
+    }
     setError(null);
     setSaving(true);
+    const body = {
+      propertyId,
+      number: number.trim() || undefined,
+      issuedOn,
+      expiresOn,
+      scope: scope.trim() || undefined,
+      products: [
+        ...cropIds.map((cropId) => ({ cropId })),
+        ...otherProducts.map((productName) => ({ productName })),
+      ],
+      workerIds,
+      notes: notes.trim() || undefined,
+    };
     try {
-      await unwrap(
-        api.POST("/certifications", {
-          body: {
-            propertyId,
-            number: number.trim() || undefined,
-            issuedOn,
-            expiresOn,
-            scope: scope.trim() || undefined,
-            notes: notes.trim() || undefined,
-          },
-        }),
-      );
+      if (mode === "edit" && certification?.id) {
+        await unwrap(
+          api.PUT("/certifications/{id}", {
+            params: { path: { id: certification.id } },
+            body: { ...body, version: certification.version },
+          }),
+        );
+      } else if (mode === "renew" && certification?.id) {
+        await unwrap(
+          api.POST("/certifications/{id}/renew", {
+            params: { path: { id: certification.id } },
+            body,
+          }),
+        );
+      } else {
+        await unwrap(api.POST("/certifications", { body }));
+      }
       await queryClient.invalidateQueries({ queryKey: ["certifications"] });
       await queryClient.invalidateQueries({ queryKey: ["properties"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       onClose();
     } catch (err) {
-      setError(err instanceof ApiProblemError ? err.message : "Erro ao emitir certificação.");
+      setError(err instanceof ApiProblemError ? err.message : "Erro ao salvar a certificação.");
     } finally {
       setSaving(false);
     }
   };
 
+  const workers = (workersQuery.data ?? []).filter(
+    (w) => w.id && (w.active !== false || workerIds.includes(w.id)),
+  );
+  const [submitIdle, submitSaving] = SUBMIT_LABELS[mode];
+
   return (
     <div className="af-modal-backdrop" onClick={onClose}>
       <div className="af-modal" onClick={(e) => e.stopPropagation()}>
         <div className="af-modal-header">
-          <h3 className="af-card-title">Emitir Nova Certificação (RN18)</h3>
+          <h3 className="af-card-title">{FORM_TITLES[mode]}</h3>
           <button type="button" className="af-btn af-btn--ghost af-btn--sm" onClick={onClose}>
             ✕
           </button>
@@ -451,28 +551,51 @@ function IssueCertificationModal({
               {error}
             </div>
           )}
+          {missingVerification && (
+            <div className="af-alert af-alert--warning" role="alert" style={{ marginBottom: 14 }}>
+              Não há visita da comissão registrada neste ciclo. Renovar mesmo assim? (RN39)
+            </div>
+          )}
           <form className="af-form-grid" onSubmit={handleSubmit}>
             <div className="af-field">
-              <label className="af-label">Propriedade *</label>
-              <select
-                className="af-select"
-                value={propertyId}
-                onChange={(e) => setPropertyId(e.target.value)}
-                required
-              >
-                <option value="">Selecione a propriedade</option>
-                {(propertiesQuery.data?.content ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.farmerName})
-                  </option>
-                ))}
-              </select>
+              <label className="af-label" htmlFor="cert-property">
+                Propriedade *
+              </label>
+              {isCreate ? (
+                <select
+                  id="cert-property"
+                  className="af-select"
+                  value={propertyId}
+                  onChange={(e) => {
+                    setPropertyId(e.target.value);
+                    setWorkerIds([]);
+                  }}
+                  required
+                >
+                  <option value="">Selecione a propriedade</option>
+                  {(propertiesQuery.data ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.farmerName})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="cert-property"
+                  className="af-input"
+                  value={`${certification?.property?.name ?? "Propriedade"} (${certification?.property?.farmerName ?? ""})`}
+                  disabled
+                />
+              )}
             </div>
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Nº do Certificado</label>
+                <label className="af-label" htmlFor="cert-number">
+                  Nº do Certificado
+                </label>
                 <input
+                  id="cert-number"
                   className="af-input"
                   value={number}
                   onChange={(e) => setNumber(e.target.value)}
@@ -480,8 +603,11 @@ function IssueCertificationModal({
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Escopo</label>
+                <label className="af-label" htmlFor="cert-scope">
+                  Escopo
+                </label>
                 <input
+                  id="cert-scope"
                   className="af-input"
                   value={scope}
                   onChange={(e) => setScope(e.target.value)}
@@ -491,8 +617,11 @@ function IssueCertificationModal({
 
             <div className="af-form-row">
               <div className="af-field">
-                <label className="af-label">Data de emissão *</label>
+                <label className="af-label" htmlFor="cert-issued">
+                  Data de emissão *
+                </label>
                 <input
+                  id="cert-issued"
                   type="date"
                   className="af-input"
                   value={issuedOn}
@@ -504,8 +633,11 @@ function IssueCertificationModal({
                 />
               </div>
               <div className="af-field">
-                <label className="af-label">Validade (padrão +1 ano — RN18) *</label>
+                <label className="af-label" htmlFor="cert-expires">
+                  Validade (padrão +1 ano — RN18) *
+                </label>
                 <input
+                  id="cert-expires"
                   type="date"
                   className="af-input"
                   value={expiresOn}
@@ -515,9 +647,65 @@ function IssueCertificationModal({
               </div>
             </div>
 
+            <ProductsPicker
+              crops={cropsQuery.data ?? []}
+              loading={cropsQuery.isLoading}
+              cropIds={cropIds}
+              onCropIdsChange={setCropIds}
+              otherProducts={otherProducts}
+              onOtherProductsChange={setOtherProducts}
+            />
+
+            {propertyId && (
+              <fieldset className="af-field" style={{ border: 0, padding: 0, margin: 0 }}>
+                <legend className="af-label">Trabalhadores cobertos</legend>
+                {workersQuery.isLoading ? (
+                  <div className="af-empty-state" style={{ padding: 12 }}>
+                    Carregando trabalhadores...
+                  </div>
+                ) : workers.length === 0 ? (
+                  <div style={{ fontSize: "0.84rem", color: "var(--af-text-muted)" }}>
+                    Nenhum trabalhador cadastrado nesta propriedade.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "6px 16px",
+                      fontSize: "0.86rem",
+                    }}
+                  >
+                    {workers.map((w) => (
+                      <label
+                        key={w.id}
+                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={workerIds.includes(w.id!)}
+                          onChange={() =>
+                            setWorkerIds((ids) =>
+                              ids.includes(w.id!)
+                                ? ids.filter((id) => id !== w.id)
+                                : [...ids, w.id!],
+                            )
+                          }
+                        />
+                        {w.name}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </fieldset>
+            )}
+
             <div className="af-field">
-              <label className="af-label">Observações</label>
+              <label className="af-label" htmlFor="cert-notes">
+                Observações
+              </label>
               <textarea
+                id="cert-notes"
                 className="af-textarea"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -529,12 +717,143 @@ function IssueCertificationModal({
                 Cancelar
               </button>
               <button type="submit" className="af-btn af-btn--primary af-btn--sm" disabled={saving}>
-                {saving ? "Emitindo..." : "Emitir certificação"}
+                {saving ? submitSaving : missingVerification ? "Renovar mesmo assim" : submitIdle}
               </button>
             </div>
           </form>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Escopo sugerido para novas certificações. */
+const DEFAULT_SCOPE = "Produção Primária Vegetal";
+
+/** Limite de nomes livres por certificação, o mesmo da API (CertificationWrite.products, @Size max 100). */
+const MAX_PRODUCTS = 100;
+const PRODUCT_NAME_MAX_LENGTH = 120;
+
+type ProductsPickerProps = {
+  crops: CropView[];
+  loading: boolean;
+  cropIds: string[];
+  onCropIdsChange: (ids: string[]) => void;
+  otherProducts: string[];
+  onOtherProductsChange: (names: string[]) => void;
+};
+
+/** Escolha dos produtos certificados: culturas do catálogo marcadas e nomes livres para o que não está nele. */
+function ProductsPicker({
+  crops,
+  loading,
+  cropIds,
+  onCropIdsChange,
+  otherProducts,
+  onOtherProductsChange,
+}: ProductsPickerProps) {
+  const [otherName, setOtherName] = useState("");
+  const total = cropIds.length + otherProducts.length;
+
+  const toggleCrop = (id: string) =>
+    onCropIdsChange(cropIds.includes(id) ? cropIds.filter((c) => c !== id) : [...cropIds, id]);
+
+  const addOther = () => {
+    const name = otherName.trim();
+    const duplicated = otherProducts.some((p) => p.toLowerCase() === name.toLowerCase());
+    if (!name || duplicated || total >= MAX_PRODUCTS) return;
+    onOtherProductsChange([...otherProducts, name]);
+    setOtherName("");
+  };
+
+  return (
+    <div className="af-field">
+      <label className="af-label">
+        Produtos certificados * ({total} selecionado{total === 1 ? "" : "s"})
+      </label>
+      {loading ? (
+        <div className="af-empty-state" style={{ padding: 12 }}>
+          Carregando culturas...
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+            gap: "6px 12px",
+            maxHeight: 180,
+            overflowY: "auto",
+            padding: 10,
+            border: "1px solid var(--af-border)",
+            borderRadius: "var(--af-radius-md)",
+            fontSize: "0.86rem",
+          }}
+        >
+          {crops
+            .filter((c) => c.id && c.active !== false)
+            .map((c) => (
+              <label
+                key={c.id}
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={cropIds.includes(c.id!)}
+                  onChange={() => toggleCrop(c.id!)}
+                />
+                {c.name}
+              </label>
+            ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <input
+          className="af-input"
+          value={otherName}
+          maxLength={PRODUCT_NAME_MAX_LENGTH}
+          onChange={(e) => setOtherName(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter adiciona o produto em vez de enviar o formulário inteiro.
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addOther();
+            }
+          }}
+          placeholder="Produto fora do catálogo (ex.: Mel de abelha)"
+        />
+        <button type="button" className="af-btn af-btn--outline af-btn--sm" onClick={addOther}>
+          Adicionar
+        </button>
+      </div>
+
+      {otherProducts.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+          {otherProducts.map((name) => (
+            <span
+              key={name}
+              className="af-badge af-badge--valid"
+              style={{ display: "inline-flex", gap: 6 }}
+            >
+              {name}
+              <button
+                type="button"
+                aria-label={`Remover ${name}`}
+                onClick={() => onOtherProductsChange(otherProducts.filter((p) => p !== name))}
+                style={{
+                  border: 0,
+                  background: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  color: "inherit",
+                }}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

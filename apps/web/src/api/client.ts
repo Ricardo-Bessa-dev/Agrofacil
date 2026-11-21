@@ -166,8 +166,11 @@ export async function unwrap<T>(
   return data as T;
 }
 
-/** Faz download autenticado de binários (PDF, CSV, fotos, áudios) e aciona o download no navegador. */
-export async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
+/**
+ * GET autenticado de um binário. Necessário porque <img src> e <a href> não enviam o token Bearer.
+ * @param path caminho relativo a /api/v1, ex.: "/files/{id}/content"
+ */
+async function fetchBinary(path: string): Promise<Response> {
   const headers: Record<string, string> = {};
   if (accessToken) {
     headers["Authorization"] = `Bearer ${accessToken}`;
@@ -186,6 +189,17 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
     }
     throw new ApiError(response.status, body);
   }
+  return response;
+}
+
+/** Baixa um binário autenticado (foto, áudio) para exibir na página com URL.createObjectURL. */
+export async function fetchFileBlob(path: string): Promise<Blob> {
+  return (await fetchBinary(path)).blob();
+}
+
+/** Faz download autenticado de binários (PDF, CSV, fotos, áudios) e aciona o download no navegador. */
+export async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
+  const response = await fetchBinary(path);
   const disposition = response.headers.get("Content-Disposition");
   const filenameMatch = disposition?.match(/filename="?([^";]+)"?/i);
   const filename = filenameMatch?.[1] ?? fallbackFilename;

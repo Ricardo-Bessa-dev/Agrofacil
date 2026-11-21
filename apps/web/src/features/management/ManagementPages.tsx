@@ -11,6 +11,7 @@ import {
   USER_STATUS_LABELS,
 } from "@agrofacil/domain";
 import { api, ApiProblemError, downloadFile, normalizePhoneE164, unwrap } from "../../api/client";
+import { fetchAllPages } from "../../api/pagination";
 
 export function AnnouncementsPage() {
   const queryClient = useQueryClient();
@@ -660,9 +661,9 @@ export function ReportsPage() {
   const propertiesQuery = useQuery({
     queryKey: ["properties", "all-select"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/properties", {
-          params: { query: { filter: {}, pageable: { page: 0, size: 100 } } },
+          params: { query: { filter: {}, pageable: { ...pageable, sort: ["name,asc"] } } },
         }),
       ),
   });
@@ -696,7 +697,7 @@ export function ReportsPage() {
                 onChange={(e) => setPropertyId(e.target.value)}
               >
                 <option value="">Selecione a propriedade</option>
-                {(propertiesQuery.data?.content ?? []).map((p) => (
+                {(propertiesQuery.data ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.farmerName})
                   </option>

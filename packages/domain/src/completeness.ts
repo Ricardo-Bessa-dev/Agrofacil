@@ -14,7 +14,9 @@ export type RecordCompletenessInput = {
 
 /** Calcula os campos recomendados que ainda estão vazios para um registro de manejo. */
 export function missingFields(record: RecordCompletenessInput): string[] {
-  const hasValidQuantity = Boolean(record.quantity && record.quantity.value && record.quantity.value > 0);
+  const hasValidQuantity = Boolean(
+    record.quantity && record.quantity.value && record.quantity.value > 0,
+  );
   const hasValidPlantedArea = Boolean(
     record.plantedArea && record.plantedArea.value && record.plantedArea.value > 0,
   );
@@ -27,7 +29,9 @@ export function missingFields(record: RecordCompletenessInput): string[] {
         !record.expectedHarvestOn && "expectedHarvestOn",
       ].filter(Boolean) as string[];
     case "INPUT_APPLICATION":
-      return [!hasValidQuantity && "quantity", !record.purpose && "purpose"].filter(Boolean) as string[];
+      return [!hasValidQuantity && "quantity", !record.purpose && "purpose"].filter(
+        Boolean,
+      ) as string[];
     case "HARVEST":
       return [!hasValidQuantity && "quantity"].filter(Boolean) as string[];
     case "INPUT_PURCHASE":

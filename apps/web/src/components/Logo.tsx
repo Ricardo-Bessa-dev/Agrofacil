@@ -1,4 +1,4 @@
-// Componente de Logotipo oficial do AgroFácil extraído da seção Identidade Visual (3:51 e 140:6 do Figma).
+// Logotipo do AgroFácil (símbolo + nome) com o subtítulo do painel, como na Identidade Visual do Figma (3:51 e 140:6).
 import logoMark from "../assets/figma/logo-mark.png";
 import logoText from "../assets/figma/logo-text.png";
 
@@ -7,27 +7,23 @@ type LogoProps = {
   size?: "sm" | "md" | "lg";
 };
 
+/** Medidas em px de cada tamanho. textH segue a proporção da imagem do nome (252 × 83). */
+const SIZES = {
+  sm: { markW: 36, markH: 38, textW: 105, textH: 35, subSize: 11 },
+  md: { markW: 44, markH: 46, textW: 123, textH: 41, subSize: 13 },
+  lg: { markW: 66, markH: 70, textW: 187, textH: 62, subSize: 18 },
+} as const;
+
+const SUBTITLE_COLOR = "rgba(129, 94, 62, 0.97)";
+
 export function Logo({ subtitle = "Coordenação", size = "md" }: LogoProps) {
-  const dimensions = {
-    sm: { markW: 36, markH: 38, textW: 105, textH: 34, subSize: 11, subTop: 28, subLeft: 76 },
-    md: { markW: 44, markH: 46, textW: 123, textH: 40, subSize: 13, subTop: 33, subLeft: 92 },
-    lg: { markW: 66, markH: 70, textW: 187, textH: 62, subSize: 18, subTop: 51, subLeft: 132 },
-  }[size];
+  const dimensions = SIZES[size];
 
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        position: "relative",
-        height: dimensions.markH + 10,
-        paddingRight: 8,
-        userSelect: "none",
-      }}
-    >
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 2, userSelect: "none" }}>
       <img
         src={logoMark}
-        alt="Símbolo AgroFácil"
+        alt=""
         style={{
           width: dimensions.markW,
           height: dimensions.markH,
@@ -35,32 +31,28 @@ export function Logo({ subtitle = "Coordenação", size = "md" }: LogoProps) {
           flexShrink: 0,
         }}
       />
-      <img
-        src={logoText}
-        alt="AgroFácil"
-        style={{
-          width: dimensions.textW,
-          height: dimensions.textH,
-          objectFit: "contain",
-          marginLeft: -4,
-        }}
-      />
-      {subtitle && (
-        <span
-          style={{
-            position: "absolute",
-            left: dimensions.subLeft,
-            top: dimensions.subTop,
-            fontSize: dimensions.subSize,
-            fontWeight: 600,
-            color: "rgba(129, 94, 62, 0.97)",
-            whiteSpace: "nowrap",
-            lineHeight: 1,
-          }}
-        >
-          {subtitle}
-        </span>
-      )}
+      {/* O subtítulo fica numa coluna abaixo do nome, e não por cima dele: assim não se sobrepõem em nenhum tamanho. */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <img
+          src={logoText}
+          alt="AgroFácil"
+          style={{ width: dimensions.textW, height: dimensions.textH, objectFit: "contain" }}
+        />
+        {subtitle && (
+          <span
+            style={{
+              fontSize: dimensions.subSize,
+              fontWeight: 600,
+              color: SUBTITLE_COLOR,
+              whiteSpace: "nowrap",
+              lineHeight: 1.1,
+              paddingRight: 4,
+            }}
+          >
+            {subtitle}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

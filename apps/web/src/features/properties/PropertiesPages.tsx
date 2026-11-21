@@ -11,6 +11,7 @@ import {
   WORKER_RELATIONSHIP_LABELS,
 } from "@agrofacil/domain";
 import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
+import { fetchAllPages } from "../../api/pagination";
 import { fetchMunicipalities } from "../../api/municipalities";
 import { CertificationStatusBadge } from "../../components/StatusBadge";
 import propertyImg1 from "../../assets/figma/property-placeholder-1.png";
@@ -401,15 +402,12 @@ function CreatePropertyModal({
   const [saving, setSaving] = useState(false);
 
   const farmersQuery = useQuery({
-    queryKey: ["farmers", "all-select"],
+    queryKey: ["farmers", "all-select", "ACTIVE"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/farmers", {
           params: {
-            query: {
-              filter: { status: "ACTIVE" },
-              pageable: { page: 0, size: 100, sort: ["name,asc"] },
-            },
+            query: { filter: { status: "ACTIVE" }, pageable: { ...pageable, sort: ["name,asc"] } },
           },
         }),
       ),
@@ -481,7 +479,7 @@ function CreatePropertyModal({
                 required
               >
                 <option value="">Selecione o agricultor</option>
-                {(farmersQuery.data?.content ?? []).map((f) => (
+                {(farmersQuery.data ?? []).map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.name} ({f.cpfMasked})
                   </option>

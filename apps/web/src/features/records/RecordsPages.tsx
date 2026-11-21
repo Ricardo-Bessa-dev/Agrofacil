@@ -21,6 +21,8 @@ import {
 } from "@agrofacil/domain";
 import type { RecordWrite } from "@agrofacil/api-types";
 import { api, ApiProblemError, downloadFile, unwrap } from "../../api/client";
+import { fetchAllPages } from "../../api/pagination";
+import { AttachmentGallery } from "../../components/AttachmentGallery";
 import { RecordTypeAvatar } from "../../components/StatusBadge";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
@@ -330,15 +332,12 @@ export function RecordCreatePage() {
   const [saving, setSaving] = useState(false);
 
   const farmersQuery = useQuery({
-    queryKey: ["farmers", "all-select"],
+    queryKey: ["farmers", "all-select", "ACTIVE"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/farmers", {
           params: {
-            query: {
-              filter: { status: "ACTIVE" },
-              pageable: { page: 0, size: 100, sort: ["name,asc"] },
-            },
+            query: { filter: { status: "ACTIVE" }, pageable: { ...pageable, sort: ["name,asc"] } },
           },
         }),
       ),
@@ -348,15 +347,8 @@ export function RecordCreatePage() {
     queryKey: ["properties", "by-farmer", farmerId],
     enabled: Boolean(farmerId),
     queryFn: () =>
-      unwrap(
-        api.GET("/properties", {
-          params: {
-            query: {
-              filter: { farmerId },
-              pageable: { page: 0, size: 50 },
-            },
-          },
-        }),
+      fetchAllPages((pageable) =>
+        api.GET("/properties", { params: { query: { filter: { farmerId }, pageable } } }),
       ),
   });
 
@@ -371,13 +363,10 @@ export function RecordCreatePage() {
     queryKey: ["records", "plantings", propertyId],
     enabled: Boolean(propertyId) && type !== "PLANTING" && type !== "INPUT_PURCHASE",
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/records", {
           params: {
-            query: {
-              filter: { propertyId, type: "PLANTING", cycleStatus: "ACTIVE" },
-              pageable: { page: 0, size: 50 },
-            },
+            query: { filter: { propertyId, type: "PLANTING", cycleStatus: "ACTIVE" }, pageable },
           },
         }),
       ),
@@ -557,7 +546,7 @@ export function RecordCreatePage() {
                 required
               >
                 <option value="">Selecione o agricultor</option>
-                {(farmersQuery.data?.content ?? []).map((f) => (
+                {(farmersQuery.data ?? []).map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.name}
                   </option>
@@ -578,7 +567,7 @@ export function RecordCreatePage() {
                 disabled={!farmerId}
               >
                 <option value="">Selecione a propriedade</option>
-                {(propertiesQuery.data?.content ?? []).map((p) => (
+                {(propertiesQuery.data ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
@@ -629,7 +618,7 @@ export function RecordCreatePage() {
                   required={type === "HARVEST"}
                 >
                   <option value="">Selecione o ciclo de plantio</option>
-                  {(plantingsQuery.data?.content ?? []).map((pl) => (
+                  {(plantingsQuery.data ?? []).map((pl) => (
                     <option key={pl.id} value={pl.id}>
                       #{pl.number} — {pl.subject ?? "Plantio"} ({formatDatePtBr(pl.performedOn)})
                     </option>
@@ -1198,6 +1187,13 @@ export function RecordDetailPage() {
             </button>
           </form>
         </div>
+      </div>
+
+      <div className="af-card" style={{ marginTop: 20 }}>
+        <h2 className="af-card-title" style={{ marginBottom: 14 }}>
+          Fotos e anexos
+        </h2>
+        <AttachmentGallery attachments={rec.attachments ?? []} />
       </div>
 
       {/* Histórico de Auditoria Envers (ADR-10) */}

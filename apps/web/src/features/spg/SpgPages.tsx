@@ -17,6 +17,7 @@ import {
 } from "@agrofacil/domain";
 import type { GenerateDocumentRequest, ParticipantWrite } from "@agrofacil/api-types";
 import { api, ApiProblemError, downloadFile, normalizePhoneE164, unwrap } from "../../api/client";
+import { fetchAllPages } from "../../api/pagination";
 
 export function VisitsPage() {
   const [searchParams] = useSearchParams();
@@ -303,14 +304,9 @@ function ScheduleVisitModal({
   const propertiesQuery = useQuery({
     queryKey: ["properties", "all-select"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/properties", {
-          params: {
-            query: {
-              filter: {},
-              pageable: { page: 0, size: 100, sort: ["name,asc"] },
-            },
-          },
+          params: { query: { filter: {}, pageable: { ...pageable, sort: ["name,asc"] } } },
         }),
       ),
   });
@@ -407,7 +403,7 @@ function ScheduleVisitModal({
                 required
               >
                 <option value="">Selecione a propriedade</option>
-                {(propertiesQuery.data?.content ?? []).map((p) => (
+                {(propertiesQuery.data ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.farmerName})
                   </option>
@@ -717,13 +713,11 @@ export function DocumentsPage() {
   });
 
   const farmersQuery = useQuery({
-    queryKey: ["farmers", "all-select"],
+    queryKey: ["farmers", "all-select", "ALL"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/farmers", {
-          params: {
-            query: { filter: {}, pageable: { page: 0, size: 100 } },
-          },
+          params: { query: { filter: {}, pageable: { ...pageable, sort: ["name,asc"] } } },
         }),
       ),
   });
@@ -731,11 +725,9 @@ export function DocumentsPage() {
   const propertiesQuery = useQuery({
     queryKey: ["properties", "all-select"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/properties", {
-          params: {
-            query: { filter: {}, pageable: { page: 0, size: 100 } },
-          },
+          params: { query: { filter: {}, pageable: { ...pageable, sort: ["name,asc"] } } },
         }),
       ),
   });
@@ -746,22 +738,18 @@ export function DocumentsPage() {
   });
 
   const visitsQuery = useQuery({
-    queryKey: ["visits", "list"],
+    queryKey: ["visits", "all-select"],
     queryFn: () =>
-      unwrap(
-        api.GET("/visits", {
-          params: { query: { filter: {}, pageable: { page: 0, size: 50 } } },
-        }),
+      fetchAllPages((pageable) =>
+        api.GET("/visits", { params: { query: { filter: {}, pageable } } }),
       ),
   });
 
   const certsQuery = useQuery({
     queryKey: ["certifications", "all-select"],
     queryFn: () =>
-      unwrap(
-        api.GET("/certifications", {
-          params: { query: { filter: {}, pageable: { page: 0, size: 50 } } },
-        }),
+      fetchAllPages((pageable) =>
+        api.GET("/certifications", { params: { query: { filter: {}, pageable } } }),
       ),
   });
 
@@ -862,7 +850,7 @@ export function DocumentsPage() {
                     required
                   >
                     <option value="">Selecione</option>
-                    {(farmersQuery.data?.content ?? []).map((f) => (
+                    {(farmersQuery.data ?? []).map((f) => (
                       <option key={f.id} value={f.id}>
                         {f.name}
                       </option>
@@ -878,7 +866,7 @@ export function DocumentsPage() {
                     required
                   >
                     <option value="">Selecione</option>
-                    {(propertiesQuery.data?.content ?? []).map((p) => (
+                    {(propertiesQuery.data ?? []).map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
@@ -898,7 +886,7 @@ export function DocumentsPage() {
                   required
                 >
                   <option value="">Selecione a propriedade</option>
-                  {(propertiesQuery.data?.content ?? []).map((p) => (
+                  {(propertiesQuery.data ?? []).map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.farmerName})
                     </option>
@@ -938,7 +926,7 @@ export function DocumentsPage() {
                   required
                 >
                   <option value="">Selecione a visita</option>
-                  {(visitsQuery.data?.content ?? []).map((v) => (
+                  {(visitsQuery.data ?? []).map((v) => (
                     <option key={v.id} value={v.id}>
                       {formatDatePtBr(v.plannedOn)} — {v.property?.name} (
                       {v.type ? VISIT_TYPE_LABELS[v.type] : ""})
@@ -958,7 +946,7 @@ export function DocumentsPage() {
                   required
                 >
                   <option value="">Selecione a certificação</option>
-                  {(certsQuery.data?.content ?? []).map((c) => (
+                  {(certsQuery.data ?? []).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.property?.name} — Nº {c.number ?? "S/N"}
                     </option>
@@ -1117,11 +1105,11 @@ export function SpgPeoplePage() {
   });
 
   const farmersQuery = useQuery({
-    queryKey: ["farmers", "all-select"],
+    queryKey: ["farmers", "all-select", "ALL"],
     queryFn: () =>
-      unwrap(
+      fetchAllPages((pageable) =>
         api.GET("/farmers", {
-          params: { query: { filter: {}, pageable: { page: 0, size: 100 } } },
+          params: { query: { filter: {}, pageable: { ...pageable, sort: ["name,asc"] } } },
         }),
       ),
   });
@@ -1282,7 +1270,7 @@ export function SpgPeoplePage() {
                   required
                 >
                   <option value="">Selecione</option>
-                  {(farmersQuery.data?.content ?? []).map((f) => (
+                  {(farmersQuery.data ?? []).map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name}
                     </option>
@@ -1490,7 +1478,7 @@ export function SpgPeoplePage() {
                   required
                 >
                   <option value="">Selecione</option>
-                  {(farmersQuery.data?.content ?? []).map((f) => (
+                  {(farmersQuery.data ?? []).map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name}
                     </option>
@@ -1506,7 +1494,7 @@ export function SpgPeoplePage() {
                   required
                 >
                   <option value="">Selecione</option>
-                  {(farmersQuery.data?.content ?? []).map((f) => (
+                  {(farmersQuery.data ?? []).map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name}
                     </option>
