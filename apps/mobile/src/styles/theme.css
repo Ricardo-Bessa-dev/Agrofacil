@@ -143,11 +143,14 @@ body {
 .mobile-header {
   position: relative;
   background-color: var(--color-primary);
-  background-image: url("/src/assets/figma/header-hills.webp");
+  /* O verde escuro atrás do texto garante a leitura; some embaixo para mostrar os morros. */
+  background-image:
+    linear-gradient(to bottom, rgb(14 96 39 / 95%) 45%, rgb(14 96 39 / 0%)),
+    url("/src/assets/figma/header-hills.webp");
   background-size: cover;
   background-position: center bottom;
   color: #ffffff;
-  padding: calc(16px + var(--safe-top)) 20px 24px 20px;
+  padding: calc(16px + var(--safe-top)) 20px 52px 20px;
   border-bottom-left-radius: var(--radius-lg);
   border-bottom-right-radius: var(--radius-lg);
   overflow: hidden;
@@ -161,33 +164,31 @@ body {
 }
 
 .mobile-header-greeting {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1.3;
 }
 
 .mobile-header-sub {
-  font-size: 12px;
-  opacity: 0.9;
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .mobile-header-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.45);
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #fff;
   margin-top: 6px;
 }
 
 .mobile-header-action-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.9);
   border: none;
   width: 38px;
   height: 38px;
