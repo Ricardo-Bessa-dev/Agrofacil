@@ -2226,13 +2226,12 @@ export interface components {
         JsonNode: {
             /** @enum {string} */
             nodeType?: "ARRAY" | "BINARY" | "BOOLEAN" | "MISSING" | "NULL" | "NUMBER" | "OBJECT" | "POJO" | "STRING";
-            string?: boolean;
             integralNumber?: boolean;
+            floatingPointNumber?: boolean;
             missingNode?: boolean;
             valueNode?: boolean;
             object?: boolean;
             pojo?: boolean;
-            floatingPointNumber?: boolean;
             short?: boolean;
             int?: boolean;
             long?: boolean;
@@ -2248,6 +2247,7 @@ export interface components {
             null?: boolean;
             float?: boolean;
             container?: boolean;
+            string?: boolean;
             number?: boolean;
             embeddedValue?: boolean;
         };
@@ -3070,6 +3070,15 @@ export interface components {
             content?: components["schemas"]["RecordListItem"][];
             page?: components["schemas"]["PageMeta"];
         };
+        PlantingInfo: {
+            /** Format: uuid */
+            cropId?: string;
+            cropOtherName?: string;
+            /** @enum {string} */
+            cycleStatus?: "ACTIVE" | "FINISHED";
+            /** Format: date */
+            finishedOn?: string;
+        };
         RecordListItem: {
             /** Format: uuid */
             id?: string;
@@ -3093,6 +3102,7 @@ export interface components {
             source?: "MOBILE" | "WEB";
             /** Format: date-time */
             updatedAt?: string;
+            planting?: components["schemas"]["PlantingInfo"];
         };
         RecordDetail: {
             attachments?: components["schemas"]["AttachmentView"][];

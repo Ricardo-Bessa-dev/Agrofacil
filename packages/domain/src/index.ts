@@ -8,4 +8,5 @@ export * from "./certification";
 export * from "./dates";
 export * from "./whatsapp";
 export * from "./plotArea";
+export * from "./plantings";
 export * from "./municipalities";

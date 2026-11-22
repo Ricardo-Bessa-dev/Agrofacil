@@ -620,6 +620,7 @@ Cite o número no código e nos testes, por exemplo `// RN12`.
 - **RN22:** um registro com `*_other_name` (texto livre) aparece na tela "Itens sem catálogo" do coordenador, que pode associar o texto a um item do catálogo. Isso atualiza todos os registros com aquele texto.
 - **RN26:** o app tenta capturar o GPS ao abrir o formulário. Se a permissão for negada ou não houver sinal em 10 s, salva sem localização. O GPS nunca bloqueia o registro.
 - **RN27:** compra de insumo e saída/venda pertencem à propriedade (`plot_id` nulo).
+- **RN42:** a saída/venda pode ser ligada a um plantio da mesma propriedade, não excluído, em andamento ou `FINISHED` (a venda costuma vir depois da colheita final). Não exige colheita registrada, mas a data não pode ser anterior à do plantio (`BEFORE_PLANTING`). Os formulários sugerem o produto do plantio, e a pessoa pode trocar.
 - **RN28:** os campos de quantidade aceitam até 3 casas decimais e valores maiores que 0. As áreas também.
 
 **Certificação**
@@ -1357,7 +1358,7 @@ type InputPurchaseRecord = RecordBase & {
 type OutflowRecord = RecordBase & {
   type: "OUTFLOW";
   cropId?: uuid; productOtherName?: string;
-  plantingId?: uuid;
+  plantingId?: uuid;                              // em andamento ou encerrado (RN42)
   quantity?: Quantity;
   destination?: "FAIR" | "COOPERATIVE" | "PNAE" | "PAA" | "MIDDLEMAN" | "DIRECT_SALE" | "OWN_CONSUMPTION" | "DONATION" | "OTHER";
   buyerName?: string;
@@ -1373,10 +1374,10 @@ type RecordWrite = /* Record sem os campos readonly */;
 |---|---|
 | `REQUIRED` | Falta um campo obrigatório da tabela de completude ([§2.5](#25-completude-dos-registros)) |
 | `DATE_IN_FUTURE` / `DATE_TOO_OLD` | RN10 |
-| `BEFORE_PLANTING` | Colheita ou aplicação antes da data do plantio |
+| `BEFORE_PLANTING` | Colheita, aplicação ou saída antes da data do plantio (RN10, RN42) |
 | `MUST_BE_POSITIVE` / `TOO_MANY_DECIMALS` | RN28 |
 | `UNIT_NOT_ALLOWED` | Unidade de área em quantidade ou vice-versa |
-| `PLANTING_NOT_FOUND` | Plantio inexistente, excluído ou de outra propriedade (RN11) |
+| `PLANTING_NOT_FOUND` | Plantio inexistente, excluído ou de outra propriedade (RN11, RN42) |
 | `PLOT_NOT_FOUND` | Área inexistente ou de outra propriedade |
 | `CATALOG_ITEM_INACTIVE` | `cropId` ou `inputId` desativado (o app deve oferecer "Outro") |
 | `TYPE_CHANGE_NOT_ALLOWED` | Tentou mudar o `type` de um registro existente |
@@ -1397,6 +1398,10 @@ type RecordListItem = {
   openCorrectionRequests: number;
   source: "MOBILE" | "WEB";
   updatedAt: instant;
+  planting?: {                     // só nas linhas de plantio; usado para escolher o plantio (RN11, RN42)
+    cropId?: uuid; cropOtherName?: string;
+    cycleStatus: "ACTIVE" | "FINISHED"; finishedOn?: date;
+  };
 };
 ```
 

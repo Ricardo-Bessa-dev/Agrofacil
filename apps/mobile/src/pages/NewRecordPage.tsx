@@ -6,13 +6,15 @@ import type { RecordWrite } from "@agrofacil/api-types";
 import {
   DEFAULT_APPLICATION_UNIT,
   DEFAULT_QUANTITY_UNIT,
-  formatDatePtBr,
+  isPlantingFinished,
   MISSING_FIELD_LABELS,
+  suggestOutflowProduct,
   todayIso,
   type AreaUnitCode,
 } from "@agrofacil/domain";
 import { api, fetchMobileRecordDetail, uploadRecordPhoto } from "../api/client";
 import { generateUuid } from "../api/uuid";
+import { PlantingSelect } from "../components/PlantingSelect";
 import { QuantityUnitSelect } from "../components/QuantityUnitSelect";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 import { onActivateKey } from "../a11y";
@@ -226,9 +228,9 @@ export function NewRecordPage() {
     enabled: Boolean(currentPropertyId),
   });
 
-  // Busca plantios ativos da propriedade para vínculo (Item 3 do Backlog)
-  const activePlantingsQuery = useQuery({
-    queryKey: ["active-plantings", currentPropertyId],
+  // Plantios da propriedade para vínculo, em andamento e encerrados (RN11, RN42)
+  const plantingsQuery = useQuery({
+    queryKey: ["property-plantings", currentPropertyId],
     queryFn: async () => {
       if (!currentPropertyId) return [];
       const { data } = await api.GET("/records", {
@@ -237,7 +239,6 @@ export function NewRecordPage() {
             filter: {
               propertyId: currentPropertyId,
               type: "PLANTING",
-              cycleStatus: "ACTIVE",
             },
             pageable: { size: 50, sort: ["performedOn,desc"] },
           },
@@ -286,7 +287,8 @@ export function NewRecordPage() {
   const crops = cropsQuery.data ?? [];
   const farmInputs = farmInputsQuery.data ?? [];
   const units = unitsQuery.data ?? [];
-  const activePlantings = activePlantingsQuery.data ?? [];
+  const plantings = plantingsQuery.data ?? [];
+  const activePlantings = plantings.filter((p) => !isPlantingFinished(p));
 
   // Só escolhe o plantio sozinho quando há um único em andamento; com mais de um, o agricultor escolhe,
   // para a colheita não ficar ligada ao plantio errado.
@@ -296,6 +298,31 @@ export function NewRecordPage() {
       setPlantingId(onlyPlantingId);
     }
   }, [selectedType, plantingId, onlyPlantingId]);
+
+  // O plantio não passa de um tipo para outro: a escolha automática da colheita não pode virar
+  // vínculo de uma saída ou aplicação sem a pessoa perceber.
+  const handleTypeChange = (type: RecordType) => {
+    if (type === selectedType) return;
+    setSelectedType(type);
+    setPlantingId("");
+  };
+
+  const handlePlantingChange = (nextId: string) => {
+    if (selectedType === "OUTFLOW") {
+      const product = suggestOutflowProduct(
+        {
+          cropId: outflowCropId === "OTHER" ? "" : outflowCropId,
+          otherName: outflowProductName,
+        },
+        plantings.find((p) => p.id === plantingId),
+        plantings.find((p) => p.id === nextId),
+        crops,
+      );
+      setOutflowCropId(product.cropId);
+      setOutflowProductName(product.otherName);
+    }
+    setPlantingId(nextId);
+  };
 
   const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -320,9 +347,9 @@ export function NewRecordPage() {
       return;
     }
 
-    if (selectedType === "HARVEST" && activePlantings.length === 0) {
+    if (selectedType === "HARVEST" && plantings.length === 0) {
       setErrorMsg(
-        "Para registrar uma colheita, é necessário ter um Plantio ativo cadastrado nesta propriedade.",
+        "Para registrar uma colheita, é necessário ter um plantio cadastrado nesta propriedade.",
       );
       return;
     }
@@ -470,7 +497,7 @@ export function NewRecordPage() {
 
       await queryClient.invalidateQueries({ queryKey: ["records"] });
       await queryClient.invalidateQueries({ queryKey: ["recent-records"] });
-      await queryClient.invalidateQueries({ queryKey: ["active-plantings"] });
+      await queryClient.invalidateQueries({ queryKey: ["property-plantings"] });
       await queryClient.invalidateQueries({
         queryKey: ["mobile-record-detail", editingRecordId],
       });
@@ -565,8 +592,8 @@ export function NewRecordPage() {
                     role="radio"
                     aria-checked={isSelected}
                     tabIndex={0}
-                    onClick={() => setSelectedType(t.type)}
-                    onKeyDown={onActivateKey(() => setSelectedType(t.type))}
+                    onClick={() => handleTypeChange(t.type)}
+                    onKeyDown={onActivateKey(() => handleTypeChange(t.type))}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -707,13 +734,13 @@ export function NewRecordPage() {
             </div>
           </div>
 
-          {/* Vínculo com Plantio Ativo para Aplicação, Colheita e Saída (Item 3 do Backlog) */}
+          {/* Vínculo com Plantio para Aplicação, Colheita e Saída (Item 3 do Backlog) */}
           {(selectedType === "INPUT_APPLICATION" ||
             selectedType === "HARVEST" ||
             selectedType === "OUTFLOW") && (
             <div className="mobile-card">
               <h2 style={{ fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
-                Vínculo com Plantio Ativo
+                Vínculo com Plantio
               </h2>
               <p
                 style={{
@@ -723,35 +750,17 @@ export function NewRecordPage() {
                 }}
               >
                 {selectedType === "HARVEST"
-                  ? "Selecione de qual plantio em andamento esta colheita está sendo realizada (obrigatório):"
-                  : "Vincule opcionalmente a um plantio em andamento para rastreabilidade do lote:"}
+                  ? "Selecione de qual plantio é esta colheita (obrigatório):"
+                  : "Vincule opcionalmente a um plantio para rastreabilidade do lote:"}
               </p>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label htmlFor="planting-select" className="form-label">
-                  Plantio {selectedType === "HARVEST" ? "*" : "(opcional)"}
-                </label>
-                <select
-                  id="planting-select"
-                  value={plantingId}
-                  onChange={(e) => setPlantingId(e.target.value)}
-                  className="form-select"
-                  required={selectedType === "HARVEST"}
-                >
-                  <option value="">
-                    {selectedType === "HARVEST"
-                      ? "Selecione o plantio..."
-                      : "Sem vínculo com plantio específico"}
-                  </option>
-                  {activePlantings.map((pl) => (
-                    <option key={pl.id} value={pl.id}>
-                      {pl.subject || "Plantio"} —{" "}
-                      {pl.performedOn ? formatDatePtBr(pl.performedOn) : ""}
-                      {pl.plot?.name ? ` (${pl.plot.name})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <PlantingSelect
+                key={selectedType}
+                recordType={selectedType}
+                value={plantingId}
+                onChange={handlePlantingChange}
+                plantings={plantings}
+              />
             </div>
           )}
 

@@ -1,4 +1,5 @@
-// Regras de validação dos registros que dependem de datas e do banco (RN10, RN11, RN14, RN28).
+// Regras de validação dos registros que dependem de datas e do banco (RN10, RN11, RN14, RN28,
+// RN42).
 package br.edu.ifba.agrofacil.record;
 
 import br.edu.ifba.agrofacil.catalog.CropRepository;
@@ -95,7 +96,6 @@ public class RecordRules {
 
     if (planting != null
         && w.performedOn() != null
-        && !(w instanceof OutflowWrite)
         && w.performedOn().isBefore(planting.getPerformedOn())) {
       errors.add(field("performedOn", "BEFORE_PLANTING", "A data não pode ser antes do plantio."));
     }
@@ -260,7 +260,8 @@ public class RecordRules {
   }
 
   /**
-   * O plantio precisa ser da mesma propriedade e não estar excluído; pode estar encerrado (RN11).
+   * O plantio precisa ser da mesma propriedade e não estar excluído; pode estar encerrado (RN11,
+   * RN42).
    */
   private Planting resolvePlanting(RecordWrite w, Property property, List<FieldErrorItem> errors) {
     UUID plantingId =

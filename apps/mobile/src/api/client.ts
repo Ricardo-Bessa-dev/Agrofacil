@@ -925,6 +925,15 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
                 openCorrectionRequests: r.openCorrectionRequests,
                 source: r.source,
                 updatedAt: r.updatedAt,
+                planting:
+                  r.type === "PLANTING"
+                    ? {
+                        cropId: recAny.cropId as string | undefined,
+                        cropOtherName: recAny.cropOtherName as string | undefined,
+                        cycleStatus: recAny.cycleStatus as NonNullable<RecordListItem["planting"]>["cycleStatus"],
+                        finishedOn: recAny.finishedOn as string | undefined,
+                      }
+                    : undefined,
               };
             })
             .sort((a, b) => (b.performedOn ?? "").localeCompare(a.performedOn ?? ""));

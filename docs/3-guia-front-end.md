@@ -779,7 +779,8 @@ O detalhe do registro mostra as fotos enviadas (baixadas com o token) e as que a
 
 `NewRecordPage` cria e edita os 5 tipos (plantio, aplicação, colheita, compra e saída) numa tela só: primeiro o tipo, depois os campos daquele tipo, com os catálogos da associação e "Outro" em texto livre.
 
-- **Vínculos:** colheita e aplicação escolhem o plantio ativo (seleção automática só quando há exatamente um); plantio pede a área (seleção automática só quando a propriedade tem uma área).
+- **Vínculos:** colheita e aplicação mostram os plantios em andamento, com a opção "Ver plantações terminadas" (RN11); a saída mostra também os encerrados e sugere o produto do plantio (RN42). A colheita se liga sozinha quando há exatamente um plantio em andamento, e a edição sempre mostra o plantio já vinculado ([`plantings.ts`](../packages/domain/src/plantings.ts)). Plantio pede a área (seleção automática só quando a propriedade tem uma área).
+- **Unidades:** vêm do catálogo da API pelo espelho local, sem as de área ([`quantityUnits.ts`](../packages/domain/src/quantityUnits.ts)).
 - **Foto opcional**, tirada pela câmera (`capture="environment"`).
 - **Pedido de correção:** o registro com pedido aberto mostra a mensagem da coordenação; ao salvar, a API resolve o pedido.
 - **Tamanho da propriedade** (em `PropertyDetailPage`): o app mostra quanto as áreas ocupam e não deixa salvar um tamanho menor (RN41).
@@ -1076,7 +1077,7 @@ Sugestão de visitadores                        (a escolha final é sua, depois 
 | Tipo | Ferramenta | O que existe |
 |---|---|---|
 | Unitário | Vitest | Cliente HTTP (`ApiError`, telefone E.164, renovação da sessão), `fetchAllPages` |
-| Regras | Vitest em `@agrofacil/domain` | CPF, áreas (RN41), completude, certificação, datas, WhatsApp, municípios |
+| Regras | Vitest em `@agrofacil/domain` | CPF, áreas (RN41), unidades de quantidade, escolha do plantio (RN42), completude, certificação, datas, WhatsApp, municípios |
 
 **Ainda falta:** testes de componentes (Testing Library) e ponta a ponta (Playwright, com a API real) dos fluxos principais: login com 2FA, cadastrar agricultor e gerar código, registrar pelo agricultor, emitir e renovar certificação, marcar visita e gerar documento.
 

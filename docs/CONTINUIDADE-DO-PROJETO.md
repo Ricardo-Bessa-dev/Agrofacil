@@ -108,6 +108,8 @@ Todas as melhorias previstas no backlog técnico foram implementadas e validadas
 - **Fotos offline:** ficam no IndexedDB ([`photoQueue.ts`](../apps/mobile/src/api/photoQueue.ts)) até o arquivo chegar à API; o detalhe do registro mostra as fotos enviadas e as que aguardam envio.
 - **Avisos só no app:** o envio de push pelo Expo fica desligado (`PUSH_ENABLED=false`), porque o PWA não registra token de push.
 - **RN41:** a soma das áreas não pode passar do tamanho da propriedade (API, painel e app).
+- **RN42:** a saída/venda pode ser ligada a um plantio já encerrado, mas não pode ser anterior a ele; o produto do plantio é sugerido ([`plantings.ts`](../packages/domain/src/plantings.ts)).
+- **Unidades de quantidade:** os formulários usam os códigos do catálogo da API ([`quantityUnits.ts`](../packages/domain/src/quantityUnits.ts)); um teste compara a cópia do domínio com a migração V3.
 - **Painel:** listas paginadas com o componente [`Pagination`](../apps/web/src/components/Pagination.tsx), avisos de erro das ações ([`Toaster`](../apps/web/src/components/Toaster.tsx)) e menus de seleção que buscam todas as páginas ([`pagination.ts`](../apps/web/src/api/pagination.ts)).
 - **Municípios da Bahia** ficam em `@agrofacil/domain`, usados pelos dois apps.
 - **Sessão do painel:** quando o token de acesso (15 min) expira, o cliente renova pelo cookie e repete a chamada, sem erro para o coordenador.
