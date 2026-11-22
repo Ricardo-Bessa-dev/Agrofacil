@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import type { RecordWrite } from "@agrofacil/api-types";
 import {
+  DEFAULT_APPLICATION_UNIT,
+  DEFAULT_QUANTITY_UNIT,
   formatDatePtBr,
   MISSING_FIELD_LABELS,
   todayIso,
@@ -11,6 +13,7 @@ import {
 } from "@agrofacil/domain";
 import { api, fetchMobileRecordDetail, uploadRecordPhoto } from "../api/client";
 import { generateUuid } from "../api/uuid";
+import { QuantityUnitSelect } from "../components/QuantityUnitSelect";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 import { onActivateKey } from "../a11y";
 
@@ -84,26 +87,26 @@ export function NewRecordPage() {
     "FERTILIZATION" | "PEST_DISEASE_CONTROL" | "SOIL_CORRECTION" | "OTHER"
   >("FERTILIZATION");
   const [applicationQtyVal, setApplicationQtyVal] = useState<string>("");
-  const [applicationQtyUnit, setApplicationQtyUnit] = useState<string>("L");
+  const [applicationQtyUnit, setApplicationQtyUnit] = useState<string>(DEFAULT_APPLICATION_UNIT);
 
   // Específicos para Colheita
   const [harvestCropName, setHarvestCropName] = useState<string>("");
   const [harvestQtyVal, setHarvestQtyVal] = useState<string>("");
-  const [harvestQtyUnit, setHarvestQtyUnit] = useState<string>("KG");
+  const [harvestQtyUnit, setHarvestQtyUnit] = useState<string>(DEFAULT_QUANTITY_UNIT);
   const [isFinal, setIsFinal] = useState<boolean>(false);
 
   // Específicos para Compra de Insumo
   const [purchaseInputId, setPurchaseInputId] = useState<string>("");
   const [purchaseInputName, setPurchaseInputName] = useState<string>("");
   const [purchaseQtyVal, setPurchaseQtyVal] = useState<string>("");
-  const [purchaseQtyUnit, setPurchaseQtyUnit] = useState<string>("KG");
+  const [purchaseQtyUnit, setPurchaseQtyUnit] = useState<string>(DEFAULT_QUANTITY_UNIT);
   const [supplier, setSupplier] = useState<string>("");
 
   // Específicos para Saída
   const [outflowCropId, setOutflowCropId] = useState<string>("");
   const [outflowProductName, setOutflowProductName] = useState<string>("");
   const [outflowQtyVal, setOutflowQtyVal] = useState<string>("");
-  const [outflowQtyUnit, setOutflowQtyUnit] = useState<string>("KG");
+  const [outflowQtyUnit, setOutflowQtyUnit] = useState<string>(DEFAULT_QUANTITY_UNIT);
   const [destination, setDestination] = useState<
     | "FAIR"
     | "COOPERATIVE"
@@ -269,9 +272,20 @@ export function NewRecordPage() {
     staleTime: 300_000,
   });
 
+  // Unidades de medida aceitas pela API
+  const unitsQuery = useQuery({
+    queryKey: ["catalog-units"],
+    queryFn: async () => {
+      const { data } = await api.GET("/catalog/units");
+      return data ?? [];
+    },
+    staleTime: 300_000,
+  });
+
   const plots = plotsQuery.data ?? [];
   const crops = cropsQuery.data ?? [];
   const farmInputs = farmInputsQuery.data ?? [];
+  const units = unitsQuery.data ?? [];
   const activePlantings = activePlantingsQuery.data ?? [];
 
   // Só escolhe o plantio sozinho quando há um único em andamento; com mais de um, o agricultor escolhe,
@@ -981,17 +995,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={applicationQtyUnit}
-                    onChange={(e) => setApplicationQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="L">Litros (L)</option>
-                    <option value="ML">Mililitros (mL)</option>
-                    <option value="KG">Quilos (kg)</option>
-                    <option value="G">Gramas (g)</option>
-                  </select>
+                    onChange={setApplicationQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
             </div>
@@ -1033,18 +1041,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={harvestQtyUnit}
-                    onChange={(e) => setHarvestQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="CX">caixas</option>
-                    <option value="SACAS">sacas</option>
-                    <option value="DZ">dúzias</option>
-                    <option value="UN">unidades</option>
-                  </select>
+                    onChange={setHarvestQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
 
@@ -1126,17 +1127,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={purchaseQtyUnit}
-                    onChange={(e) => setPurchaseQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="SACAS">sacas</option>
-                    <option value="L">litros</option>
-                    <option value="UN">unidades</option>
-                  </select>
+                    onChange={setPurchaseQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
 
@@ -1217,17 +1212,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={outflowQtyUnit}
-                    onChange={(e) => setOutflowQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="CX">caixas</option>
-                    <option value="UN">unidades</option>
-                    <option value="DZ">dúzias</option>
-                  </select>
+                    onChange={setOutflowQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
 

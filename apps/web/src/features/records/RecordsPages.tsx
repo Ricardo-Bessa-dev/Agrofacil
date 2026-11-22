@@ -6,6 +6,7 @@ import {
   APPLICATION_PURPOSE_LABELS,
   AREA_UNIT_LABELS,
   COMPLETENESS_LABELS,
+  DEFAULT_QUANTITY_UNIT,
   formatArea,
   formatDatePtBr,
   formatDateTimePtBr,
@@ -14,6 +15,7 @@ import {
   missingFields,
   OUTFLOW_DESTINATION_LABELS,
   PROPAGATION_TYPE_LABELS,
+  quantityUnitOptions,
   RECORD_SOURCE_LABELS,
   RECORD_TYPE_LABELS,
   SEED_ORIGIN_LABELS,
@@ -302,7 +304,7 @@ export function RecordCreatePage() {
     "FERTILIZATION" | "PEST_DISEASE_CONTROL" | "SOIL_CORRECTION" | "OTHER"
   >("FERTILIZATION");
   const [qtyValue, setQtyValue] = useState("");
-  const [qtyUnit, setQtyUnit] = useState("KG");
+  const [qtyUnit, setQtyUnit] = useState(DEFAULT_QUANTITY_UNIT);
   const [isFinal, setIsFinal] = useState(false);
   const [supplier, setSupplier] = useState("");
   const [destination, setDestination] = useState<
@@ -773,14 +775,11 @@ export function RecordCreatePage() {
                   value={qtyUnit}
                   onChange={(e) => setQtyUnit(e.target.value)}
                 >
-                  {(unitsQuery.data ?? []).map((u) => (
-                    <option key={u.code} value={u.code}>
-                      {u.namePlural} ({u.code})
+                  {quantityUnitOptions(unitsQuery.data, qtyUnit).map((unit) => (
+                    <option key={unit.code} value={unit.code}>
+                      {unit.label}
                     </option>
                   ))}
-                  {(unitsQuery.data ?? []).length === 0 && (
-                    <option value="KG">Quilogramas (KG)</option>
-                  )}
                 </select>
               </div>
             </div>

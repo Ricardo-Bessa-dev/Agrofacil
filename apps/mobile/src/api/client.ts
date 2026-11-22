@@ -706,7 +706,8 @@ async function submitRecordMutation(
 /**
  * Intercepta as rotas que o SecurityConfig restringe a COORDINATOR (/properties, /records,
  * /announcements, /notifications, /catalog/crops, /catalog/farm-inputs) e as atende via
- * /sync/pull e /sync/push para o perfil FARMER.
+ * /sync/pull e /sync/push para o perfil FARMER. /catalog/units é aberta ao agricultor, mas também sai do
+ * espelho local para o formulário ter as unidades sem internet.
  */
 async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const req = input instanceof Request ? input : new Request(input, init);
@@ -725,7 +726,8 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       path === "/announcements" ||
       path === "/notifications" ||
       path === "/catalog/crops" ||
-      path === "/catalog/farm-inputs"
+      path === "/catalog/farm-inputs" ||
+      path === "/catalog/units"
     ) {
       try {
         const pull = await fetchSyncSnapshot();
@@ -788,6 +790,10 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
         if (path === "/catalog/farm-inputs") {
           return jsonResponse(inputs);
+        }
+
+        if (path === "/catalog/units") {
+          return jsonResponse(changes?.units ?? []);
         }
 
         if (path === "/announcements") {
