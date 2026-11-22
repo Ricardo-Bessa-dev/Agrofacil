@@ -143,11 +143,14 @@ body {
 .mobile-header {
   position: relative;
   background-color: var(--color-primary);
-  background-image: url("/src/assets/figma/header-hills.webp");
+  /* O verde escuro atrás do texto garante a leitura; some embaixo para mostrar os morros. */
+  background-image:
+    linear-gradient(to bottom, rgb(14 96 39 / 95%) 45%, rgb(14 96 39 / 0%)),
+    url("/src/assets/figma/header-hills.webp");
   background-size: cover;
   background-position: center bottom;
   color: #ffffff;
-  padding: calc(16px + var(--safe-top)) 20px 24px 20px;
+  padding: calc(16px + var(--safe-top)) 20px 52px 20px;
   border-bottom-left-radius: var(--radius-lg);
   border-bottom-right-radius: var(--radius-lg);
   overflow: hidden;
@@ -161,33 +164,31 @@ body {
 }
 
 .mobile-header-greeting {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1.3;
 }
 
 .mobile-header-sub {
-  font-size: 12px;
-  opacity: 0.9;
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .mobile-header-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.45);
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #fff;
   margin-top: 6px;
 }
 
 .mobile-header-action-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.9);
   border: none;
   width: 38px;
   height: 38px;
@@ -244,6 +245,7 @@ body {
   padding: 6px 8px;
   margin-left: -8px;
   border-radius: var(--radius-sm);
+  text-decoration: none;
 }
 
 /* Componentes & Utilitários Comuns */
@@ -332,6 +334,125 @@ body {
   color: var(--color-text);
 }
 
+/* Atalho da tela inicial: cartão inteiro clicável */
+.shortcut-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.shortcut-card:active {
+  background-color: var(--color-primary-surface);
+}
+
+.shortcut-card-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background-color: var(--color-primary-light);
+}
+
+.shortcut-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shortcut-card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.shortcut-card-subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.shortcut-card-arrow {
+  color: var(--color-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* Visitas do SPG */
+.visit-page {
+  padding: 16px 16px 24px;
+}
+
+.visit-card {
+  margin-bottom: 10px;
+}
+
+.visit-section-title {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.visit-text,
+.visit-people {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.visit-people {
+  list-style: none;
+}
+
+.visit-people li + li {
+  margin-top: 6px;
+}
+
+/* O legend sai da borda do fieldset para o título ficar dentro do cartão. */
+.visit-fieldset {
+  min-width: 0;
+}
+
+.visit-fieldset > legend {
+  float: left;
+  width: 100%;
+}
+
+.visit-fieldset > legend + * {
+  clear: both;
+}
+
+.visit-fieldset .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.visit-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* Altura mínima de toque para dedos. */
+  min-height: 44px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.visit-check input {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+}
+
+.visit-help {
+  margin-bottom: 6px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
 /* Chips de Filtro */
 .chips-scroll {
   display: flex;
@@ -389,6 +510,16 @@ body {
 .badge-incomplete {
   background: var(--color-warning-bg);
   color: #b26200;
+}
+
+.badge-planned {
+  background: var(--color-input-bg);
+  color: var(--color-input);
+}
+
+.badge-cancelled {
+  background: var(--color-border-subtle);
+  color: var(--color-text-secondary);
 }
 
 /* Floating Action Button (FAB) */

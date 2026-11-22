@@ -1407,7 +1407,7 @@ type RecordListItem = {
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/records?farmerId&propertyId&plotId&type&cycleStatus&from&to&completeness&hasOpenCorrection&source&search&page` | Página de `RecordListItem`. Ordenação padrão: `performedOn,desc` |
+| GET | `/records?farmerId&propertyId&plotId&type&cycleStatus&from&to&completeness&hasOpenCorrection&source&search&page` | Página de `RecordListItem`. Ordenação padrão: `performedOn,desc`; no empate, o criado por último vem primeiro |
 | GET | `/records/{id}` | `Record` + `attachments: Attachment[]` + `correctionRequests: CorrectionRequest[]` |
 | POST | `/records` | `RecordWrite` → `201 Record`. **Registrar pelo agricultor:** `source = WEB`, `createdById` = coordenador. O agricultor é notificado (RN16) |
 | PUT | `/records/{id}` | `RecordWrite` completo + `version` → `Record` |

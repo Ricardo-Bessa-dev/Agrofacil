@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import br.edu.ifba.agrofacil.IntegrationTest;
 import br.edu.ifba.agrofacil.support.Fixtures;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -201,6 +202,26 @@ class PanelRecordsTest extends IntegrationTest {
     call(HttpMethod.GET, url + "HARVEST", coordinator.accessToken(), null)
         .andExpect(jsonPath("$.content[0].id").exists())
         .andExpect(jsonPath("$.content[0].planting").doesNotExist());
+  }
+
+  @Test
+  void list_sameDay_showsTheLastCreatedFirst_andPagesDoNotRepeat() throws Exception {
+    String first = planting(today.toString());
+    String second = planting(today.toString());
+    String third = planting(today.toString());
+    String older = planting(today.minusDays(1).toString());
+
+    for (String sort : List.of("", "&sort=performedOn,desc")) {
+      String url = "/records?propertyId=" + propertyId + "&size=2" + sort + "&page=";
+      List<String> ids = new ArrayList<>();
+      for (int page = 0; page < 2; page++) {
+        ids.addAll(
+            read(
+                call(HttpMethod.GET, url + page, coordinator.accessToken(), null),
+                "$.content[*].id"));
+      }
+      assertThat(ids).containsExactly(third, second, first, older);
+    }
   }
 
   private void finalHarvest(String plantingId, LocalDate performedOn) throws Exception {

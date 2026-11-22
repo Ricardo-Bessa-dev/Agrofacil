@@ -12,6 +12,7 @@ import {
 } from "@agrofacil/domain";
 import { api, fetchMobileRecordDetail } from "../api/client";
 import { usePendingRecordIds } from "../api/pendingRecords";
+import { SORT_BY_CREATION } from "../api/recordOrder";
 import { onActivateKey } from "../a11y";
 import { RecordPhotos } from "../components/RecordPhotos";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
@@ -50,7 +51,7 @@ export function RecordsPage() {
               : {},
             pageable: {
               size: 50,
-              sort: ["performedOn,desc"],
+              sort: [SORT_BY_CREATION],
             },
           },
         },

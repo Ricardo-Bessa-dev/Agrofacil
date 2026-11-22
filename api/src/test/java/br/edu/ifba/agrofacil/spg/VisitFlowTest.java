@@ -58,6 +58,51 @@ class VisitFlowTest extends SpgScenarioTest {
   }
 
   @Test
+  void verificationVisit_acceptsACommitteeCollaborator_onlyAsCollaborator_RN32() throws Exception {
+    String collaboratorId =
+        read(
+            call(
+                    HttpMethod.POST,
+                    "/collaborators",
+                    coordinator.accessToken(),
+                    """
+                    {"name": "Tereza Técnica", "kind": "TECHNICIAN"}\
+                    """)
+                .andExpect(status().isCreated()),
+            "$.id");
+    call(
+            HttpMethod.POST,
+            "/committee-members",
+            coordinator.accessToken(),
+            """
+            {"person": {"kind": "COLLABORATOR", "id": "%s"}, "representedGroupId": "%s",
+             "role": "HOLDER", "startedOn": "%s"}\
+            """
+                .formatted(collaboratorId, group("Lagoa Funda"), today().minusDays(30)))
+        .andExpect(status().isCreated());
+    String body =
+        """
+        {"propertyId": "%s", "type": "VERIFICATION", "unannounced": false, "plannedOn": "%s",
+         "participants": [{"person": {"kind": "%s", "id": "%s"}, "role": "VISITOR"}]}\
+        """;
+    var day = today().plusDays(5);
+
+    call(
+            HttpMethod.POST,
+            "/visits",
+            coordinator.accessToken(),
+            body.formatted(propertyId, day, "FARMER", collaboratorId))
+        .andExpect(status().is4xxClientError());
+    call(
+            HttpMethod.POST,
+            "/visits",
+            coordinator.accessToken(),
+            body.formatted(propertyId, day, "COLLABORATOR", collaboratorId))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.participants[0].person.kind").value("COLLABORATOR"));
+  }
+
+  @Test
   void unannouncedPeerVisit_isRejected_RN31() throws Exception {
     call(
             HttpMethod.POST,

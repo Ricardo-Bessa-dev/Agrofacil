@@ -672,6 +672,12 @@ textarea {
   transition: background-color 0.12s ease;
 }
 
+/* Texto da linha: ocupa o espaço livre, para ficar à esquerda, logo depois da figura. */
+.af-record-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .af-record-row:last-child {
   border-bottom: none;
 }
