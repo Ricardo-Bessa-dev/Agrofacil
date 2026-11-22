@@ -42,6 +42,7 @@ public class AppUser extends SyncableEntity {
   private String termsVersion;
   @NotAudited private Instant lastLoginAt;
   @NotAudited private Instant syncResetAt;
+  @NotAudited private Instant departedAt;
 
   protected AppUser() {}
 
@@ -140,6 +141,19 @@ public class AppUser extends SyncableEntity {
 
   public UserStatus getStatus() {
     return status;
+  }
+
+  public void depart(Instant now) {
+    status = UserStatus.INACTIVE;
+    if (departedAt == null) {
+      departedAt = now;
+    }
+  }
+
+  public void rejoin() {
+    status = UserStatus.ACTIVE;
+    departedAt = null;
+    lastLoginAt = null;
   }
 
   public void setStatus(UserStatus status) {

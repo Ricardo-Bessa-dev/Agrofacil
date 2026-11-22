@@ -1,6 +1,7 @@
 // Rotina mensal de retenção (LGPD): apaga códigos, tokens e mutações de sync vencidos (doc 1 §5.7).
 package br.edu.ifba.agrofacil.retention;
 
+import br.edu.ifba.agrofacil.attachment.FileStorage;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -15,8 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Só apaga o que não é prova: credenciais de uso único, sessões encerradas e o registro de
- * idempotência do push. A anonimização dos agricultores desligados depende da data de desligamento
- * e de um relatório de simulação conferido pelo coordenador, e ainda não está implementada.
+ * idempotência do push. A remoção física de arquivos é processada após a confirmação da retenção
+ * pelo coordenador.
  */
 @Component
 public class DataRetentionJob {
@@ -31,10 +32,12 @@ public class DataRetentionJob {
 
   private final JdbcClient jdbc;
   private final Clock clock;
+  private final FileStorage files;
 
-  public DataRetentionJob(JdbcClient jdbc, Clock clock) {
+  public DataRetentionJob(JdbcClient jdbc, Clock clock, FileStorage files) {
     this.jdbc = jdbc;
     this.clock = clock;
+    this.files = files;
   }
 
   /**
@@ -79,5 +82,27 @@ public class DataRetentionJob {
             .update());
     log.info("Retenção de dados: {}", result);
     return result;
+  }
+
+  @Scheduled(fixedDelayString = "PT5M")
+  @Transactional
+  public void deleteConfirmedFiles() {
+    var pending =
+        jdbc.sql(
+                """
+                select storage_key from retention_file_deletion order by queued_at, storage_key
+                limit 100 for update skip locked
+                """)
+            .query(String.class)
+            .list();
+    for (String key : pending) {
+      try {
+        files.delete(key);
+      } catch (RuntimeException exception) {
+        log.warn("Não foi possível remover um arquivo da fila de retenção", exception);
+        continue;
+      }
+      jdbc.sql("delete from retention_file_deletion where storage_key = ?").param(key).update();
+    }
   }
 }

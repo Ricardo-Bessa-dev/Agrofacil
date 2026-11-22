@@ -1,17 +1,18 @@
 // Moldura do app do agricultor: banner de sincronização/recusas, aceite dos termos (LGPD) e menu inferior.
-import { useCallback, useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   api,
-  dismissRejectedChanges,
+  discardPendingPhoto,
+  discardRejectedMutation,
   flushOfflineQueue,
   getOfflineQueue,
-  getRejectedChanges,
+  getPendingPhotos,
   OFFLINE_QUEUE_EVENT,
-  type RejectedChange,
+  type QueuedMutation,
 } from "../api/client";
-import { countPendingPhotos } from "../api/photoQueue";
+import type { PendingPhoto } from "../api/photoQueue";
 import { useAuth } from "../auth/useAuth";
 import navHome from "../assets/figma/nav-home.svg";
 import navHomeActive from "../assets/figma/nav-home-active.svg";
@@ -29,9 +30,9 @@ export function MobileShell() {
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
-  const [pendingCount, setPendingCount] = useState<number>(() => getOfflineQueue().length);
-  const [pendingPhotos, setPendingPhotos] = useState(0);
-  const [rejected, setRejected] = useState<RejectedChange[]>(() => getRejectedChanges());
+  const [queue, setQueue] = useState<QueuedMutation[]>(getOfflineQueue);
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [showRejected, setShowRejected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [acceptingTerms, setAcceptingTerms] = useState(false);
@@ -40,13 +41,11 @@ export function MobileShell() {
   useEffect(() => {
     const updateStatus = () => {
       setIsOnline(navigator.onLine);
-      setPendingCount(getOfflineQueue().length);
-      setRejected(getRejectedChanges());
-      void countPendingPhotos()
-        .then(setPendingPhotos)
-        .catch(() => setPendingPhotos(0));
+      setQueue(getOfflineQueue());
+      void getPendingPhotos().then(setPhotos);
     };
 
+    updateStatus();
     window.addEventListener("online", updateStatus);
     window.addEventListener("offline", updateStatus);
     window.addEventListener(OFFLINE_QUEUE_EVENT, updateStatus);
@@ -57,23 +56,29 @@ export function MobileShell() {
     };
   }, []);
 
-  const handleManualSync = useCallback(async () => {
+  const handleManualSync = async () => {
     setSyncing(true);
+    setSyncFeedback(null);
     try {
-      await flushOfflineQueue();
-      setPendingCount(getOfflineQueue().length);
-      await queryClient.invalidateQueries({ queryKey: ["records"] });
-      await queryClient.invalidateQueries({ queryKey: ["recent-records"] });
+      const { remaining } = await flushOfflineQueue();
+      const remainingPhotos = await getPendingPhotos();
+      await queryClient.invalidateQueries();
+      setSyncFeedback(
+        remaining > 0 || remainingPhotos.length > 0
+          ? "Ainda há itens pendentes. Confira os avisos e tente de novo mais tarde."
+          : "Sincronização concluída.",
+      );
     } finally {
       setSyncing(false);
     }
-  }, [queryClient]);
+  };
 
-  // Ao abrir o app com internet, envia o que ficou pendente de outra vez (manejos e fotos).
-  useEffect(() => {
-    if (navigator.onLine) void handleManualSync();
-  }, [handleManualSync]);
-
+  // Recusados esperam a pessoa corrigir ou descartar; os outros só esperam internet.
+  const rejected = queue.filter((m) => m.rejection);
+  const rejectedPhotos = photos.filter((p) => p.error);
+  const rejectedCount = rejected.length + rejectedPhotos.length;
+  const pendingCount = queue.length - rejected.length;
+  const pendingPhotos = photos.length - rejectedPhotos.length;
   const totalPending = pendingCount + pendingPhotos;
 
   const needsTermsConsent = Boolean(
@@ -107,7 +112,7 @@ export function MobileShell() {
   return (
     <div className="mobile-app-container">
       {/* Banner Offline / Sincronização Pendente (Item 5 - ADR-02) */}
-      {rejected.length > 0 && (
+      {rejectedCount > 0 && (
         <div
           role="alert"
           style={{
@@ -125,7 +130,7 @@ export function MobileShell() {
               alignItems: "center",
             }}
           >
-            <span>⚠ {rejected.length} alteração(ões) não foram aceitas pelo sistema.</span>
+            <span>⚠ {rejectedCount} alteração(ões) não foram aceitas pelo sistema.</span>
             <button
               type="button"
               onClick={() => setShowRejected((v) => !v)}
@@ -137,25 +142,40 @@ export function MobileShell() {
           {showRejected && (
             <>
               <ul style={{ margin: "8px 0", paddingLeft: 18 }}>
-                {rejected.map((r) => (
-                  <li key={r.mutationId}>
-                    <strong>{REJECTED_ENTITY_LABELS[r.entity] ?? "Alteração"}:</strong> {r.message}
+                {rejected.map((item) => {
+                  const correctionPath = CORRECTION_PATHS[item.entity]?.(item.entityId);
+                  return (
+                    <li key={item.mutationId} style={{ marginBottom: 8 }}>
+                      <strong>{ENTITY_LABELS[item.entity]}:</strong> {item.rejection}{" "}
+                      {correctionPath && (
+                        <Link to={correctionPath} style={{ color: "#ffffff", fontWeight: 700 }}>
+                          Corrigir
+                        </Link>
+                      )}{" "}
+                      <button
+                        type="button"
+                        onClick={() => discardRejectedMutation(item.mutationId)}
+                        style={bannerButtonStyle("#991b1b")}
+                      >
+                        Descartar
+                      </button>
+                    </li>
+                  );
+                })}
+                {rejectedPhotos.map((photo) => (
+                  <li key={photo.attachmentId} style={{ marginBottom: 8 }}>
+                    <strong>Foto:</strong> {photo.error}{" "}
+                    <button
+                      type="button"
+                      onClick={() => void discardPendingPhoto(photo.attachmentId)}
+                      style={bannerButtonStyle("#991b1b")}
+                    >
+                      Descartar
+                    </button>
                   </li>
                 ))}
               </ul>
-              <p style={{ margin: "0 0 8px" }}>
-                Confira os dados e registre de novo. Em caso de dúvida, fale com a coordenação.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  dismissRejectedChanges();
-                  setShowRejected(false);
-                }}
-                style={bannerButtonStyle("#991b1b")}
-              >
-                Entendi
-              </button>
+              <p style={{ margin: 0 }}>Em caso de dúvida, fale com a coordenação.</p>
             </>
           )}
         </div>
@@ -200,6 +220,12 @@ export function MobileShell() {
             </button>
           )}
         </div>
+      )}
+
+      {syncFeedback && (
+        <p role="status" className="mobile-card">
+          {syncFeedback}
+        </p>
       )}
 
       <main className="mobile-shell-content">
@@ -345,11 +371,19 @@ export function MobileShell() {
   );
 }
 
-const REJECTED_ENTITY_LABELS: Record<string, string> = {
+const ENTITY_LABELS: Record<QueuedMutation["entity"], string> = {
   record: "Manejo",
   property: "Propriedade",
   attachment: "Foto",
   notification: "Aviso",
+  visit: "Visita",
+};
+
+/** Tela onde a pessoa corrige uma alteração recusada. */
+const CORRECTION_PATHS: Partial<Record<QueuedMutation["entity"], (id: string) => string>> = {
+  record: (id) => `/registros/${id}/editar`,
+  property: (id) => `/propriedades/${id}`,
+  visit: (id) => `/visitas/${id}`,
 };
 
 function bannerButtonStyle(color: string) {
@@ -366,10 +400,10 @@ function bannerButtonStyle(color: string) {
   } as const;
 }
 
-/** Ex.: "2 manejo(s) e 1 foto(s)". */
-function describePending(records: number, photos: number): string {
+/** Ex.: "2 item(ns) e 1 foto(s)". */
+function describePending(items: number, photos: number): string {
   const parts = [];
-  if (records > 0 || photos === 0) parts.push(`${records} manejo(s)`);
+  if (items > 0 || photos === 0) parts.push(`${items} item(ns)`);
   if (photos > 0) parts.push(`${photos} foto(s)`);
   return parts.join(" e ");
 }

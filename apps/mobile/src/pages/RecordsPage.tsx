@@ -1,7 +1,7 @@
 // Lista os registros de manejo do agricultor, com filtro por tipo e o detalhe de cada registro (fotos incluídas).
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import type { RecordListItem } from "@agrofacil/api-types";
 import {
   formatArea,
@@ -31,13 +31,15 @@ const FILTER_OPTIONS = [
 
 export function RecordsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const feedback = (location.state as { feedback?: string } | null)?.feedback;
   const [selectedType, setSelectedType] = useState<string>("");
   const [selectedRecord, setSelectedRecord] = useState<RecordListItem | null>(null);
 
   const recordsQuery = useQuery({
     queryKey: ["records", selectedType],
     queryFn: async () => {
-      const { data } = await api.GET("/records", {
+      const { data, response } = await api.GET("/records", {
         params: {
           query: {
             filter: selectedType
@@ -53,6 +55,7 @@ export function RecordsPage() {
           },
         },
       });
+      if (!response.ok) throw new Error("Falha ao carregar a lista de manejos.");
       return data?.content ?? [];
     },
   });
@@ -91,6 +94,12 @@ export function RecordsPage() {
         </Link>
       </div>
 
+      {feedback && (
+        <p role="status" className="mobile-card">
+          {feedback}
+        </p>
+      )}
+
       {/* Chips de Filtro (Figma 49:852) */}
       <div className="chips-scroll">
         {FILTER_OPTIONS.map((opt) => (
@@ -110,6 +119,17 @@ export function RecordsPage() {
         {recordsQuery.isLoading ? (
           <div className="empty-state">
             <div className="empty-state-title">Carregando manejos...</div>
+          </div>
+        ) : recordsQuery.isError ? (
+          <div className="empty-state">
+            <p role="alert">Não foi possível carregar os manejos.</p>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => void recordsQuery.refetch()}
+            >
+              Tentar novamente
+            </button>
           </div>
         ) : records.length === 0 ? (
           <div className="empty-state">

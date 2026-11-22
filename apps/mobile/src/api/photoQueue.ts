@@ -2,11 +2,14 @@
 // (O localStorage não serve: só guarda texto e tem cota pequena.)
 
 const DB_NAME = "agrofacil-mobile";
-const DB_VERSION = 1;
+/** 2: garante a lista de fotos em aparelhos que já tinham um banco com o mesmo nome. */
+const DB_VERSION = 2;
 const STORE = "pending-photos";
 
 /** Foto esperando envio. Os ids são gerados uma vez, para que reenviar não crie anexos repetidos. */
 export interface PendingPhoto {
+  /** Id da conta que tirou a foto. Ausente só em fotos de versões anteriores do app. */
+  owner?: string;
   attachmentId: string;
   /** mutationId fixo: a API ignora a mesma mutação enviada duas vezes. */
   mutationId: string;
@@ -19,6 +22,8 @@ export interface PendingPhoto {
   createdAt: string;
   /** true depois que a API aceitou o anexo; falta só o arquivo. */
   registered: boolean;
+  /** Motivo da recusa. A foto espera a pessoa descartar e não é reenviada sozinha. */
+  error?: string;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -27,7 +32,9 @@ function openDb(): Promise<IDBDatabase> {
   dbPromise ??= new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
-      request.result.createObjectStore(STORE, { keyPath: "attachmentId" });
+      if (!request.result.objectStoreNames.contains(STORE)) {
+        request.result.createObjectStore(STORE, { keyPath: "attachmentId" });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => {
@@ -63,9 +70,4 @@ export function listPendingPhotos(): Promise<PendingPhoto[]> {
 
 export function deletePendingPhoto(attachmentId: string): Promise<undefined> {
   return run("readwrite", (store) => store.delete(attachmentId));
-}
-
-export async function countPendingPhotos(): Promise<number> {
-  if (typeof indexedDB === "undefined") return 0;
-  return run("readonly", (store) => store.count());
 }

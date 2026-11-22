@@ -1,5 +1,6 @@
 // Conversão de áreas (RN14, ADR-12) e formatação numérica no padrão brasileiro.
 import { AREA_UNIT_LABELS, AREA_UNIT_PLURAL_LABELS } from "./labels";
+import { QUANTITY_UNIT_LABELS } from "./quantityUnits";
 
 export type AreaUnitCode = "HECTARE" | "SQUARE_METER" | "TAREFA";
 
@@ -46,14 +47,14 @@ export function formatArea(area?: { value?: number; unit?: string } | null): str
   return `${formatted} ${label}`;
 }
 
-/** Formata uma quantidade com sua unidade: { value: 30, unit: "MOLHO" } -> "30 molhos". */
+/** Formata uma quantidade com sua unidade: { value: 30, unit: "BUNCH" } -> "30 molhos". */
 export function formatQuantity(
   quantity?: { value?: number; unit?: string } | null,
-  unitLabels?: Record<string, { singular: string; plural: string }>,
+  unitLabels: Record<string, { singular: string; plural: string }> = QUANTITY_UNIT_LABELS,
 ): string {
   if (!quantity || quantity.value === undefined || !quantity.unit) return "—";
   const formatted = formatNumberPtBr(quantity.value);
-  const unitInfo = unitLabels?.[quantity.unit];
+  const unitInfo = unitLabels[quantity.unit];
   if (unitInfo) {
     return `${formatted} ${quantity.value === 1 ? unitInfo.singular : unitInfo.plural}`;
   }

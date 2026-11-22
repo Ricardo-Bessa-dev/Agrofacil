@@ -258,8 +258,16 @@ public class RecordQueryService {
                 r.getCompleteness(),
                 open.getOrDefault(r.getId(), 0L),
                 r.getSource(),
-                r.getUpdatedAt()))
+                r.getUpdatedAt(),
+                plantingInfo(r)))
         .toList();
+  }
+
+  private static RecordListItem.PlantingInfo plantingInfo(ManagementRecord r) {
+    return r instanceof Planting p
+        ? new RecordListItem.PlantingInfo(
+            p.getCropId(), p.getCropOtherName(), p.getCycleStatus(), p.getFinishedOn())
+        : null;
   }
 
   /** Nome da cultura, do insumo ou do produto; o texto de "Outro" quando não há catálogo. */

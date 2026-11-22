@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.test.web.servlet.ResultActions;
 
 class PanelRecordsTest extends IntegrationTest {
 
@@ -158,6 +159,76 @@ class PanelRecordsTest extends IntegrationTest {
   }
 
   @Test
+  void outflow_canBeLinkedToAFinishedPlanting_RN42() throws Exception {
+    String plantingId = planting(today.minusDays(30).toString());
+    finalHarvest(plantingId, today.minusDays(2));
+
+    outflow(plantingId, today)
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.plantingId").value(plantingId));
+  }
+
+  @Test
+  void outflow_canBeRegisteredWithoutHarvest_onThePlantingDate_RN42() throws Exception {
+    LocalDate plantedOn = today.minusDays(30);
+    String plantingId = planting(plantedOn.toString());
+
+    outflow(plantingId, plantedOn).andExpect(status().isCreated());
+  }
+
+  @Test
+  void outflowBeforePlanting_isRejected_RN42() throws Exception {
+    LocalDate plantedOn = today.minusDays(30);
+    String plantingId = planting(plantedOn.toString());
+
+    outflow(plantingId, plantedOn.minusDays(1))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors[0].field").value("performedOn"))
+        .andExpect(jsonPath("$.errors[0].code").value("BEFORE_PLANTING"));
+  }
+
+  @Test
+  void list_showsTheCropAndTheCycleOfPlantingsOnly_RN42() throws Exception {
+    String plantingId = planting(today.minusDays(30).toString());
+    LocalDate finishedOn = today.minusDays(2);
+    finalHarvest(plantingId, finishedOn);
+
+    String url = "/records?propertyId=" + propertyId + "&type=";
+    call(HttpMethod.GET, url + "PLANTING", coordinator.accessToken(), null)
+        .andExpect(jsonPath("$.content[0].planting.cropOtherName").value("Alface crespa"))
+        .andExpect(jsonPath("$.content[0].planting.cycleStatus").value("FINISHED"))
+        .andExpect(jsonPath("$.content[0].planting.finishedOn").value(finishedOn.toString()));
+    call(HttpMethod.GET, url + "HARVEST", coordinator.accessToken(), null)
+        .andExpect(jsonPath("$.content[0].id").exists())
+        .andExpect(jsonPath("$.content[0].planting").doesNotExist());
+  }
+
+  private void finalHarvest(String plantingId, LocalDate performedOn) throws Exception {
+    call(
+            HttpMethod.POST,
+            "/records",
+            coordinator.accessToken(),
+            """
+            {"type": "HARVEST", "propertyId": "%s", "plantingId": "%s", "performedOn": "%s",
+             "isFinal": true}\
+            """
+                .formatted(propertyId, plantingId, performedOn))
+        .andExpect(status().isCreated());
+  }
+
+  private ResultActions outflow(String plantingId, LocalDate performedOn) throws Exception {
+    return call(
+        HttpMethod.POST,
+        "/records",
+        coordinator.accessToken(),
+        """
+        {"type": "OUTFLOW", "propertyId": "%s", "plantingId": "%s", "performedOn": "%s",
+         "productOtherName": "Alface crespa"}\
+        """
+            .formatted(propertyId, plantingId, performedOn));
+  }
+
+  @Test
   void update_withStaleVersion_conflicts_andHistoryShowsTheChanges() throws Exception {
     String plantingId = planting(today.minusDays(4).toString());
     String update =
@@ -294,5 +365,40 @@ class PanelRecordsTest extends IntegrationTest {
             "{\"name\": \"área principal\", \"status\": \"ORGANIC\"}")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("PLOT_NAME_IN_USE"));
+  }
+
+  @Test
+  void linkedOutflow_withoutProduct_usesThePlantingProduct_RN42() throws Exception {
+    var plantingId = planting(today.toString());
+    call(
+            HttpMethod.POST,
+            "/records",
+            coordinator.accessToken(),
+            """
+            {"type":"OUTFLOW","propertyId":"%s","performedOn":"%s",
+             "plantingId":"%s",
+             "quantity":{"value":2.5,"unit":"KILOGRAM"},"destination":"FAIR"}
+            """
+                .formatted(propertyId, today, plantingId))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.productOtherName").value("Alface crespa"))
+        .andExpect(jsonPath("$.quantity.unit").value("KILOGRAM"));
+  }
+
+  @Test
+  void linkedOutflow_keepsTheInformedProduct_RN42() throws Exception {
+    var plantingId = planting(today.toString());
+    call(
+            HttpMethod.POST,
+            "/records",
+            coordinator.accessToken(),
+            """
+            {"type":"OUTFLOW","propertyId":"%s","performedOn":"%s",
+             "plantingId":"%s","productOtherName":"Alface higienizada"}
+            """
+                .formatted(propertyId, today, plantingId))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.plantingId").value(plantingId))
+        .andExpect(jsonPath("$.productOtherName").value("Alface higienizada"));
   }
 }

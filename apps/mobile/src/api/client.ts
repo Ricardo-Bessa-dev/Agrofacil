@@ -2,6 +2,7 @@
 // Inclui ponte transparente para /sync/pull e /sync/push, cache offline em localStorage (ADR-02),
 // fila de mutações offline e upload de anexos fotográficos com verificação SHA-256.
 // Toda chamada à API passa por authFetch, que renova o token vencido (15 min) e repete a chamada uma vez.
+// Espelho, fila e fotos são separados por conta: duas pessoas podem usar o mesmo aparelho.
 import createClient, { type Middleware } from "openapi-fetch";
 import type {
   AttachmentView,
@@ -24,15 +25,15 @@ import {
   savePendingPhoto,
   type PendingPhoto,
 } from "./photoQueue";
-import { splitPushResults, type RejectedChange } from "./pushResults";
+import { rejectionMessage, splitPushResults } from "./pushResults";
 import { applyPull, emptySyncState, parseSyncState, type SyncState } from "./syncState";
-
-export type { RejectedChange } from "./pushResults";
 
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly detail: string;
+  /** Texto da API sem o resumo dos campos. */
+  readonly problemDetail: string;
   readonly errors: FieldErrorItem[];
 
   constructor(status: number, body: unknown) {
@@ -54,6 +55,7 @@ export class ApiError extends Error {
     this.status = status;
     this.code = typeof obj.code === "string" ? obj.code : "UNKNOWN_ERROR";
     this.detail = detail;
+    this.problemDetail = baseDetail;
     this.errors = errs;
   }
 }
@@ -67,8 +69,12 @@ const STORAGE_KEYS = {
   /** Formato antigo (pull completo a cada vez); só é apagado. */
   LEGACY_SYNC_SNAPSHOT: "af_mobile_sync_snapshot",
   OFFLINE_QUEUE: "af_mobile_offline_queue",
-  REJECTED_CHANGES: "af_mobile_rejected_changes",
+  /** Lista antiga de recusas; hoje a recusa fica no próprio item da fila. */
+  LEGACY_REJECTED_CHANGES: "af_mobile_rejected_changes",
 } as const;
+
+/** Chave do usuário salvo; as outras abas observam a mudança dela para acompanhar a troca de conta. */
+export const USER_STORAGE_KEY = STORAGE_KEYS.USER;
 
 /** Evento disparado quando a fila, as fotos pendentes ou as recusas mudam (o banner do app escuta). */
 export const OFFLINE_QUEUE_EVENT = "af-offline-queue-changed";
@@ -78,14 +84,18 @@ const PULL_PAGE_SIZE = 500;
 const MAX_PULL_PAGES = 50;
 /** Pulls seguidos dentro deste intervalo (ms) reaproveitam o resultado em memória. */
 const PULL_MEMORY_CACHE_MS = 2500;
+/** Mutações por envio no /sync/push (limite da API). */
+const PUSH_BATCH_SIZE = 100;
 
 export interface QueuedMutation {
   mutationId: string;
-  entity: "record" | "property" | "attachment" | "notification";
+  entity: "record" | "property" | "attachment" | "notification" | "visit";
   op: "UPSERT" | "DELETE";
   entityId: string;
   clientTimestamp: string;
   data?: Record<string, unknown>;
+  /** Motivo da recusa. O item espera a pessoa corrigir ou descartar e não é reenviado sozinho. */
+  rejection?: string;
 }
 
 export interface MobileRecordDetail {
@@ -130,7 +140,21 @@ export function getStoredUser(): Me | null {
   }
 }
 
+/** Sobe a cada troca de conta ou saída. Respostas de uma sessão anterior são ignoradas. */
+let sessionGeneration = 0;
+
+function accountId(): string | undefined {
+  return getStoredUser()?.id;
+}
+
+function accountKey(key: string, owner: string): string {
+  return `${key}:${owner}`;
+}
+
 export function saveSession(session: SessionResponse): void {
+  if (session.user?.id && session.user.id !== accountId()) {
+    invalidateStoredSession();
+  }
   if (session.accessToken) {
     localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.accessToken);
   }
@@ -142,29 +166,46 @@ export function saveSession(session: SessionResponse): void {
   }
 }
 
+/** Descarta o que está em memória da sessão (ex.: outra aba trocou de conta). */
+export function invalidateStoredSession(): void {
+  sessionGeneration++;
+  cachedPull = null;
+}
+
 export function clearSession(): void {
+  const owner = accountId();
+  invalidateStoredSession();
   localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
   localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
   localStorage.removeItem(STORAGE_KEYS.USER);
   // LGPD: o espelho tem dados pessoais e não pode ficar para o próximo usuário do aparelho.
-  // A fila offline e as recusas ficam: são trabalho do agricultor que ainda não chegou à API.
+  // A fila e as fotos ficam, separadas por conta: são trabalho que ainda não chegou à API.
+  if (owner) localStorage.removeItem(accountKey(STORAGE_KEYS.SYNC_STATE, owner));
   localStorage.removeItem(STORAGE_KEYS.SYNC_STATE);
   localStorage.removeItem(STORAGE_KEYS.LEGACY_SYNC_SNAPSHOT);
-  cachedPull = null;
 }
 
-export function getOfflineQueue(): QueuedMutation[] {
-  const raw = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
-  if (!raw) return [];
+function readList<T>(key: string): T[] {
   try {
-    return JSON.parse(raw) as QueuedMutation[];
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return Array.isArray(value) ? (value as T[]) : [];
   } catch {
     return [];
   }
 }
 
-function setOfflineQueue(queue: QueuedMutation[]): void {
-  localStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(queue));
+function readQueue(owner: string): QueuedMutation[] {
+  return readList(accountKey(STORAGE_KEYS.OFFLINE_QUEUE, owner));
+}
+
+/** Fila da conta atual, incluindo os itens recusados que esperam correção. */
+export function getOfflineQueue(): QueuedMutation[] {
+  const owner = accountId();
+  return owner ? readQueue(owner) : [];
+}
+
+function setOfflineQueue(owner: string, queue: QueuedMutation[]): void {
+  localStorage.setItem(accountKey(STORAGE_KEYS.OFFLINE_QUEUE, owner), JSON.stringify(queue));
   notifyQueueChanged();
 }
 
@@ -172,110 +213,177 @@ function notifyQueueChanged(): void {
   window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_EVENT));
 }
 
-/** Alterações que a API recusou e o agricultor ainda não viu. */
-export function getRejectedChanges(): RejectedChange[] {
-  const raw = localStorage.getItem(STORAGE_KEYS.REJECTED_CHANGES);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw) as RejectedChange[];
-  } catch {
-    return [];
+function enqueueOfflineMutation(owner: string, mutation: QueuedMutation): void {
+  const others = readQueue(owner).filter(
+    (m) => !(m.entity === mutation.entity && m.entityId === mutation.entityId),
+  );
+  setOfflineQueue(owner, [...others, mutation]);
+}
+
+/** Tira da fila uma alteração recusada que a pessoa decidiu não corrigir. */
+export function discardRejectedMutation(mutationId: string): void {
+  const owner = accountId();
+  if (!owner) return;
+  setOfflineQueue(
+    owner,
+    readQueue(owner).filter((m) => !(m.rejection && m.mutationId === mutationId)),
+  );
+}
+
+/**
+ * Versões anteriores guardavam uma fila só para o aparelho, sem dono. Recupera apenas os itens cujo
+ * destino está no espelho desta conta; os demais ficam para a conta certa.
+ */
+function recoverLegacyQueue(owner: string, changes: SyncState["changes"]): void {
+  const legacyRejected = readList<{
+    mutationId: string;
+    entity: QueuedMutation["entity"];
+    entityId: string;
+    message: string;
+    rejectedAt: string;
+    data?: Record<string, unknown>;
+  }>(STORAGE_KEYS.LEGACY_REJECTED_CHANGES).map(
+    ({ message, rejectedAt, ...item }): QueuedMutation => ({
+      ...item,
+      op: "UPSERT",
+      clientTimestamp: rejectedAt,
+      rejection: message,
+    }),
+  );
+  const legacyQueue = readList<QueuedMutation>(STORAGE_KEYS.OFFLINE_QUEUE);
+  if (legacyQueue.length + legacyRejected.length === 0) return;
+
+  const propertyIds = new Set((changes.properties ?? []).map((row) => row.id));
+  const recordIds = new Set((changes.records ?? []).map((row) => row.id));
+  const isOwn = (item: QueuedMutation) => {
+    const target = item.entity === "property" ? item.entityId : item.data?.propertyId;
+    return (
+      (typeof target === "string" && propertyIds.has(target)) ||
+      (item.entity === "record" && recordIds.has(item.entityId))
+    );
+  };
+
+  const pending = readQueue(owner);
+  for (const item of [...legacyQueue, ...legacyRejected].filter(isOwn)) {
+    const exists = pending.some((m) => m.entity === item.entity && m.entityId === item.entityId);
+    if (!exists) pending.push(item);
   }
-}
-
-function addRejectedChanges(items: RejectedChange[]): void {
-  if (items.length === 0) return;
+  setOfflineQueue(owner, pending);
   localStorage.setItem(
-    STORAGE_KEYS.REJECTED_CHANGES,
-    JSON.stringify([...getRejectedChanges(), ...items]),
+    STORAGE_KEYS.OFFLINE_QUEUE,
+    JSON.stringify(legacyQueue.filter((m) => !isOwn(m))),
   );
-  notifyQueueChanged();
-}
-
-export function dismissRejectedChanges(): void {
-  localStorage.removeItem(STORAGE_KEYS.REJECTED_CHANGES);
-  notifyQueueChanged();
-}
-
-function enqueueOfflineMutation(mutation: QueuedMutation): void {
-  const current = getOfflineQueue().filter(
-    (m) => !(m.entity === mutation.entity && m.entityId === mutation.entityId && m.op === "UPSERT"),
+  localStorage.setItem(
+    STORAGE_KEYS.LEGACY_REJECTED_CHANGES,
+    JSON.stringify(
+      readList<{ mutationId: string }>(STORAGE_KEYS.LEGACY_REJECTED_CHANGES).filter(
+        (m) => !legacyRejected.some((item) => item.mutationId === m.mutationId && isOwn(item)),
+      ),
+    ),
   );
-  current.push(mutation);
-  setOfflineQueue(current);
 }
 
-function loadSyncState(): SyncState | null {
-  return parseSyncState(localStorage.getItem(STORAGE_KEYS.SYNC_STATE));
+function loadSyncState(owner: string): SyncState | null {
+  const own = parseSyncState(localStorage.getItem(accountKey(STORAGE_KEYS.SYNC_STATE, owner)));
+  if (own) return own;
+  // Espelho de versões anteriores, sem dono na chave: só vale se for desta conta.
+  const legacy = parseSyncState(localStorage.getItem(STORAGE_KEYS.SYNC_STATE));
+  return legacy?.changes.me?.id === owner ? legacy : null;
 }
 
-function saveSyncState(state: SyncState): void {
+function saveSyncState(owner: string, state: SyncState): void {
   localStorage.removeItem(STORAGE_KEYS.LEGACY_SYNC_SNAPSHOT);
+  localStorage.removeItem(STORAGE_KEYS.SYNC_STATE);
   try {
-    localStorage.setItem(STORAGE_KEYS.SYNC_STATE, JSON.stringify(state));
+    localStorage.setItem(accountKey(STORAGE_KEYS.SYNC_STATE, owner), JSON.stringify(state));
   } catch {
     // Cota cheia: o espelho continua só em memória e o próximo início puxa tudo de novo (cursor "0").
   }
 }
 
-let refreshingPromise: Promise<SessionResponse | null> | null = null;
+let refreshing: { generation: number; promise: Promise<string | null> } | null = null;
 let onUnauthorizedCallback: (() => void) | null = null;
 
 export function setOnUnauthorized(cb: (() => void) | null): void {
   onUnauthorizedCallback = cb;
 }
 
-/** Renova o token com o refresh token. Chamadas simultâneas compartilham a mesma renovação. */
-function refreshSession(): Promise<SessionResponse | null> {
+function endSession(): void {
+  clearSession();
+  onUnauthorizedCallback?.();
+}
+
+/** Renova o token de acesso. Chamadas simultâneas da mesma sessão compartilham a renovação. */
+async function renewAccessToken(
+  generation: number,
+  failedToken: string | null,
+): Promise<string | null> {
+  if (generation !== sessionGeneration) return null;
+  const current = getStoredAccessToken();
+  if (current && current !== failedToken) return current;
+  if (refreshing?.generation === generation) return refreshing.promise;
+
   const refreshToken = getStoredRefreshToken();
   if (!refreshToken) {
-    clearSession();
-    onUnauthorizedCallback?.();
-    return Promise.resolve(null);
+    endSession();
+    return null;
   }
-  refreshingPromise ??= (async () => {
+  const promise = (async () => {
     try {
-      const refreshRes = await window.fetch("/api/v1/auth/refresh", {
+      const response = await window.fetch("/api/v1/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken, deviceId: getStoredDeviceId() }),
       });
-      if (!refreshRes.ok) {
-        clearSession();
-        onUnauthorizedCallback?.();
+      if (generation !== sessionGeneration) return null;
+      if (response.status === 401 || response.status === 403) {
+        endSession();
         return null;
       }
-      const session = (await refreshRes.json()) as SessionResponse;
+      // API fora do ar (5xx): a sessão continua e a renovação é tentada de novo depois.
+      if (!response.ok) return null;
+      const session = (await response.json()) as SessionResponse;
+      if (generation !== sessionGeneration) return null;
       saveSession(session);
-      return session;
+      return session.accessToken ?? null;
     } catch {
       // Sem rede: não derruba a sessão; o agricultor continua trabalhando offline.
       return null;
-    } finally {
-      refreshingPromise = null;
     }
   })();
-  return refreshingPromise;
+  refreshing = { generation, promise };
+  try {
+    return await promise;
+  } finally {
+    if (refreshing?.promise === promise) refreshing = null;
+  }
 }
 
 /**
  * fetch para a API com o token do aparelho. Em 401, renova o token e repete a chamada uma vez.
  * O body precisa poder ser reenviado (string, ArrayBuffer ou Blob; não stream).
+ * Se a conta mudar durante a chamada, devolve 401 para a resposta não cair na conta errada.
  * @param path caminho relativo a /api/v1, com a query string
  */
 async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const send = (token: string | null) => {
+  const isLogin = path.startsWith("/auth/") && !path.startsWith("/auth/logout");
+  const generation = sessionGeneration;
+  const send = async (token: string | null) => {
     const headers = new Headers(init.headers);
     if (token) headers.set("Authorization", `Bearer ${token}`);
     else headers.delete("Authorization");
-    return window.fetch(`/api/v1${path}`, { ...init, headers });
+    const result = await window.fetch(`/api/v1${path}`, { ...init, headers });
+    return isLogin || generation === sessionGeneration
+      ? result
+      : new Response(null, { status: 401 });
   };
-  const response = await send(getStoredAccessToken());
-  if (response.status !== 401 || path.startsWith("/auth/")) {
+  const token = getStoredAccessToken();
+  const response = await send(token);
+  if (response.status !== 401 || path.startsWith("/auth/") || generation !== sessionGeneration) {
     return response;
   }
-  const session = await refreshSession();
-  return session?.accessToken ? send(session.accessToken) : response;
+  const renewed = await renewAccessToken(generation, token);
+  return renewed ? send(renewed) : response;
 }
 
 function jsonPost(path: string, body: unknown): Promise<Response> {
@@ -318,9 +426,16 @@ const municipalityNameById = new Map<number, string>(
 );
 
 let cachedPull: { at: number; data: PullResponse } | null = null;
-let inflightPull: Promise<PullResponse> | null = null;
+let inflightPull: {
+  generation: number;
+  revision: number;
+  promise: Promise<PullResponse>;
+} | null = null;
+/** Sobe quando algo foi enviado: um pull iniciado antes disso não serve como resposta. */
+let pullRevision = 0;
 
 export function invalidateMobileSyncCache(): void {
+  pullRevision++;
   cachedPull = null;
 }
 
@@ -328,85 +443,147 @@ export function invalidateMobileSyncCache(): void {
  * Devolve o espelho local atualizado. Puxa só o que mudou desde o último cursor, página a página,
  * até hasMore=false. Sem rede, devolve o último espelho salvo no aparelho.
  */
-async function fetchSyncSnapshot(force = false): Promise<PullResponse> {
-  if (!force && cachedPull && Date.now() - cachedPull.at < PULL_MEMORY_CACHE_MS) {
+export async function fetchSyncSnapshot(): Promise<PullResponse> {
+  const owner = accountId();
+  if (!owner) throw new ApiError(401, null);
+  if (cachedPull && Date.now() - cachedPull.at < PULL_MEMORY_CACHE_MS) {
     return cachedPull.data;
   }
-  inflightPull ??= (async () => {
+  const generation = sessionGeneration;
+  const revision = pullRevision;
+  if (inflightPull?.generation === generation && inflightPull.revision === revision) {
+    return inflightPull.promise;
+  }
+  const saved = loadSyncState(owner);
+  if (saved && !navigator.onLine) return { cursor: saved.cursor, changes: saved.changes };
+
+  const promise = (async () => {
     try {
-      const state = await pullChanges(loadSyncState() ?? emptySyncState());
+      const state = await pullChanges(owner, generation, saved ?? emptySyncState());
       const data: PullResponse = { cursor: state.cursor, changes: state.changes };
-      cachedPull = { at: Date.now(), data };
+      if (revision === pullRevision) cachedPull = { at: Date.now(), data };
+      recoverLegacyQueue(owner, state.changes);
       return data;
     } catch (err) {
-      const saved = loadSyncState();
-      if (saved) {
-        return { cursor: saved.cursor, changes: saved.changes };
-      }
+      // 401 com a sessão ainda aberta = a renovação falhou por falta de rede: vale o espelho salvo.
+      const refused = err instanceof ApiError && err.status === 403;
+      const fallback = generation === sessionGeneration && !refused ? loadSyncState(owner) : null;
+      if (fallback) return { cursor: fallback.cursor, changes: fallback.changes };
       throw err;
-    } finally {
-      inflightPull = null;
     }
   })();
-  return inflightPull;
+  inflightPull = { generation, revision, promise };
+  try {
+    return await promise;
+  } finally {
+    if (inflightPull?.promise === promise) inflightPull = null;
+  }
 }
 
-async function pullChanges(initial: SyncState): Promise<SyncState> {
+async function pullChanges(
+  owner: string,
+  generation: number,
+  initial: SyncState,
+): Promise<SyncState> {
   let state = initial;
   for (let page = 0; page < MAX_PULL_PAGES; page++) {
     const res = await authFetch(
       `/sync/pull?cursor=${encodeURIComponent(state.cursor)}&limit=${PULL_PAGE_SIZE}`,
       { headers: { Accept: "application/json" } },
     );
-    if (!res.ok) {
-      throw new Error(`Sync pull failed with status ${res.status}`);
-    }
+    if (!res.ok) throw new ApiError(res.status, null);
     const data = (await res.json()) as PullResponse;
+    if (generation !== sessionGeneration) throw new ApiError(401, null);
     state = applyPull(state, data);
-    saveSyncState(state);
+    saveSyncState(owner, state);
     // reset: o espelho foi zerado; a próxima volta puxa tudo de novo a partir do cursor "0".
     if (!data.reset && !data.hasMore) break;
   }
   return state;
 }
 
-/**
- * Sincroniza mutações pendentes na fila offline quando a conexão é restabelecida.
- */
-export async function flushOfflineQueue(): Promise<{ synced: number; remaining: number }> {
-  const queue = getOfflineQueue();
-  let synced = 0;
-  if (queue.length > 0 && getStoredAccessToken()) {
-    try {
-      const res = await jsonPost("/sync/push", { deviceId: getStoredDeviceId(), mutations: queue });
-      if (res.ok) {
-        const pushData = (await res.json()) as PushResponse;
-        const { remaining, rejected } = splitPushResults(
-          queue,
-          pushData.results,
-          new Date().toISOString(),
-        );
-        // Relê a fila: o agricultor pode ter salvo algo novo enquanto o envio estava em andamento.
-        const sentIds = new Set(queue.map((m) => m.mutationId));
-        const addedMeanwhile = getOfflineQueue().filter((m) => !sentIds.has(m.mutationId));
-        setOfflineQueue([...remaining, ...addedMeanwhile]);
-        addRejectedChanges(rejected);
-        synced = queue.length - remaining.length - rejected.length;
-        cachedPull = null;
-      }
-    } catch {
-      // Sem rede: a fila fica como está.
-    }
-  }
-  // Fotos depois dos registros: o anexo só é aceito quando o registro já existe na API.
-  await syncPendingPhotos();
-  return { synced, remaining: getOfflineQueue().length };
+/** 4xx (fora 401/408/429) é definitivo, ex.: CHECKSUM_MISMATCH; 5xx e os demais tentam de novo depois. */
+function isRetryableStatus(status: number): boolean {
+  return status === 401 || status === 408 || status === 429 || status >= 500;
 }
 
-if (typeof window !== "undefined") {
-  window.addEventListener("online", () => {
-    void flushOfflineQueue();
-  });
+async function pushMutations(
+  batch: Omit<QueuedMutation, "rejection">[],
+): Promise<PushResponse["results"]> {
+  const res = await jsonPost("/sync/push", { deviceId: getStoredDeviceId(), mutations: batch });
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+  return ((await res.json()) as PushResponse).results;
+}
+
+type FlushResult = { synced: number; remaining: number };
+let flushing: { generation: number; promise: Promise<FlushResult> } | null = null;
+
+/** Envia o que está na fila da conta atual e, depois, as fotos. Chamadas simultâneas compartilham o envio. */
+export async function flushOfflineQueue(): Promise<FlushResult> {
+  const owner = accountId();
+  if (!owner) return { synced: 0, remaining: 0 };
+  const generation = sessionGeneration;
+  if (flushing?.generation === generation) return flushing.promise;
+  const promise = (async () => {
+    const synced = await flushMutations(owner, generation);
+    // Fotos depois dos registros: o anexo só é aceito quando o registro já existe na API.
+    if (generation === sessionGeneration) await syncPendingPhotos();
+    return { synced, remaining: readQueue(owner).length };
+  })();
+  flushing = { generation, promise };
+  try {
+    return await promise;
+  } finally {
+    if (flushing?.promise === promise) flushing = null;
+  }
+}
+
+async function flushMutations(owner: string, generation: number): Promise<number> {
+  const attempted = new Set<string>();
+  let synced = 0;
+  while (generation === sessionGeneration) {
+    const batch = readQueue(owner)
+      .filter((m) => !m.rejection && !attempted.has(m.mutationId))
+      .slice(0, PUSH_BATCH_SIZE);
+    if (batch.length === 0) break;
+    for (const item of batch) attempted.add(item.mutationId);
+    try {
+      const results = await pushMutations(batch);
+      const { remaining, rejected } = splitPushResults(batch, results);
+      const keep = new Map([...remaining, ...rejected].map((m) => [m.mutationId, m]));
+      // Relê a fila: o agricultor pode ter salvo algo novo enquanto o envio estava em andamento.
+      setOfflineQueue(
+        owner,
+        readQueue(owner).flatMap((m) => {
+          if (!batch.some((sent) => sent.mutationId === m.mutationId)) return [m];
+          const kept = keep.get(m.mutationId);
+          return kept ? [kept] : [];
+        }),
+      );
+      synced += batch.length - keep.size;
+      invalidateMobileSyncCache();
+    } catch {
+      break; // Sem rede ou API fora do ar: a fila fica como está.
+    }
+  }
+  return synced;
+}
+
+/** Fotos da conta atual. As de versões anteriores não têm dono: só valem se o registro for desta conta. */
+async function ownPendingPhotos(): Promise<PendingPhoto[]> {
+  const owner = accountId();
+  if (!owner) return [];
+  const photos = await listPendingPhotos();
+  const ownRecords = new Set([
+    ...(loadSyncState(owner)?.changes.records ?? []).map((r) => r.id),
+    ...readQueue(owner).map((m) => m.entityId),
+  ]);
+  return photos.filter((p) => (p.owner ? p.owner === owner : ownRecords.has(p.recordId)));
+}
+
+/** Fotos da conta atual que ainda não chegaram à API (vazio se o IndexedDB não estiver disponível). */
+export async function getPendingPhotos(): Promise<PendingPhoto[]> {
+  return ownPendingPhotos().catch(() => []);
 }
 
 /**
@@ -414,19 +591,16 @@ if (typeof window !== "undefined") {
  * depois manda o arquivo. Cada etapa concluída é gravada, então uma falha no meio não repete trabalho.
  */
 export async function syncPendingPhotos(): Promise<void> {
-  let photos: PendingPhoto[];
-  try {
-    photos = await listPendingPhotos();
-  } catch {
-    return; // IndexedDB indisponível (ex.: navegação anônima antiga)
-  }
+  const generation = sessionGeneration;
+  const photos = await getPendingPhotos();
   const recordsNotSentYet = new Set(
     getOfflineQueue()
       .filter((m) => m.entity === "record")
       .map((m) => m.entityId),
   );
   for (const photo of photos) {
-    if (recordsNotSentYet.has(photo.recordId)) continue;
+    if (generation !== sessionGeneration) return;
+    if (photo.error || recordsNotSentYet.has(photo.recordId)) continue;
     try {
       const done = await sendPendingPhoto(photo);
       if (done) await deletePendingPhoto(photo.attachmentId);
@@ -434,16 +608,16 @@ export async function syncPendingPhotos(): Promise<void> {
       break; // sem rede: tenta tudo de novo no próximo envio
     }
   }
-  notifyQueueChanged();
+  if (photos.length > 0) notifyQueueChanged();
 }
 
-/** Envia uma foto. Devolve true quando ela pode sair da fila (enviada ou recusada de vez). */
+/** Envia uma foto. Devolve true quando a API a recebeu; recusada, fica com o motivo para a pessoa ver. */
 async function sendPendingPhoto(photo: PendingPhoto): Promise<boolean> {
   if (!photo.registered) {
     const mutation = {
       mutationId: photo.mutationId,
-      entity: "attachment",
-      op: "UPSERT",
+      entity: "attachment" as const,
+      op: "UPSERT" as const,
       entityId: photo.attachmentId,
       clientTimestamp: photo.createdAt,
       data: {
@@ -456,20 +630,10 @@ async function sendPendingPhoto(photo: PendingPhoto): Promise<boolean> {
         sha256: photo.sha256,
       },
     };
-    const res = await jsonPost("/sync/push", {
-      deviceId: getStoredDeviceId(),
-      mutations: [mutation],
-    });
-    if (!res.ok) return false;
-    const pushData = (await res.json()) as PushResponse;
-    const { remaining, rejected } = splitPushResults(
-      [mutation],
-      pushData.results,
-      new Date().toISOString(),
-    );
-    if (rejected.length > 0) {
-      addRejectedChanges(rejected);
-      return true;
+    const { remaining, rejected } = splitPushResults([mutation], await pushMutations([mutation]));
+    if (rejected[0]) {
+      await savePendingPhoto({ ...photo, error: rejected[0].rejection });
+      return false;
     }
     if (remaining.length > 0) return false;
     await savePendingPhoto({ ...photo, registered: true });
@@ -481,23 +645,28 @@ async function sendPendingPhoto(photo: PendingPhoto): Promise<boolean> {
     body: photo.blob,
   });
   if (put.ok) {
-    cachedPull = null;
+    invalidateMobileSyncCache();
     return true;
   }
-  // 4xx (fora 401/408/429) é definitivo, ex.: CHECKSUM_MISMATCH; 5xx e os demais tentam de novo depois.
-  const retryable =
-    put.status === 401 || put.status === 408 || put.status === 429 || put.status >= 500;
-  if (retryable) return false;
-  addRejectedChanges([
-    {
-      mutationId: photo.mutationId,
-      entity: "attachment",
-      entityId: photo.attachmentId,
-      message: "A foto foi recusada pelo servidor.",
-      rejectedAt: new Date().toISOString(),
-    },
-  ]);
-  return true;
+  if (!isRetryableStatus(put.status)) {
+    const problem = await put.json().catch(() => null);
+    await savePendingPhoto({
+      ...photo,
+      registered: true,
+      error: problem
+        ? new ApiError(put.status, problem).detail
+        : "A foto foi recusada pelo servidor.",
+    });
+  }
+  return false;
+}
+
+/** Desiste de enviar uma foto que está no aparelho. */
+export async function discardPendingPhoto(attachmentId: string): Promise<void> {
+  const isOwn = (await getPendingPhotos()).some((p) => p.attachmentId === attachmentId);
+  if (!isOwn) return;
+  await deletePendingPhoto(attachmentId);
+  notifyQueueChanged();
 }
 
 async function computeSha256Hex(buffer: ArrayBuffer): Promise<string> {
@@ -521,9 +690,12 @@ export async function uploadRecordPhoto(
   recordId: string,
   file: File,
 ): Promise<{ attachmentId: string; queued: boolean }> {
+  const owner = accountId();
+  if (!owner) throw new ApiError(401, null);
   const sha256 = await computeSha256Hex(await file.arrayBuffer());
   const attachmentId = generateUuid();
   await savePendingPhoto({
+    owner,
     attachmentId,
     mutationId: generateUuid(),
     recordId,
@@ -534,18 +706,15 @@ export async function uploadRecordPhoto(
     createdAt: new Date().toISOString(),
     registered: false,
   });
-  await syncPendingPhotos();
-  const stillPending = (await listPendingPhotos()).some((p) => p.attachmentId === attachmentId);
+  notifyQueueChanged();
+  await flushOfflineQueue();
+  const stillPending = (await getPendingPhotos()).some((p) => p.attachmentId === attachmentId);
   return { attachmentId, queued: stillPending };
 }
 
-/** Fotos deste registro que ainda estão só no aparelho (vazio se o IndexedDB não estiver disponível). */
+/** Fotos deste registro que ainda estão só no aparelho. */
 export async function listPendingPhotosForRecord(recordId: string): Promise<PendingPhoto[]> {
-  try {
-    return (await listPendingPhotos()).filter((p) => p.recordId === recordId);
-  } catch {
-    return [];
-  }
+  return (await getPendingPhotos()).filter((p) => p.recordId === recordId);
 }
 
 /**
@@ -569,7 +738,11 @@ export async function fetchMobileRecordDetail(
 ): Promise<MobileRecordDetail | null> {
   const pull = await fetchSyncSnapshot();
   const rawRecords = pull.changes?.records ?? [];
-  const found = rawRecords.find((r) => r.id === recordId) as RecordView | undefined;
+  // O que está na fila (esperando envio ou correção) vale mais que o espelho.
+  const pending = getOfflineQueue().find((m) => m.entity === "record" && m.entityId === recordId);
+  const serverRecord = rawRecords.find((r) => r.id === recordId);
+  const found = (pending?.data ? { ...serverRecord, ...pending.data } : serverRecord) as
+    RecordView | undefined;
   if (!found) return null;
 
   const attachments = (pull.changes?.attachments ?? []).filter(
@@ -598,46 +771,72 @@ export async function fetchMobileRecordDetail(
 /**
  * Atualiza ou cadastra uma propriedade do agricultor via /sync/push (entidade "property").
  */
-export async function upsertFarmerProperty(
+export function upsertFarmerProperty(
   propertyId: string,
   payload: PropertyWrite,
-): Promise<void> {
-  const nowIso = new Date().toISOString();
-  const dataPayload: Record<string, unknown> = {
-    ...payload,
-    id: propertyId,
-  };
+): Promise<"applied" | "queued"> {
+  return submitMutation("property", propertyId, { ...payload, id: propertyId });
+}
 
+/**
+ * Envia uma alteração. Sem rede, com a API fora do ar ou com itens na frente, ela entra na fila.
+ * @throws ApiError se a API recusar
+ */
+export async function submitMutation(
+  entity: QueuedMutation["entity"],
+  entityId: string,
+  data: Record<string, unknown>,
+): Promise<"applied" | "queued"> {
+  const owner = accountId();
+  if (!owner) throw new ApiError(401, null);
+  const generation = sessionGeneration;
   const mutation: QueuedMutation = {
     mutationId: generateUuid(),
-    entity: "property",
+    entity,
     op: "UPSERT",
-    entityId: propertyId,
-    clientTimestamp: nowIso,
-    data: dataPayload,
+    entityId,
+    clientTimestamp: new Date().toISOString(),
+    data,
   };
-
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    enqueueOfflineMutation(mutation);
-    return;
+  const queue = () => {
+    if (generation !== sessionGeneration) throw new ApiError(401, null);
+    enqueueOfflineMutation(owner, mutation);
+    return "queued" as const;
+  };
+  if (!navigator.onLine) return queue();
+  if (readQueue(owner).some((m) => !m.rejection)) {
+    // Mantém a ordem: um registro não pode chegar antes do plantio que está na fila.
+    const status = queue();
+    void flushOfflineQueue();
+    return status;
   }
 
-  const pushRes = await jsonPost("/sync/push", {
-    deviceId: getStoredDeviceId(),
-    mutations: [mutation],
-  });
-
-  if (!pushRes.ok) {
-    throw new Error("Não foi possível atualizar os dados da propriedade.");
+  let results: PushResponse["results"];
+  try {
+    results = await pushMutations([mutation]);
+  } catch (error) {
+    if (error instanceof ApiError && !isRetryableStatus(error.status)) throw error;
+    return queue();
   }
-
-  const pushData = (await pushRes.json()) as PushResponse;
-  const firstResult = pushData.results?.[0];
-  if (firstResult?.status === "REJECTED") {
-    throw new Error(firstResult.error?.message ?? "Dados da propriedade inválidos.");
+  if (generation !== sessionGeneration) throw new ApiError(401, null);
+  const result = results?.find((r) => r.mutationId === mutation.mutationId);
+  if (result?.status === "REJECTED") {
+    throw new ApiError(422, {
+      code: result.error?.code ?? "VALIDATION_ERROR",
+      detail: result.error?.message ?? rejectionMessage(result),
+      errors: result.error?.errors ?? [],
+    });
   }
-
-  cachedPull = null;
+  if (result?.status !== "APPLIED") return queue();
+  // A versão recusada antes, se havia, foi substituída por esta.
+  setOfflineQueue(
+    owner,
+    readQueue(owner).filter(
+      (m) => !(m.rejection && m.entity === entity && m.entityId === entityId),
+    ),
+  );
+  invalidateMobileSyncCache();
+  return "applied";
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -651,62 +850,51 @@ async function submitRecordMutation(
   entityId: string,
   bodyData: Record<string, unknown>,
 ): Promise<Response> {
-  const nowIso = new Date().toISOString();
-  const recordPayload: Record<string, unknown> = {
+  const payload: Record<string, unknown> = {
     ...bodyData,
     id: entityId,
-    clientCreatedAt: (bodyData.clientCreatedAt as string | undefined) ?? nowIso,
+    clientCreatedAt: bodyData.clientCreatedAt ?? new Date().toISOString(),
   };
-
-  const mutation: QueuedMutation = {
-    mutationId: generateUuid(),
-    entity: "record",
-    op: "UPSERT",
-    entityId,
-    clientTimestamp: nowIso,
-    data: recordPayload,
-  };
-
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    enqueueOfflineMutation(mutation);
-    return jsonResponse({ id: entityId, ...recordPayload, offlineQueued: true }, 201);
-  }
-
   try {
-    const pushRes = await jsonPost("/sync/push", {
-      deviceId: getStoredDeviceId(),
-      mutations: [mutation],
-    });
-
-    if (!pushRes.ok) {
-      return pushRes;
-    }
-
-    const pushData = (await pushRes.json()) as PushResponse;
-    const firstResult = pushData.results?.[0];
-    if (firstResult?.status === "REJECTED") {
-      return jsonResponse(
-        {
-          code: firstResult.error?.code ?? "VALIDATION_ERROR",
-          detail: firstResult.error?.message ?? "Não foi possível salvar o registro.",
-          errors: firstResult.error?.errors ?? [],
-        },
-        422,
-      );
-    }
-
-    cachedPull = null;
-    return jsonResponse({ id: entityId, ...recordPayload }, 200);
-  } catch {
-    enqueueOfflineMutation(mutation);
-    return jsonResponse({ id: entityId, ...recordPayload, offlineQueued: true }, 201);
+    const status = await submitMutation("record", entityId, payload);
+    // 201 = guardado no aparelho; 200 = recebido pela API.
+    return jsonResponse(
+      { ...payload, offlineQueued: status === "queued" },
+      status === "queued" ? 201 : 200,
+    );
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+    return jsonResponse(
+      { code: error.code, detail: error.problemDetail, errors: error.errors },
+      error.status,
+    );
   }
+}
+
+/** Marca avisos como lidos num envio só; sem rede, guarda na fila. */
+async function markNotificationsRead(ids: string[]): Promise<void> {
+  const owner = accountId();
+  if (!owner || ids.length === 0) return;
+  const nowIso = new Date().toISOString();
+  const mutations = ids.map(
+    (id): QueuedMutation => ({
+      mutationId: generateUuid(),
+      entity: "notification",
+      op: "UPSERT",
+      entityId: id,
+      clientTimestamp: nowIso,
+      data: { readAt: nowIso },
+    }),
+  );
+  for (const mutation of mutations) enqueueOfflineMutation(owner, mutation);
+  if (navigator.onLine) await flushOfflineQueue();
 }
 
 /**
  * Intercepta as rotas que o SecurityConfig restringe a COORDINATOR (/properties, /records,
  * /announcements, /notifications, /catalog/crops, /catalog/farm-inputs) e as atende via
- * /sync/pull e /sync/push para o perfil FARMER.
+ * /sync/pull e /sync/push para o perfil FARMER. /catalog/units é aberta ao agricultor, mas também sai do
+ * espelho local para o formulário ter as unidades sem internet.
  */
 async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const req = input instanceof Request ? input : new Request(input, init);
@@ -725,13 +913,20 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       path === "/announcements" ||
       path === "/notifications" ||
       path === "/catalog/crops" ||
-      path === "/catalog/farm-inputs"
+      path === "/catalog/farm-inputs" ||
+      path === "/catalog/units"
     ) {
       try {
         const pull = await fetchSyncSnapshot();
         const changes = pull.changes;
+        const pendingProperties = new Map(
+          getOfflineQueue()
+            .filter((m) => m.entity === "property")
+            .map((m) => [m.entityId, m.data]),
+        );
         const props = (changes?.properties ?? []).map((p) => ({
           ...p,
+          ...(p.id ? pendingProperties.get(p.id) : undefined),
           address: p.address
             ? {
                 ...p.address,
@@ -788,6 +983,12 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
         if (path === "/catalog/farm-inputs") {
           return jsonResponse(inputs);
+        }
+
+        if (path === "/catalog/units") {
+          return jsonResponse(
+            [...(changes?.units ?? [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+          );
         }
 
         if (path === "/announcements") {
@@ -919,6 +1120,15 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
                 openCorrectionRequests: r.openCorrectionRequests,
                 source: r.source,
                 updatedAt: r.updatedAt,
+                planting:
+                  r.type === "PLANTING"
+                    ? {
+                        cropId: recAny.cropId as string | undefined,
+                        cropOtherName: recAny.cropOtherName as string | undefined,
+                        cycleStatus: recAny.cycleStatus as NonNullable<RecordListItem["planting"]>["cycleStatus"],
+                        finishedOn: recAny.finishedOn as string | undefined,
+                      }
+                    : undefined,
               };
             })
             .sort((a, b) => (b.performedOn ?? "").localeCompare(a.performedOn ?? ""));
@@ -933,11 +1143,11 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
             },
           });
         }
-      } catch {
+      } catch (error) {
         // Essas rotas são só do coordenador; repassar para a API daria 403. Sem espelho, não há o que mostrar.
         return jsonResponse(
           { detail: "Sem conexão e ainda sem dados guardados no aparelho. Tente com internet." },
-          503,
+          error instanceof ApiError ? error.status : 503,
         );
       }
     }
@@ -962,21 +1172,7 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   if (method === "POST" && path === "/notifications/read-all") {
     const pull = await fetchSyncSnapshot();
     const unread = (pull.changes?.notifications ?? []).filter((n) => !n.readAt && n.id);
-    if (unread.length > 0) {
-      const nowIso = new Date().toISOString();
-      await jsonPost("/sync/push", {
-        deviceId: getStoredDeviceId(),
-        mutations: unread.map((n) => ({
-          mutationId: generateUuid(),
-          entity: "notification",
-          op: "UPSERT",
-          entityId: n.id,
-          clientTimestamp: nowIso,
-          data: { readAt: nowIso },
-        })),
-      });
-      cachedPull = null;
-    }
+    await markNotificationsRead(unread.map((n) => n.id!));
     return new Response(null, { status: 204 });
   }
 

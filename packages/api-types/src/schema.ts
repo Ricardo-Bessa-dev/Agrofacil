@@ -152,6 +152,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/retention/farmers/{id}/anonymize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["anonymizeFarmer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records": {
         parameters: {
             query?: never;
@@ -1116,6 +1132,22 @@ export interface paths {
         };
         /** Mudanças depois do cursor; repita enquanto hasMore for true */
         get: operations["pull"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/retention/farmers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewFarmerRetention"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2226,13 +2258,12 @@ export interface components {
         JsonNode: {
             /** @enum {string} */
             nodeType?: "ARRAY" | "BINARY" | "BOOLEAN" | "MISSING" | "NULL" | "NUMBER" | "OBJECT" | "POJO" | "STRING";
-            string?: boolean;
             integralNumber?: boolean;
+            floatingPointNumber?: boolean;
             missingNode?: boolean;
             valueNode?: boolean;
             object?: boolean;
             pojo?: boolean;
-            floatingPointNumber?: boolean;
             short?: boolean;
             int?: boolean;
             long?: boolean;
@@ -2248,6 +2279,7 @@ export interface components {
             null?: boolean;
             float?: boolean;
             container?: boolean;
+            string?: boolean;
             number?: boolean;
             embeddedValue?: boolean;
         };
@@ -2622,16 +2654,17 @@ export interface components {
             version?: number;
         };
         Write: {
-            code?: string;
+            name: string;
             /** @enum {string} */
-            appliesTo: "PEER" | "VERIFICATION" | "BOTH";
-            question: string;
-            formalText: string;
-            help?: string;
-            legalReference?: string;
-            /** Format: int32 */
-            sortOrder?: number;
+            kind: "TECHNICIAN" | "CONSUMER" | "ORGANIZATION" | "OTHER";
+            organization?: string;
+            phone?: string;
+            /** Format: uuid */
+            groupId?: string;
+            notes?: string;
             active?: boolean;
+            /** Format: int64 */
+            version?: number;
         };
         View: {
             /** Format: uuid */
@@ -2650,6 +2683,31 @@ export interface components {
         };
         StatusReason: {
             reason: string;
+        };
+        VisitChecklistItemWrite: {
+            code?: string;
+            /** @enum {string} */
+            appliesTo: "PEER" | "VERIFICATION" | "BOTH";
+            question: string;
+            formalText: string;
+            help?: string;
+            legalReference?: string;
+            /** Format: int32 */
+            sortOrder?: number;
+            active?: boolean;
+        };
+        VisitChecklistItemView: {
+            code?: string;
+            /** @enum {string} */
+            appliesTo?: "PEER" | "VERIFICATION" | "BOTH";
+            question?: string;
+            formalText?: string;
+            help?: string;
+            legalReference?: string;
+            /** Format: int32 */
+            sortOrder?: number;
+            templateVersion?: string;
+            active?: boolean;
         };
         ResolveUnmapped: {
             /** @enum {string} */
@@ -3006,7 +3064,7 @@ export interface components {
             farmInputs?: components["schemas"]["FarmInputView"][];
             units?: components["schemas"]["UnitView"][];
             visits?: components["schemas"]["VisitView"][];
-            visitChecklistItems?: components["schemas"]["View"][];
+            visitChecklistItems?: components["schemas"]["VisitChecklistItemView"][];
         };
         NotificationView: {
             /** Format: uuid */
@@ -3044,6 +3102,19 @@ export interface components {
             /** Format: uuid */
             id?: string;
         };
+        FarmerRetentionCandidate: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** Format: date-time */
+            departedAt?: string;
+            /** Format: int64 */
+            attachments?: number;
+            /** Format: int64 */
+            documents?: number;
+            /** Format: int64 */
+            sharedDocumentsToReview?: number;
+        };
         RecordFilter: {
             /** Format: uuid */
             farmerId?: string;
@@ -3070,6 +3141,15 @@ export interface components {
             content?: components["schemas"]["RecordListItem"][];
             page?: components["schemas"]["PageMeta"];
         };
+        PlantingInfo: {
+            /** Format: uuid */
+            cropId?: string;
+            cropOtherName?: string;
+            /** @enum {string} */
+            cycleStatus?: "ACTIVE" | "FINISHED";
+            /** Format: date */
+            finishedOn?: string;
+        };
         RecordListItem: {
             /** Format: uuid */
             id?: string;
@@ -3093,6 +3173,7 @@ export interface components {
             source?: "MOBILE" | "WEB";
             /** Format: date-time */
             updatedAt?: string;
+            planting?: components["schemas"]["PlantingInfo"];
         };
         RecordDetail: {
             attachments?: components["schemas"]["AttachmentView"][];
@@ -3718,6 +3799,26 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["PushResponse"];
                 };
+            };
+        };
+    };
+    anonymizeFarmer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4605,7 +4706,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["View"][];
+                    "*/*": components["schemas"]["VisitChecklistItemView"][];
                 };
             };
         };
@@ -4619,7 +4720,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Write"];
+                "application/json": components["schemas"]["VisitChecklistItemWrite"];
             };
         };
         responses: {
@@ -4629,7 +4730,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["View"];
+                    "*/*": components["schemas"]["VisitChecklistItemView"];
                 };
             };
         };
@@ -5539,7 +5640,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Write"];
+                "application/json": components["schemas"]["VisitChecklistItemWrite"];
             };
         };
         responses: {
@@ -5549,7 +5650,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["View"];
+                    "*/*": components["schemas"]["VisitChecklistItemView"];
                 };
             };
         };
@@ -5766,6 +5867,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PullResponse"];
+                };
+            };
+        };
+    };
+    previewFarmerRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FarmerRetentionCandidate"][];
                 };
             };
         };

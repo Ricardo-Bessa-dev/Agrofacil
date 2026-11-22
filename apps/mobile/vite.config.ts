@@ -56,6 +56,7 @@ function listFiles(dir: string): string[] {
 
 export default defineConfig({
   plugins: [react(), serviceWorkerPrecache()],
+  preview: { proxy: { "/api": API_DEV_URL } },
   server: {
     port: 5174,
     proxy: { "/api": API_DEV_URL },

@@ -2,9 +2,9 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { getOfflineQueue, OFFLINE_QUEUE_EVENT, type QueuedMutation } from "./client";
 
-/** Ids dos registros com mutação na fila (criados ou editados sem internet). */
+/** Ids dos registros esperando envio (criados ou editados sem internet); os recusados não esperam. */
 export function pendingRecordIds(queue: QueuedMutation[]): Set<string> {
-  return new Set(queue.filter((m) => m.entity === "record").map((m) => m.entityId));
+  return new Set(queue.filter((m) => m.entity === "record" && !m.rejection).map((m) => m.entityId));
 }
 
 function subscribe(onChange: () => void): () => void {

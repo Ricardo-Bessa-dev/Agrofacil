@@ -19,7 +19,7 @@ describe("domain rules", () => {
 
   it("calculates completeness and missing fields", () => {
     expect(missingFields({ type: "HARVEST" })).toEqual(["quantity"]);
-    expect(isRecordComplete({ type: "HARVEST", quantity: { value: 30, unit: "MOLHO" } })).toBe(
+    expect(isRecordComplete({ type: "HARVEST", quantity: { value: 30, unit: "BUNCH" } })).toBe(
       true,
     );
     expect(

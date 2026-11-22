@@ -6,6 +6,7 @@ import {
   APPLICATION_PURPOSE_LABELS,
   AREA_UNIT_LABELS,
   COMPLETENESS_LABELS,
+  DEFAULT_QUANTITY_UNIT,
   formatArea,
   formatDatePtBr,
   formatDateTimePtBr,
@@ -14,9 +15,11 @@ import {
   missingFields,
   OUTFLOW_DESTINATION_LABELS,
   PROPAGATION_TYPE_LABELS,
+  quantityUnitOptions,
   RECORD_SOURCE_LABELS,
   RECORD_TYPE_LABELS,
   SEED_ORIGIN_LABELS,
+  suggestOutflowProduct,
   todayIso,
 } from "@agrofacil/domain";
 import type { RecordWrite } from "@agrofacil/api-types";
@@ -25,6 +28,7 @@ import { fetchAllPages } from "../../api/pagination";
 import { AttachmentGallery } from "../../components/AttachmentGallery";
 import { RecordTypeAvatar } from "../../components/StatusBadge";
 import { Pagination } from "../../components/Pagination";
+import { PlantingSelect } from "./PlantingSelect";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
 
@@ -302,7 +306,7 @@ export function RecordCreatePage() {
     "FERTILIZATION" | "PEST_DISEASE_CONTROL" | "SOIL_CORRECTION" | "OTHER"
   >("FERTILIZATION");
   const [qtyValue, setQtyValue] = useState("");
-  const [qtyUnit, setQtyUnit] = useState("KG");
+  const [qtyUnit, setQtyUnit] = useState(DEFAULT_QUANTITY_UNIT);
   const [isFinal, setIsFinal] = useState(false);
   const [supplier, setSupplier] = useState("");
   const [destination, setDestination] = useState<
@@ -355,7 +359,7 @@ export function RecordCreatePage() {
       fetchAllPages((pageable) =>
         api.GET("/records", {
           params: {
-            query: { filter: { propertyId, type: "PLANTING", cycleStatus: "ACTIVE" }, pageable },
+            query: { filter: { propertyId, type: "PLANTING" }, pageable },
           },
         }),
       ),
@@ -386,6 +390,27 @@ export function RecordCreatePage() {
     supplier: supplier || null,
     destination: destination || null,
   });
+
+  const handleTypeChange = (nextType: RecordType) => {
+    if (nextType === type) return;
+    setType(nextType);
+    setPlantingId("");
+  };
+
+  const handlePlantingChange = (nextId: string) => {
+    if (type === "OUTFLOW") {
+      const plantings = plantingsQuery.data ?? [];
+      const product = suggestOutflowProduct(
+        { cropId, otherName: cropId ? "" : cropOtherName },
+        plantings.find((p) => p.id === plantingId),
+        plantings.find((p) => p.id === nextId),
+        cropsQuery.data ?? [],
+      );
+      setCropId(product.cropId);
+      setCropOtherName(product.otherName);
+    }
+    setPlantingId(nextId);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -520,7 +545,7 @@ export function RecordCreatePage() {
                     type === k ? "af-btn--primary" : "af-btn--outline"
                   }`}
                   aria-pressed={type === k}
-                  onClick={() => setType(k)}
+                  onClick={() => handleTypeChange(k)}
                 >
                   {label}
                 </button>
@@ -541,6 +566,7 @@ export function RecordCreatePage() {
                   setFarmerId(e.target.value);
                   setPropertyId("");
                   setPlotId("");
+                  setPlantingId("");
                 }}
                 required
               >
@@ -564,6 +590,7 @@ export function RecordCreatePage() {
                 onChange={(e) => {
                   setPropertyId(e.target.value);
                   setPlotId("");
+                  setPlantingId("");
                 }}
                 required
                 disabled={!farmerId}
@@ -615,25 +642,13 @@ export function RecordCreatePage() {
             </div>
 
             {type !== "PLANTING" && type !== "INPUT_PURCHASE" && (
-              <div className="af-field">
-                <label htmlFor="rec-plantio-vinculado" className="af-label">
-                  Plantio vinculado {type === "HARVEST" ? "*" : "(recomendado)"}
-                </label>
-                <select
-                  id="rec-plantio-vinculado"
-                  className="af-select"
-                  value={plantingId}
-                  onChange={(e) => setPlantingId(e.target.value)}
-                  required={type === "HARVEST"}
-                >
-                  <option value="">Selecione o ciclo de plantio</option>
-                  {(plantingsQuery.data ?? []).map((pl) => (
-                    <option key={pl.id} value={pl.id}>
-                      #{pl.number} — {pl.subject ?? "Plantio"} ({formatDatePtBr(pl.performedOn)})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <PlantingSelect
+                key={`${type}-${propertyId}`}
+                recordType={type}
+                value={plantingId}
+                onChange={handlePlantingChange}
+                plantings={plantingsQuery.data ?? []}
+              />
             )}
           </div>
 
@@ -773,14 +788,11 @@ export function RecordCreatePage() {
                   value={qtyUnit}
                   onChange={(e) => setQtyUnit(e.target.value)}
                 >
-                  {(unitsQuery.data ?? []).map((u) => (
-                    <option key={u.code} value={u.code}>
-                      {u.namePlural} ({u.code})
+                  {quantityUnitOptions(unitsQuery.data, qtyUnit).map((unit) => (
+                    <option key={unit.code} value={unit.code}>
+                      {unit.label}
                     </option>
                   ))}
-                  {(unitsQuery.data ?? []).length === 0 && (
-                    <option value="KG">Quilogramas (KG)</option>
-                  )}
                 </select>
               </div>
             </div>

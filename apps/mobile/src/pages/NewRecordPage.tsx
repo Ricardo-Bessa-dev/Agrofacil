@@ -2,17 +2,21 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import type { RecordWrite } from "@agrofacil/api-types";
+import type { RecordView, RecordWrite } from "@agrofacil/api-types";
 import {
-  formatDatePtBr,
+  DEFAULT_APPLICATION_UNIT,
+  DEFAULT_QUANTITY_UNIT,
+  isPlantingFinished,
   MISSING_FIELD_LABELS,
+  suggestOutflowProduct,
   todayIso,
   type AreaUnitCode,
 } from "@agrofacil/domain";
 import { api, fetchMobileRecordDetail, uploadRecordPhoto } from "../api/client";
 import { generateUuid } from "../api/uuid";
+import { PlantingSelect } from "../components/PlantingSelect";
+import { QuantityUnitSelect } from "../components/QuantityUnitSelect";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
-import { onActivateKey } from "../a11y";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
 
@@ -84,26 +88,26 @@ export function NewRecordPage() {
     "FERTILIZATION" | "PEST_DISEASE_CONTROL" | "SOIL_CORRECTION" | "OTHER"
   >("FERTILIZATION");
   const [applicationQtyVal, setApplicationQtyVal] = useState<string>("");
-  const [applicationQtyUnit, setApplicationQtyUnit] = useState<string>("L");
+  const [applicationQtyUnit, setApplicationQtyUnit] = useState<string>(DEFAULT_APPLICATION_UNIT);
 
   // Específicos para Colheita
   const [harvestCropName, setHarvestCropName] = useState<string>("");
   const [harvestQtyVal, setHarvestQtyVal] = useState<string>("");
-  const [harvestQtyUnit, setHarvestQtyUnit] = useState<string>("KG");
+  const [harvestQtyUnit, setHarvestQtyUnit] = useState<string>(DEFAULT_QUANTITY_UNIT);
   const [isFinal, setIsFinal] = useState<boolean>(false);
 
   // Específicos para Compra de Insumo
   const [purchaseInputId, setPurchaseInputId] = useState<string>("");
   const [purchaseInputName, setPurchaseInputName] = useState<string>("");
   const [purchaseQtyVal, setPurchaseQtyVal] = useState<string>("");
-  const [purchaseQtyUnit, setPurchaseQtyUnit] = useState<string>("KG");
+  const [purchaseQtyUnit, setPurchaseQtyUnit] = useState<string>(DEFAULT_QUANTITY_UNIT);
   const [supplier, setSupplier] = useState<string>("");
 
   // Específicos para Saída
   const [outflowCropId, setOutflowCropId] = useState<string>("");
   const [outflowProductName, setOutflowProductName] = useState<string>("");
   const [outflowQtyVal, setOutflowQtyVal] = useState<string>("");
-  const [outflowQtyUnit, setOutflowQtyUnit] = useState<string>("KG");
+  const [outflowQtyUnit, setOutflowQtyUnit] = useState<string>(DEFAULT_QUANTITY_UNIT);
   const [destination, setDestination] = useState<
     | "FAIR"
     | "COOPERATIVE"
@@ -223,9 +227,9 @@ export function NewRecordPage() {
     enabled: Boolean(currentPropertyId),
   });
 
-  // Busca plantios ativos da propriedade para vínculo (Item 3 do Backlog)
-  const activePlantingsQuery = useQuery({
-    queryKey: ["active-plantings", currentPropertyId],
+  // Plantios da propriedade para vínculo, em andamento e encerrados (RN11, RN42)
+  const plantingsQuery = useQuery({
+    queryKey: ["property-plantings", currentPropertyId],
     queryFn: async () => {
       if (!currentPropertyId) return [];
       const { data } = await api.GET("/records", {
@@ -234,7 +238,6 @@ export function NewRecordPage() {
             filter: {
               propertyId: currentPropertyId,
               type: "PLANTING",
-              cycleStatus: "ACTIVE",
             },
             pageable: { size: 50, sort: ["performedOn,desc"] },
           },
@@ -269,10 +272,22 @@ export function NewRecordPage() {
     staleTime: 300_000,
   });
 
+  // Unidades de medida aceitas pela API
+  const unitsQuery = useQuery({
+    queryKey: ["catalog-units"],
+    queryFn: async () => {
+      const { data } = await api.GET("/catalog/units");
+      return data ?? [];
+    },
+    staleTime: 300_000,
+  });
+
   const plots = plotsQuery.data ?? [];
   const crops = cropsQuery.data ?? [];
   const farmInputs = farmInputsQuery.data ?? [];
-  const activePlantings = activePlantingsQuery.data ?? [];
+  const units = unitsQuery.data ?? [];
+  const plantings = plantingsQuery.data ?? [];
+  const activePlantings = plantings.filter((p) => !isPlantingFinished(p));
 
   // Só escolhe o plantio sozinho quando há um único em andamento; com mais de um, o agricultor escolhe,
   // para a colheita não ficar ligada ao plantio errado.
@@ -282,6 +297,31 @@ export function NewRecordPage() {
       setPlantingId(onlyPlantingId);
     }
   }, [selectedType, plantingId, onlyPlantingId]);
+
+  // O plantio não passa de um tipo para outro: a escolha automática da colheita não pode virar
+  // vínculo de uma saída ou aplicação sem a pessoa perceber.
+  const handleTypeChange = (type: RecordType) => {
+    if (type === selectedType) return;
+    setSelectedType(type);
+    setPlantingId("");
+  };
+
+  const handlePlantingChange = (nextId: string) => {
+    if (selectedType === "OUTFLOW") {
+      const product = suggestOutflowProduct(
+        {
+          cropId: outflowCropId === "OTHER" ? "" : outflowCropId,
+          otherName: outflowProductName,
+        },
+        plantings.find((p) => p.id === plantingId),
+        plantings.find((p) => p.id === nextId),
+        crops,
+      );
+      setOutflowCropId(product.cropId);
+      setOutflowProductName(product.otherName);
+    }
+    setPlantingId(nextId);
+  };
 
   const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -306,9 +346,9 @@ export function NewRecordPage() {
       return;
     }
 
-    if (selectedType === "HARVEST" && activePlantings.length === 0) {
+    if (selectedType === "HARVEST" && plantings.length === 0) {
       setErrorMsg(
-        "Para registrar uma colheita, é necessário ter um Plantio ativo cadastrado nesta propriedade.",
+        "Para registrar uma colheita, é necessário ter um plantio cadastrado nesta propriedade.",
       );
       return;
     }
@@ -417,6 +457,21 @@ export function NewRecordPage() {
         };
       }
 
+      // Dados que o formulário não mostra não podem se perder na edição.
+      const original = editDetailQuery.data?.raw as RecordView | undefined;
+      if (original?.type === "PLANTING" && bodyPayload.type === "PLANTING") {
+        bodyPayload.propagationQuantity = original.propagationQuantity;
+      } else if (
+        original?.type === "INPUT_APPLICATION" &&
+        bodyPayload.type === "INPUT_APPLICATION"
+      ) {
+        bodyPayload.appliedArea = original.appliedArea;
+      } else if (original?.type === "HARVEST" && bodyPayload.type === "HARVEST") {
+        bodyPayload.harvestedArea = original.harvestedArea;
+      }
+      bodyPayload.clientCreatedAt = original?.clientCreatedAt;
+      bodyPayload.location = original?.location;
+
       const resultCall = isEditMode
         ? await api.PUT("/records/{id}", {
             params: { path: { id: editingRecordId } },
@@ -450,17 +505,27 @@ export function NewRecordPage() {
       const targetRecordId =
         editingRecordId || ((savedData as { id?: string } | undefined)?.id ?? newRecordId);
 
+      // 201 = guardado no aparelho (ver submitRecordMutation).
+      let feedback =
+        response.status === 201 ? "Manejo salvo no celular. Envio pendente." : "Manejo salvo.";
       if (photoFile && targetRecordId) {
-        await uploadRecordPhoto(targetRecordId, photoFile);
+        try {
+          const { queued } = await uploadRecordPhoto(targetRecordId, photoFile);
+          if (queued) feedback += " A foto ficou na fila de envio.";
+        } catch (photoError) {
+          // O manejo já foi salvo: a falha da foto não pode parecer falha do registro.
+          const reason = photoError instanceof Error ? ` ${photoError.message}` : "";
+          feedback += ` A foto não foi guardada.${reason} Adicione-a ao editar o manejo.`;
+        }
       }
 
       await queryClient.invalidateQueries({ queryKey: ["records"] });
       await queryClient.invalidateQueries({ queryKey: ["recent-records"] });
-      await queryClient.invalidateQueries({ queryKey: ["active-plantings"] });
+      await queryClient.invalidateQueries({ queryKey: ["property-plantings"] });
       await queryClient.invalidateQueries({
         queryKey: ["mobile-record-detail", editingRecordId],
       });
-      navigate("/registros", { replace: true });
+      navigate("/registros", { replace: true, state: { feedback } });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Erro ao salvar registro.");
     } finally {
@@ -539,22 +604,21 @@ export function NewRecordPage() {
               Tipo de Atividade / Manejo
             </span>
             <div
-              role="radiogroup"
+              role="group"
               aria-labelledby="record-type-label"
               style={{ display: "flex", flexDirection: "column", gap: "8px" }}
             >
               {RECORD_TYPES.map((t) => {
                 const isSelected = selectedType === t.type;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={t.type}
-                    role="radio"
-                    aria-checked={isSelected}
-                    tabIndex={0}
-                    onClick={() => setSelectedType(t.type)}
-                    onKeyDown={onActivateKey(() => setSelectedType(t.type))}
+                    aria-pressed={isSelected}
+                    onClick={() => handleTypeChange(t.type)}
                     style={{
                       display: "flex",
+                      textAlign: "left",
                       alignItems: "center",
                       gap: "12px",
                       padding: "12px 14px",
@@ -570,8 +634,8 @@ export function NewRecordPage() {
                     }}
                   >
                     <RecordTypeIcon type={t.type} size={38} />
-                    <div style={{ flex: 1 }}>
-                      <div
+                    <span style={{ flex: 1, display: "grid" }}>
+                      <span
                         style={{
                           fontSize: "14px",
                           fontWeight: 600,
@@ -579,12 +643,13 @@ export function NewRecordPage() {
                         }}
                       >
                         {t.title}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                      </span>
+                      <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
                         {t.subtitle}
-                      </div>
-                    </div>
-                    <div
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
                       style={{
                         width: "18px",
                         height: "18px",
@@ -595,7 +660,7 @@ export function NewRecordPage() {
                         backgroundColor: isSelected ? "var(--color-primary)" : "transparent",
                       }}
                     />
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -693,13 +758,13 @@ export function NewRecordPage() {
             </div>
           </div>
 
-          {/* Vínculo com Plantio Ativo para Aplicação, Colheita e Saída (Item 3 do Backlog) */}
+          {/* Vínculo com Plantio para Aplicação, Colheita e Saída (Item 3 do Backlog) */}
           {(selectedType === "INPUT_APPLICATION" ||
             selectedType === "HARVEST" ||
             selectedType === "OUTFLOW") && (
             <div className="mobile-card">
               <h2 style={{ fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
-                Vínculo com Plantio Ativo
+                Vínculo com Plantio
               </h2>
               <p
                 style={{
@@ -709,35 +774,17 @@ export function NewRecordPage() {
                 }}
               >
                 {selectedType === "HARVEST"
-                  ? "Selecione de qual plantio em andamento esta colheita está sendo realizada (obrigatório):"
-                  : "Vincule opcionalmente a um plantio em andamento para rastreabilidade do lote:"}
+                  ? "Selecione de qual plantio é esta colheita (obrigatório):"
+                  : "Vincule opcionalmente a um plantio para rastreabilidade do lote:"}
               </p>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label htmlFor="planting-select" className="form-label">
-                  Plantio {selectedType === "HARVEST" ? "*" : "(opcional)"}
-                </label>
-                <select
-                  id="planting-select"
-                  value={plantingId}
-                  onChange={(e) => setPlantingId(e.target.value)}
-                  className="form-select"
-                  required={selectedType === "HARVEST"}
-                >
-                  <option value="">
-                    {selectedType === "HARVEST"
-                      ? "Selecione o plantio..."
-                      : "Sem vínculo com plantio específico"}
-                  </option>
-                  {activePlantings.map((pl) => (
-                    <option key={pl.id} value={pl.id}>
-                      {pl.subject || "Plantio"} —{" "}
-                      {pl.performedOn ? formatDatePtBr(pl.performedOn) : ""}
-                      {pl.plot?.name ? ` (${pl.plot.name})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <PlantingSelect
+                key={selectedType}
+                recordType={selectedType}
+                value={plantingId}
+                onChange={handlePlantingChange}
+                plantings={plantings}
+              />
             </div>
           )}
 
@@ -981,17 +1028,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={applicationQtyUnit}
-                    onChange={(e) => setApplicationQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="L">Litros (L)</option>
-                    <option value="ML">Mililitros (mL)</option>
-                    <option value="KG">Quilos (kg)</option>
-                    <option value="G">Gramas (g)</option>
-                  </select>
+                    onChange={setApplicationQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
             </div>
@@ -1033,18 +1074,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={harvestQtyUnit}
-                    onChange={(e) => setHarvestQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="CX">caixas</option>
-                    <option value="SACAS">sacas</option>
-                    <option value="DZ">dúzias</option>
-                    <option value="UN">unidades</option>
-                  </select>
+                    onChange={setHarvestQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
 
@@ -1126,17 +1160,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={purchaseQtyUnit}
-                    onChange={(e) => setPurchaseQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="SACAS">sacas</option>
-                    <option value="L">litros</option>
-                    <option value="UN">unidades</option>
-                  </select>
+                    onChange={setPurchaseQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
 
@@ -1217,17 +1245,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
                     value={outflowQtyUnit}
-                    onChange={(e) => setOutflowQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="CX">caixas</option>
-                    <option value="UN">unidades</option>
-                    <option value="DZ">dúzias</option>
-                  </select>
+                    onChange={setOutflowQtyUnit}
+                    units={units}
+                  />
                 </div>
               </div>
 
