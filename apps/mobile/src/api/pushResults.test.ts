@@ -1,8 +1,7 @@
-// Testa a separação do resultado do /sync/push: aceitas saem, recusadas são guardadas, sem resposta continuam na fila.
+// Testa a separação do resultado do /sync/push: aceitas saem, recusadas ficam com o motivo, sem resposta continuam na fila.
 import { describe, expect, it } from "vitest";
 import { rejectionMessage, splitPushResults } from "./pushResults";
 
-const NOW = "2026-11-20T12:00:00.000Z";
 const mutation = (id: string) => ({
   mutationId: id,
   entity: "record",
@@ -22,7 +21,6 @@ describe("splitPushResults", () => {
           error: { code: "VALIDATION_ERROR", message: "Dados inválidos." },
         },
       ],
-      NOW,
     );
     expect(remaining.map((m) => m.mutationId)).toEqual(["m3"]);
     expect(rejected).toEqual([
@@ -30,15 +28,14 @@ describe("splitPushResults", () => {
         mutationId: "m2",
         entity: "record",
         entityId: "rec-m2",
-        message: "Dados inválidos.",
-        rejectedAt: NOW,
         data: { notes: "m2" },
+        rejection: "Dados inválidos.",
       },
     ]);
   });
 
   it("mantém tudo na fila quando a resposta não traz resultados", () => {
-    const { remaining, rejected } = splitPushResults([mutation("m1")], undefined, NOW);
+    const { remaining, rejected } = splitPushResults([mutation("m1")], undefined);
     expect(remaining).toHaveLength(1);
     expect(rejected).toHaveLength(0);
   });

@@ -620,7 +620,7 @@ Cite o número no código e nos testes, por exemplo `// RN12`.
 - **RN22:** um registro com `*_other_name` (texto livre) aparece na tela "Itens sem catálogo" do coordenador, que pode associar o texto a um item do catálogo. Isso atualiza todos os registros com aquele texto.
 - **RN26:** o app tenta capturar o GPS ao abrir o formulário. Se a permissão for negada ou não houver sinal em 10 s, salva sem localização. O GPS nunca bloqueia o registro.
 - **RN27:** compra de insumo e saída/venda pertencem à propriedade (`plot_id` nulo).
-- **RN42:** a saída/venda pode ser ligada a um plantio da mesma propriedade, não excluído, em andamento ou `FINISHED` (a venda costuma vir depois da colheita final). Não exige colheita registrada, mas a data não pode ser anterior à do plantio (`BEFORE_PLANTING`). Os formulários sugerem o produto do plantio, e a pessoa pode trocar.
+- **RN42:** a saída/venda pode ser ligada a um plantio da mesma propriedade, não excluído, em andamento ou `FINISHED` (a venda costuma vir depois da colheita final). Não exige colheita registrada, mas a data não pode ser anterior à do plantio (`BEFORE_PLANTING`). Sem produto informado, a API usa o do plantio; informado, ele é respeitado (ex.: polpa ou doce). Os formulários sugerem o produto do plantio, e a pessoa pode trocar.
 - **RN28:** os campos de quantidade aceitam até 3 casas decimais e valores maiores que 0. As áreas também.
 
 **Certificação**
@@ -2335,7 +2335,9 @@ Não acrescente campos "por garantia".
 | Logs da aplicação | 6 meses | Apagar |
 | Backups | 30 dias de diários + 12 mensais | Rotação automática ([doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)) |
 
-Implemente com uma rotina mensal (`DataRetentionJob`). Antes de rodar de verdade, ela gera um **relatório de simulação** para o coordenador conferir.
+Em **Configurações → Retenção de dados**, o coordenador simula a operação (`GET /retention/farmers`) e confirma um cadastro por vez (`POST /retention/farmers/{id}/anonymize`). A API grava a data no desligamento, apaga a data na reativação e confere o prazo de novo antes de aplicar. Desligamentos anteriores à migração V8 ficam fora da simulação até que a data deles seja registrada por manutenção. A confirmação apaga os dados cadastrais e os campos que identificam a pessoa, mantém os registros estruturados e põe os arquivos na fila de exclusão (`DataRetentionJob`, a cada 5 min). As credenciais vencidas saem na rotina mensal.
+
+Documentos compartilhados apontados na simulação precisam de revisão da coordenação: a busca usa o nome atual no conteúdo estruturado. Cópias externas e backups seguem o próprio descarte.
 
 **Pedido de eliminação pelo titular:**
 - os dados **não exigidos por lei** são apagados na hora: e-mail, telefone, fotos que não sejam prova, aparelho;

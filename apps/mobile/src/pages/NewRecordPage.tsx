@@ -2,7 +2,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import type { RecordWrite } from "@agrofacil/api-types";
+import type { RecordView, RecordWrite } from "@agrofacil/api-types";
 import {
   DEFAULT_APPLICATION_UNIT,
   DEFAULT_QUANTITY_UNIT,
@@ -17,7 +17,6 @@ import { generateUuid } from "../api/uuid";
 import { PlantingSelect } from "../components/PlantingSelect";
 import { QuantityUnitSelect } from "../components/QuantityUnitSelect";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
-import { onActivateKey } from "../a11y";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
 
@@ -458,6 +457,21 @@ export function NewRecordPage() {
         };
       }
 
+      // Dados que o formulário não mostra não podem se perder na edição.
+      const original = editDetailQuery.data?.raw as RecordView | undefined;
+      if (original?.type === "PLANTING" && bodyPayload.type === "PLANTING") {
+        bodyPayload.propagationQuantity = original.propagationQuantity;
+      } else if (
+        original?.type === "INPUT_APPLICATION" &&
+        bodyPayload.type === "INPUT_APPLICATION"
+      ) {
+        bodyPayload.appliedArea = original.appliedArea;
+      } else if (original?.type === "HARVEST" && bodyPayload.type === "HARVEST") {
+        bodyPayload.harvestedArea = original.harvestedArea;
+      }
+      bodyPayload.clientCreatedAt = original?.clientCreatedAt;
+      bodyPayload.location = original?.location;
+
       const resultCall = isEditMode
         ? await api.PUT("/records/{id}", {
             params: { path: { id: editingRecordId } },
@@ -491,8 +505,18 @@ export function NewRecordPage() {
       const targetRecordId =
         editingRecordId || ((savedData as { id?: string } | undefined)?.id ?? newRecordId);
 
+      // 201 = guardado no aparelho (ver submitRecordMutation).
+      let feedback =
+        response.status === 201 ? "Manejo salvo no celular. Envio pendente." : "Manejo salvo.";
       if (photoFile && targetRecordId) {
-        await uploadRecordPhoto(targetRecordId, photoFile);
+        try {
+          const { queued } = await uploadRecordPhoto(targetRecordId, photoFile);
+          if (queued) feedback += " A foto ficou na fila de envio.";
+        } catch (photoError) {
+          // O manejo já foi salvo: a falha da foto não pode parecer falha do registro.
+          const reason = photoError instanceof Error ? ` ${photoError.message}` : "";
+          feedback += ` A foto não foi guardada.${reason} Adicione-a ao editar o manejo.`;
+        }
       }
 
       await queryClient.invalidateQueries({ queryKey: ["records"] });
@@ -501,7 +525,7 @@ export function NewRecordPage() {
       await queryClient.invalidateQueries({
         queryKey: ["mobile-record-detail", editingRecordId],
       });
-      navigate("/registros", { replace: true });
+      navigate("/registros", { replace: true, state: { feedback } });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Erro ao salvar registro.");
     } finally {
@@ -580,22 +604,21 @@ export function NewRecordPage() {
               Tipo de Atividade / Manejo
             </span>
             <div
-              role="radiogroup"
+              role="group"
               aria-labelledby="record-type-label"
               style={{ display: "flex", flexDirection: "column", gap: "8px" }}
             >
               {RECORD_TYPES.map((t) => {
                 const isSelected = selectedType === t.type;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={t.type}
-                    role="radio"
-                    aria-checked={isSelected}
-                    tabIndex={0}
+                    aria-pressed={isSelected}
                     onClick={() => handleTypeChange(t.type)}
-                    onKeyDown={onActivateKey(() => handleTypeChange(t.type))}
                     style={{
                       display: "flex",
+                      textAlign: "left",
                       alignItems: "center",
                       gap: "12px",
                       padding: "12px 14px",
@@ -611,8 +634,8 @@ export function NewRecordPage() {
                     }}
                   >
                     <RecordTypeIcon type={t.type} size={38} />
-                    <div style={{ flex: 1 }}>
-                      <div
+                    <span style={{ flex: 1, display: "grid" }}>
+                      <span
                         style={{
                           fontSize: "14px",
                           fontWeight: 600,
@@ -620,12 +643,13 @@ export function NewRecordPage() {
                         }}
                       >
                         {t.title}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                      </span>
+                      <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
                         {t.subtitle}
-                      </div>
-                    </div>
-                    <div
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
                       style={{
                         width: "18px",
                         height: "18px",
@@ -636,7 +660,7 @@ export function NewRecordPage() {
                         backgroundColor: isSelected ? "var(--color-primary)" : "transparent",
                       }}
                     />
-                  </div>
+                  </button>
                 );
               })}
             </div>

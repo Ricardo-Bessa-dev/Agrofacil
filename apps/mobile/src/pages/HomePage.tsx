@@ -134,6 +134,10 @@ export function HomePage() {
           <span style={{ fontSize: "20px", fontWeight: 700 }}>→</span>
         </Link>
 
+        <p>
+          <Link to="/visitas">Consultar visitas do SPG</Link>
+        </p>
+
         {/* Card Resumo da Propriedade */}
         <div className="mobile-card">
           <div className="mobile-card-header">

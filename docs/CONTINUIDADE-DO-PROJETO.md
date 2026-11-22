@@ -104,15 +104,20 @@ Todas as melhorias previstas no backlog técnico foram implementadas e validadas
 
 ## 3.1 Revisão de novembro de 2026
 
-- **Sincronização incremental:** o app guarda o cursor do `/sync/pull` e pede só o que mudou, página a página ([`syncState.ts`](../apps/mobile/src/api/syncState.ts)). Mutações recusadas pela API saem da fila e aparecem num aviso ([`pushResults.ts`](../apps/mobile/src/api/pushResults.ts)).
+- **Sincronização incremental:** o app guarda o cursor do `/sync/pull` e pede só o que mudou, página a página ([`syncState.ts`](../apps/mobile/src/api/syncState.ts)). Mutações recusadas pela API ficam na fila com o motivo, para corrigir ou descartar ([`pushResults.ts`](../apps/mobile/src/api/pushResults.ts)).
 - **Fotos offline:** ficam no IndexedDB ([`photoQueue.ts`](../apps/mobile/src/api/photoQueue.ts)) até o arquivo chegar à API; o detalhe do registro mostra as fotos enviadas e as que aguardam envio.
 - **Avisos só no app:** o envio de push pelo Expo fica desligado (`PUSH_ENABLED=false`), porque o PWA não registra token de push.
 - **RN41:** a soma das áreas não pode passar do tamanho da propriedade (API, painel e app).
-- **RN42:** a saída/venda pode ser ligada a um plantio já encerrado, mas não pode ser anterior a ele; o produto do plantio é sugerido ([`plantings.ts`](../packages/domain/src/plantings.ts)).
+- **RN42:** a saída/venda pode ser ligada a um plantio já encerrado, mas não pode ser anterior a ele; o produto do plantio é sugerido, e a API o usa quando nenhum é informado ([`plantings.ts`](../packages/domain/src/plantings.ts)).
 - **Unidades de quantidade:** os formulários usam os códigos do catálogo da API ([`quantityUnits.ts`](../packages/domain/src/quantityUnits.ts)); um teste compara a cópia do domínio com a migração V3.
 - **Painel:** listas paginadas com o componente [`Pagination`](../apps/web/src/components/Pagination.tsx), avisos de erro das ações ([`Toaster`](../apps/web/src/components/Toaster.tsx)) e menus de seleção que buscam todas as páginas ([`pagination.ts`](../apps/web/src/api/pagination.ts)).
 - **Municípios da Bahia** ficam em `@agrofacil/domain`, usados pelos dois apps.
 - **Sessão do painel:** quando o token de acesso (15 min) expira, o cliente renova pelo cookie e repete a chamada, sem erro para o coordenador.
+- **Dados por conta no app:** espelho, fila e fotos são separados por conta; duas pessoas podem usar o mesmo aparelho ([`client.ts`](../apps/mobile/src/api/client.ts)).
+- **Visitas do SPG no app:** lista e resultado pelo responsável, também offline ([`VisitsPage.tsx`](../apps/mobile/src/pages/VisitsPage.tsx)). No painel, o resultado registra presença e respostas explícitas.
+- **Retenção (LGPD):** simulação e anonimização por agricultor em Configurações, a partir da data de desligamento (migração V8; [doc 1, §5.7](1-arquitetura-e-contrato.md#57-retenção-eliminação-e-anonimização)).
+- **Backup:** scripts em [`infra/backup/`](../infra/backup) com conferência de hash ([doc 2, §3.6](2-guia-api.md#36-backup-e-restauração)).
+- **CI:** além dos testes, o [`ci.yml`](../.github/workflows/ci.yml) compara o OpenAPI, roda o [fluxo principal](../testes/e2e/fluxo-principal.cjs) no navegador (com uso offline) e testa a restauração do backup.
 - **Documentação:** o doc 3 (Partes C, D e E) descreve os apps como estão; o doc 1 ganhou o ADR-19 (PWA) e a §4.0; o doc 2 descreve a publicação do PWA.
 
 ## 4. Como Rodar e Validar o Projeto no Novo Ambiente

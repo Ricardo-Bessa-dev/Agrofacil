@@ -747,23 +747,24 @@ apps/mobile/
 
 ### C.5 Autenticação e sessão
 
-- **Ativação** ([§A.3](#a3-primeiro-acesso-ativação)): CPF + código de 6 dígitos em `POST /auth/farmer/activate`, com o `deviceId` (UUID gerado uma vez e guardado) e a plataforma (`ANDROID` ou `IOS`, pelo navegador).
+- **Ativação** ([§A.3](#a3-primeiro-acesso-ativação)): CPF + código de 6 dígitos em `POST /auth/farmer/activate`, com o `deviceId` (UUID gerado uma vez e guardado) e a plataforma `WEB`.
 - **Tokens:** o de acesso dura 15 minutos. Toda chamada passa por `authFetch`, que põe o `Authorization` e, em 401, renova com o refresh token **uma vez** e repete a chamada. Renovações simultâneas compartilham a mesma promessa.
-- **Sem internet** a renovação falha sem derrubar a sessão: o agricultor continua trabalhando offline. A sessão só é encerrada quando a API responde 401/403 ao refresh ou ao `/me`.
+- **Sem internet** a renovação falha sem derrubar a sessão: o agricultor continua trabalhando offline. A sessão só é encerrada quando a API responde 401/403 ao refresh.
+- **Troca de conta:** espelho, fila e fotos são separados por conta. Ao sair, o espelho é apagado (LGPD) e a fila e as fotos ficam guardadas para aquela conta. Se a conta muda (inclusive em outra aba), respostas da sessão anterior são ignoradas e o cache das telas é limpo.
 - **Termos (LGPD):** se `termsAcceptedVersion` for diferente de `currentTermsVersion`, o `MobileShell` mostra o aceite (`POST /me/terms/accept`).
 
 ### C.6 Motor de sincronização
 
 As telas usam o mesmo cliente `openapi-fetch` do painel, mas o `fetch` dele é trocado por `mobileSyncFetch`, que responde **a partir do espelho local**:
 
-- **Leitura:** `GET /properties`, `/properties/{id}`, `/properties/{id}/plots`, `/records`, `/records/{id}`, `/announcements`, `/notifications`, `/catalog/crops` e `/catalog/farm-inputs` são montadas do espelho, junto com os registros que ainda estão na fila. As demais rotas vão direto à API.
+- **Leitura:** `GET /properties`, `/properties/{id}`, `/properties/{id}/plots`, `/records`, `/records/{id}`, `/announcements`, `/notifications`, `/catalog/crops`, `/catalog/farm-inputs` e `/catalog/units` são montadas do espelho, junto com os registros que ainda estão na fila. As demais rotas vão direto à API.
 - **Pull incremental:** `fetchSyncSnapshot` chama `GET /sync/pull?cursor=` página a página (500 itens, até 50 páginas) até `hasMore=false`, aplica as mudanças com `applyPull` e grava o novo cursor. `reset=true` recomeça do zero. Itens sem `id` (unidades e itens do roteiro) usam `code` como chave. Chamadas seguidas em menos de 2,5 s reaproveitam o último resultado.
-- **Escrita:** criar ou editar registro e propriedade gera uma mutação com `mutationId` e `entityId` gerados no aparelho, que entra na fila e é enviada por `/sync/push`. Mutações para o mesmo item são unificadas (vale o último estado).
-- **Envio da fila** (`flushOfflineQueue`): ao abrir o app, ao voltar a internet (evento `online`), depois de cada registro e no botão "Sincronizar". Resultado por mutação:
+- **Escrita** (`submitMutation`): criar ou editar registro, propriedade ou resultado de visita gera uma mutação com `mutationId` gerado no aparelho, enviada por `/sync/push`. Sem rede, com a API fora do ar ou com itens na frente, ela entra na fila, para manter a ordem. Mutações para o mesmo item são unificadas (vale o último estado).
+- **Envio da fila** (`flushOfflineQueue`): em lotes de até 100, ao abrir o app, ao voltar a internet (evento `online`) e no botão "Sincronizar". Resultado por mutação:
   - `APPLIED`: sai da fila;
-  - `REJECTED`: sai da fila e vai para as recusas, que o `MobileShell` mostra num aviso vermelho com o motivo;
+  - `REJECTED`: fica na fila com o motivo e não é reenviada sozinha. O `MobileShell` mostra num aviso vermelho, com "Corrigir" (abre a tela do item) e "Descartar";
   - sem resposta (rede ou 5xx): fica na fila para a próxima tentativa.
-- **Selo "Aguardando envio":** registros com mutação na fila aparecem assim na lista e no detalhe (`usePendingRecordIds`), porque a completude só é calculada pela API depois do envio.
+- **Selo "Aguardando envio":** registros com mutação na fila (não recusada) aparecem assim na lista e no detalhe (`usePendingRecordIds`), porque a completude só é calculada pela API depois do envio.
 
 ### C.7 Fotos
 
@@ -771,7 +772,7 @@ Fluxo em duas etapas ([doc 1, §3.6](1-arquitetura-e-contrato.md#36-arquivos-fot
 
 1. A foto é guardada no IndexedDB com `attachmentId`, `mutationId` e SHA-256 fixos.
 2. Quando o registro dela já foi enviado, o app registra o anexo (mutação `attachment`) e depois manda o arquivo (`PUT /files/{id}/content`). Cada etapa concluída é gravada, então uma queda no meio não repete trabalho.
-3. 401, 408, 429 e 5xx tentam de novo depois; outros 4xx (ex.: `CHECKSUM_MISMATCH`) vão para as recusas.
+3. 401, 408, 429 e 5xx tentam de novo depois; outros 4xx (ex.: `CHECKSUM_MISMATCH`) ficam com o motivo, e a pessoa pode descartar a foto.
 
 O detalhe do registro mostra as fotos enviadas (baixadas com o token) e as que ainda estão no aparelho, com o selo "Aguardando envio". As fotos baixadas ficam em cache só enquanto o app está aberto.
 
@@ -798,6 +799,7 @@ Os avisos ficam **só dentro do app**: a tela de avisos lista as notificações 
 | `/propriedades`, `/propriedades/:id` | Propriedades, áreas, trabalhadores, edição de produção, tamanho e roteiro de acesso |
 | `/registros` | Caderno de campo com filtro por tipo e detalhe (fotos, pendências e correções) |
 | `/registros/novo`, `/registros/:id/editar` | Formulário de registro |
+| `/visitas`, `/visitas/:id` | Visitas do SPG e resultado, só para o responsável pelo registro (funciona offline) |
 | `/notificacoes` | Avisos |
 | `/perfil` | Meus dados, WhatsApp da associação e sair |
 
@@ -807,7 +809,7 @@ Os avisos ficam **só dentro do app**: a tela de avisos lista as notificações 
 - assistente passo a passo (hoje é um formulário por tipo);
 - lembretes e notificações fora do app (push);
 - entrada por digital;
-- visitas do SPG no app ([§A.13](#a13-visitas-do-grupo-e-da-comissão-spg)): cartões, resumo da propriedade visitada e resultado pelo visitador;
+- visitas do SPG ([§A.13](#a13-visitas-do-grupo-e-da-comissão-spg)): cartões e resumo (`brief`) da propriedade visitada;
 - cadastro e exclusão de propriedade pelo agricultor (o app só edita).
 
 ### C.11 Testes do mobile
@@ -1079,7 +1081,9 @@ Sugestão de visitadores                        (a escolha final é sua, depois 
 | Unitário | Vitest | Cliente HTTP (`ApiError`, telefone E.164, renovação da sessão), `fetchAllPages` |
 | Regras | Vitest em `@agrofacil/domain` | CPF, áreas (RN41), unidades de quantidade, escolha do plantio (RN42), completude, certificação, datas, WhatsApp, municípios |
 
-**Ainda falta:** testes de componentes (Testing Library) e ponta a ponta (Playwright, com a API real) dos fluxos principais: login com 2FA, cadastrar agricultor e gerar código, registrar pelo agricultor, emitir e renovar certificação, marcar visita e gerar documento.
+**Ponta a ponta (Playwright, no CI):** [`fluxo-principal.cjs`](../testes/e2e/fluxo-principal.cjs) cobre login com 2FA, grupo, agricultor, código, propriedade e manejos no app, com e sem internet.
+
+**Ainda falta:** testes de componentes (Testing Library) e ponta a ponta de certificação, visitas e documentos.
 
 ### D.9 Build
 
@@ -1101,6 +1105,6 @@ A ordem original (marcos F0 a F8) foi seguida com o app como PWA. Situação em 
 | F5 | Feito: avisos no app e comunicados. **Fora por decisão:** push e lembretes locais | Feito: certificações (emitir, editar, renovar com aviso da RN39), comunicados, notificações |
 | F6 | Feito: propriedades (edição), Meus dados. **Falta:** voz e GPS | Feito: painel inicial, catálogo, relatórios, configurações |
 | F7 | **Falta:** testes com agricultores ([§A.12](#a12-testes-com-agricultores)) | **Falta:** testes com o coordenador |
-| F8 | **Falta:** visitas no app (cartões, resumo, resultado pelo visitador) | Feito: situação do ciclo, marcar visita com sugestão, resultado, documentos D1–D8, pessoas do SPG |
+| F8 | Feito: lista de visitas e resultado pelo visitador. **Falta:** cartões e resumo | Feito: situação do ciclo, marcar visita com sugestão, resultado, documentos D1–D8, pessoas do SPG |
 
 O maior risco continua sendo a usabilidade com os agricultores (F7): teste o app com eles antes de acrescentar funções.

@@ -160,7 +160,7 @@ public class RecordRules {
         }
       }
       case OutflowWrite o -> {
-        if (o.cropId() == null && isBlank(o.productOtherName())) {
+        if (o.plantingId() == null && o.cropId() == null && isBlank(o.productOtherName())) {
           errors.add(required("cropId", "Escolha o produto."));
         }
       }

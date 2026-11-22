@@ -17,6 +17,11 @@ describe("pendingRecordIds", () => {
     expect([...pendingRecordIds(queue)]).toEqual(["r1"]);
   });
 
+  it("não conta o registro recusado, que espera correção e não internet", () => {
+    const queue = [{ ...mutation("record", "r1"), rejection: "Corrija a data." }];
+    expect(pendingRecordIds(queue).size).toBe(0);
+  });
+
   it("fica vazio com a fila vazia", () => {
     expect(pendingRecordIds([]).size).toBe(0);
   });

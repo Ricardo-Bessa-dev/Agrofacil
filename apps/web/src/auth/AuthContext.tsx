@@ -1,5 +1,6 @@
 // Contexto de autenticação do coordenador (login + 2FA + sessão por cookie HttpOnly, doc 3 §D.3).
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { LoginChallengeResponse, Me } from "@agrofacil/api-types";
 import {
   api,
@@ -12,6 +13,7 @@ import {
 import { AuthContext, type AuthContextValue } from "./useAuth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<Me | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -23,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setOnUnauthorized(() => {
       setAccessToken(null);
+      queryClient.clear();
       setUser(null);
     });
 
@@ -47,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       setOnUnauthorized(null);
     };
-  }, []);
+  }, [queryClient]);
 
   const loginStep1 = useCallback(
     async (email: string, password: string): Promise<LoginChallengeResponse> => {
@@ -93,9 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     } finally {
       setAccessToken(null);
+      queryClient.clear();
       setUser(null);
     }
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

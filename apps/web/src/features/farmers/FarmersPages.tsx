@@ -21,6 +21,10 @@ import { CertificationStatusBadge, RecordTypeAvatar } from "../../components/Sta
 /** Registros por página na ficha do agricultor. */
 const FARMER_RECORDS_PAGE_SIZE = 20;
 
+function isBrazilianMobile(phone: string | undefined): boolean {
+  return /^\+55[1-9][0-9]9[0-9]{8}$/.test(phone ?? "");
+}
+
 function AccessCodeModal({
   farmerName,
   farmerPhone,
@@ -383,7 +387,8 @@ export function FarmerFormPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [groupJoinedYear, setGroupJoinedYear] = useState(() => String(new Date().getFullYear()));
+  const [currentYear] = useState(() => new Date().getFullYear());
+  const [groupJoinedYear, setGroupJoinedYear] = useState(() => String(currentYear));
   const [cafNumber, setCafNumber] = useState("");
   const [uf, setUf] = useState("BA");
   const [municipalityId, setMunicipalityId] = useState<string>("");
@@ -425,6 +430,12 @@ export function FarmerFormPage() {
       return;
     }
 
+    const normalizedPhone = normalizePhoneE164(phone);
+    if (phone.trim() && !isBrazilianMobile(normalizedPhone)) {
+      setError("Informe um celular com DDD e 11 dígitos.");
+      return;
+    }
+
     const cepDigits = onlyDigits(postalCode);
     if (cepDigits && cepDigits.length !== 8) {
       setError("O CEP deve ter 8 dígitos (ou deixe em branco).");
@@ -438,7 +449,7 @@ export function FarmerFormPage() {
           body: {
             name: name.trim(),
             cpf: cpfDigits,
-            phone: normalizePhoneE164(phone),
+            phone: normalizedPhone,
             email: email.trim() || undefined,
             groupId: groupId || undefined,
             groupJoinedYear: groupJoinedYear ? Number(groupJoinedYear) : undefined,
@@ -544,6 +555,8 @@ export function FarmerFormPage() {
               </label>
               <input
                 id="f-phone"
+                type="tel"
+                autoComplete="tel-national"
                 className="af-input"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -609,8 +622,8 @@ export function FarmerFormPage() {
                 className="af-input"
                 value={groupJoinedYear}
                 onChange={(e) => setGroupJoinedYear(e.target.value)}
-                min={1990}
-                max={2100}
+                min={1950}
+                max={currentYear}
               />
             </div>
           </div>
@@ -1132,6 +1145,12 @@ function FarmerEditCard({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const normalizedPhone = normalizePhoneE164(phone);
+    const phoneChanged = phone !== (farmer.phone ?? "");
+    if (phoneChanged && phone.trim() && !isBrazilianMobile(normalizedPhone)) {
+      setError("Informe um celular com DDD e 11 dígitos.");
+      return;
+    }
     setSaving(true);
     try {
       await unwrap(
@@ -1140,7 +1159,7 @@ function FarmerEditCard({
           body: {
             name: name.trim(),
             cpf: onlyDigits(cpf),
-            phone: normalizePhoneE164(phone),
+            ...(phoneChanged ? { phone: normalizedPhone } : {}),
             email: email.trim() || undefined,
             groupId: groupId || undefined,
             cafNumber: cafNumber.trim() || undefined,
@@ -1203,6 +1222,7 @@ function FarmerEditCard({
             </label>
             <input
               id="farmer-telefone-whatsapp"
+              type="tel"
               className="af-input"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}

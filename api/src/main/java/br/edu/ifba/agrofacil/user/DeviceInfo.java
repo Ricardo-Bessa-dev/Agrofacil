@@ -8,8 +8,8 @@ import jakarta.validation.constraints.Size;
 import java.util.UUID;
 
 /**
- * @param id gerado na instalação do app e guardado no SecureStore
- * @param platform {@code ANDROID} ou {@code IOS}
+ * @param id gerado no primeiro acesso e guardado no aparelho
+ * @param platform {@code WEB} para a PWA, {@code ANDROID} ou {@code IOS} para apps nativos
  */
 public record DeviceInfo(
     @NotNull UUID id,

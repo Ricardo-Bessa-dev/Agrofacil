@@ -1938,35 +1938,17 @@ Para configurar a Cloudflare:
 
 ### 3.6 Backup e restauração
 
-`infra/backup/backup.sh`, agendado no cron do computador servidor, todo dia às 02:00:
+Rode numa janela de manutenção, com as escritas da API e as tarefas agendadas paradas: assim o dump e os anexos representam o mesmo momento. O acesso ao PostgreSQL vem de `PGHOST`, `PGPORT`, `PGUSER` e `PGPASSFILE`. O destino precisa ficar fora do diretório de arquivos da aplicação.
 
 ```bash
-#!/usr/bin/env bash
-# Faz backup diário do banco e dos anexos, mantém 30 diários e 12 mensais, e copia para fora da máquina.
-set -euo pipefail
-STAMP=$(date +%F)
-DEST=/var/backups/agrofacil
-mkdir -p "$DEST/daily" "$DEST/monthly"
-
-docker compose -f /opt/agrofacil/infra/docker-compose.yml exec -T postgres \
-  pg_dump -U agrofacil -Fc agrofacil > "$DEST/daily/db-$STAMP.dump"
-docker run --rm -v agrofacil_files:/files -v "$DEST/daily":/out alpine \
-  tar czf "/out/files-$STAMP.tar.gz" -C /files .
-
-if [ "$(date +%d)" = "01" ]; then cp "$DEST/daily/"*"$STAMP"* "$DEST/monthly/"; fi
-find "$DEST/daily" -type f -mtime +30 -delete
-ls -1t "$DEST/monthly"/db-*.dump | tail -n +13 | xargs -r rm --
-
-# Cópia para fora do computador (HD externo, outro computador ou nuvem com rclone).
-rclone copy "$DEST" remoto:agrofacil-backups --max-age 48h
+infra/backup/backup.sh agrofacil /srv/agrofacil/files /srv/backups/agrofacil
+infra/backup/restore.sh /srv/backups/agrofacil/agrofacil-AAAAMMDDTHHMMSSZ agrofacil_teste /srv/restore/files
+infra/backup/verify.sh agrofacil_teste /srv/restore/files
 ```
 
-**Teste de restauração (obrigatório, uma vez por mês):**
-1. `docker run -d --name pg-restore -e POSTGRES_PASSWORD=x postgres:17-alpine`
-2. `docker exec -i pg-restore createdb -U postgres agrofacil`
-3. `docker exec -i pg-restore pg_restore -U postgres -d agrofacil < db-AAAA-MM-DD.dump`
-4. Confira a contagem de registros e abra um caderno de campo.
-5. Anote a data do teste no README de `infra/`.
+A restauração cria um banco e um diretório novos. A verificação compara o hash dos anexos e documentos com o do banco restaurado. O CI exercita esse procedimento com os dados do teste de navegador.
+
+Os scripts **não** agendam, não rotacionam nem copiam para fora do servidor: programe isso no ambiente da associação e anote quando a restauração foi testada (o ideal é uma vez por mês).
 
 > Os backups contêm dados pessoais. Proteja-os: disco criptografado ou `rclone crypt` ([doc 1 §5.2](1-arquitetura-e-contrato.md#52-ameaças-e-controles)).
 

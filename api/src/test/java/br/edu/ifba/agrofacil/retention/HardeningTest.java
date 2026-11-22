@@ -3,6 +3,8 @@ package br.edu.ifba.agrofacil.retention;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.edu.ifba.agrofacil.IntegrationTest;
 import java.sql.Timestamp;
@@ -58,5 +60,43 @@ class HardeningTest extends IntegrationTest {
         .andExpect(header().string("X-Frame-Options", "DENY"))
         .andExpect(header().string("Referrer-Policy", "no-referrer"))
         .andExpect(header().exists("Cache-Control"));
+  }
+
+  @Test
+  void retentionPreviewsAndRemovesPersonalFieldsOnlyAfterTheDeadline() throws Exception {
+    var coordinator = fixtures.coordinator();
+    var farmer = fixtures.farmer("Pessoa do teste de retenção");
+    var property = fixtures.property(coordinator, farmer, "Propriedade identificável");
+    var path = "/retention/farmers";
+    var id = farmer.user().getId();
+
+    call(HttpMethod.GET, path, farmer.accessToken(), null).andExpect(status().isForbidden());
+    call(HttpMethod.POST, path + "/" + id + "/anonymize", coordinator.accessToken(), null)
+        .andExpect(status().isNotFound());
+
+    jdbc.sql("update app_user set status = 'INACTIVE', departed_at = ? where id = ?")
+        .params(Timestamp.from(clock.instant().minus(Duration.ofDays(365 * 10L))), id)
+        .update();
+
+    call(HttpMethod.GET, path, coordinator.accessToken(), null)
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$[?(@.id == '%s')].name".formatted(id))
+                .value(org.hamcrest.Matchers.hasItem("Pessoa do teste de retenção")));
+    call(HttpMethod.POST, path + "/" + id + "/anonymize", coordinator.accessToken(), null)
+        .andExpect(status().isNoContent());
+    assertThat(
+            jdbc.sql(
+                    "select count(*) from app_user where id = ? and cpf is null and deleted_at is not null")
+                .param(id)
+                .query(Long.class)
+                .single())
+        .isEqualTo(1);
+    assertThat(
+            jdbc.sql("select name from property where id = ?")
+                .param(property.id())
+                .query(String.class)
+                .single())
+        .startsWith("Propriedade ");
   }
 }

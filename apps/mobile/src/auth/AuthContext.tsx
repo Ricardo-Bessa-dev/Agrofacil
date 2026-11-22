@@ -1,15 +1,20 @@
 // Sessão do agricultor no aparelho: ativação, perfil (/me) e saída. Offline, mantém o perfil salvo.
 import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Me } from "@agrofacil/api-types";
 import { onlyDigits } from "@agrofacil/domain";
 import {
   api,
   clearSession,
+  flushOfflineQueue,
   getStoredAccessToken,
   getStoredDeviceId,
   getStoredUser,
+  invalidateMobileSyncCache,
+  invalidateStoredSession,
   saveSession,
   setOnUnauthorized,
+  USER_STORAGE_KEY,
 } from "../api/client";
 
 export interface AuthContextValue {
@@ -24,20 +29,21 @@ export interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<Me | null>(() => getStoredUser());
   const [isLoading, setIsLoading] = useState<boolean>(() => Boolean(getStoredAccessToken()));
 
   const refreshProfile = useCallback(async () => {
     try {
       const { data, response } = await api.GET("/me");
-      if (data) {
-        setUser(data);
-        saveSession({ user: data });
-      } else if (response.status === 401 || response.status === 403) {
-        // Sessão recusada mesmo após tentar renovar o token: volta para a ativação.
-        clearSession();
-        setUser(null);
+      if (response.status === 401 || response.status === 403) {
+        // Só volta para a ativação se a sessão acabou de fato; sem rede para renovar o token, ela continua.
+        if (!getStoredAccessToken()) setUser(null);
+        return;
       }
+      if (!data || !getStoredAccessToken()) return;
+      setUser(data);
+      saveSession({ user: data });
       // Outros erros (API fora do ar, 5xx): mantém o perfil salvo no aparelho.
     } catch {
       // Sem internet: o app é offline-first, então o agricultor continua com o perfil salvo.
@@ -46,28 +52,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setOnUnauthorized(() => {
+      queryClient.clear();
       setUser(null);
     });
 
-    const token = getStoredAccessToken();
-    if (!token) {
+    if (getStoredAccessToken()) {
+      void refreshProfile().finally(() => setIsLoading(false));
+    } else {
       setIsLoading(false);
-      return;
     }
+    return () => setOnUnauthorized(null);
+  }, [queryClient, refreshProfile]);
 
-    refreshProfile().finally(() => {
-      setIsLoading(false);
-    });
-  }, [refreshProfile]);
+  // Outra aba entrou, saiu ou trocou de conta: esta acompanha, sem misturar os dados.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== USER_STORAGE_KEY) return;
+      const stored = getStoredUser();
+      if (stored?.id === user?.id) return;
+      invalidateStoredSession();
+      queryClient.clear();
+      setUser(stored);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [queryClient, user?.id]);
+
+  // Ao abrir o app com internet ou quando ela volta, envia o que ficou pendente e atualiza as telas.
+  useEffect(() => {
+    if (!user?.id) return;
+    const sync = async () => {
+      invalidateMobileSyncCache();
+      await flushOfflineQueue();
+      await queryClient.invalidateQueries();
+    };
+    const onOnline = () => void sync();
+    window.addEventListener("online", onOnline);
+    if (navigator.onLine) onOnline();
+    return () => window.removeEventListener("online", onOnline);
+  }, [queryClient, user?.id]);
 
   const activate = useCallback(
     async (cpf: string, code: string) => {
       const cleanCpf = onlyDigits(cpf);
       const cleanCode = code.trim();
       const deviceId = getStoredDeviceId();
-      const isIos =
-        typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
       const { data, error, response } = await api.POST("/auth/farmer/activate", {
         body: {
           cpf: cleanCpf,
@@ -78,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               typeof navigator !== "undefined"
                 ? navigator.userAgent.slice(0, 50)
                 : "Celular do Agricultor",
-            platform: isIos ? "IOS" : "ANDROID",
+            platform: "WEB",
             appVersion: "1.0.0",
           },
         },
@@ -96,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(detail);
       }
 
+      queryClient.clear();
       saveSession(data);
       if (data.user) {
         setUser(data.user);
@@ -103,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await refreshProfile();
       }
     },
-    [refreshProfile],
+    [queryClient, refreshProfile],
   );
 
   const logout = useCallback(async () => {
@@ -116,9 +146,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ignora erro no logout para garantir saída local
     } finally {
       clearSession();
+      queryClient.clear();
       setUser(null);
     }
-  }, []);
+  }, [queryClient]);
 
   return (
     <AuthContext.Provider
