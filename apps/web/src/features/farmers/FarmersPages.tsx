@@ -1016,7 +1016,7 @@ export function FarmerDetailPage() {
               {(recordsQuery.data?.content ?? []).map((rec) => (
                 <Link key={rec.id} to={`/registros/${rec.id}`} className="af-record-row">
                   <RecordTypeAvatar type={rec.type} />
-                  <div>
+                  <div className="af-record-row-main">
                     <div className="af-record-row-title">
                       {rec.type ? RECORD_TYPE_LABELS[rec.type] : "Manejo"} • {rec.subject ?? ""}
                     </div>

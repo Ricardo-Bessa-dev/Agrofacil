@@ -46,6 +46,7 @@ import java.util.stream.Stream;
 import org.hibernate.envers.AuditReaderFactory;
 import org.hibernate.envers.RevisionType;
 import org.hibernate.envers.query.AuditEntity;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -114,10 +115,15 @@ public class RecordQueryService {
     this.mapper = mapper;
   }
 
-  /** Lista paginada; ordenação padrão {@code performedOn,desc}. */
+  /**
+   * Lista paginada; ordenação padrão {@code performedOn,desc}. No empate, o criado por último vem
+   * primeiro: o número é único, então um registro não se repete nem some entre as páginas.
+   */
   @Transactional(readOnly = true)
   public PageResponse<RecordListItem> list(CurrentUser user, RecordFilter filter, Pageable page) {
-    var result = records.findAll(specFor(user.associationId(), filter), page);
+    var sort = page.getSort().and(Sort.by("recordNumber").descending());
+    var sorted = PageRequest.of(page.getPageNumber(), page.getPageSize(), sort);
+    var result = records.findAll(specFor(user.associationId(), filter), sorted);
     return PageResponse.of(result, listItems(user.associationId(), result.getContent()));
   }
 
