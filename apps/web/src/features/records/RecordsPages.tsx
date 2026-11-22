@@ -770,7 +770,7 @@ export function RecordCreatePage() {
                   <option value="">Selecione a unidade</option>
                   {quantityUnits.map((u) => (
                     <option key={u.code} value={u.code}>
-                      {u.namePlural} ({u.code})
+                      {u.nameSingular ?? u.namePlural}
                     </option>
                   ))}
                 </select>
