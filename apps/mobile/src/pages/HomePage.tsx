@@ -1,12 +1,18 @@
+// Tela inicial do app: atalhos, propriedade principal, últimos manejos e avisos da coordenação.
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { formatArea, formatDatePtBr, RECORD_TYPE_FARMER_LABELS } from "@agrofacil/domain";
 import { api } from "../api/client";
+import { SORT_BY_CREATION } from "../api/recordOrder";
 import { useAuth } from "../auth/useAuth";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 import bellIcon from "../assets/figma/bell.svg";
 import plusIcon from "../assets/figma/plus-circle.svg";
 import sunIcon from "../assets/figma/sun.svg";
+import visitsIcon from "../assets/visits.svg";
+
+/** Quantos registros aparecem em "Últimos Manejos". */
+const RECENT_RECORDS = 5;
 
 export function HomePage() {
   const { user } = useAuth();
@@ -45,11 +51,12 @@ export function HomePage() {
         params: {
           query: {
             filter: {},
-            pageable: { size: 5, sort: ["performedOn,desc"] },
+            pageable: { size: RECENT_RECORDS, sort: [SORT_BY_CREATION] },
           },
         },
       });
-      return data?.content ?? [];
+      // O espelho local devolve a lista inteira, sem paginar.
+      return (data?.content ?? []).slice(0, RECENT_RECORDS);
     },
   });
 
@@ -134,9 +141,18 @@ export function HomePage() {
           <span style={{ fontSize: "20px", fontWeight: 700 }}>→</span>
         </Link>
 
-        <p>
-          <Link to="/visitas">Consultar visitas do SPG</Link>
-        </p>
+        <Link to="/visitas" className="mobile-card shortcut-card">
+          <span className="shortcut-card-icon">
+            <img src={visitsIcon} alt="" width={22} height={22} />
+          </span>
+          <span className="shortcut-card-text">
+            <span className="shortcut-card-title">Visitas do SPG</span>
+            <span className="shortcut-card-subtitle">Veja as visitas do grupo e da comissão</span>
+          </span>
+          <span className="shortcut-card-arrow" aria-hidden="true">
+            →
+          </span>
+        </Link>
 
         {/* Card Resumo da Propriedade */}
         <div className="mobile-card">

@@ -26,6 +26,7 @@ import {
   type PendingPhoto,
 } from "./photoQueue";
 import { rejectionMessage, splitPushResults } from "./pushResults";
+import { compareRecords } from "./recordOrder";
 import { applyPull, emptySyncState, parseSyncState, type SyncState } from "./syncState";
 
 export class ApiError extends Error {
@@ -1055,6 +1056,8 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
             .filter((m) => m.entity === "record" && m.op === "UPSERT" && m.data)
             .map((m) => ({
               ...(m.data as unknown as RecordView),
+              // A edição na fila não muda quando o registro foi criado.
+              createdAt: recordById.get(m.entityId)?.createdAt,
               id: m.entityId,
               completeness: "INCOMPLETE" as const,
             }));
@@ -1072,6 +1075,7 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
               const recAny = r as Record<string, unknown>;
               return !recAny.cycleStatus || recAny.cycleStatus === filterCycleStatus;
             })
+            .sort(compareRecords(url.searchParams.get("sort")))
             .map((r) => {
               const recAny = r as Record<string, unknown>;
               const prop = r.propertyId ? propById.get(r.propertyId) : undefined;
@@ -1130,8 +1134,7 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
                       }
                     : undefined,
               };
-            })
-            .sort((a, b) => (b.performedOn ?? "").localeCompare(a.performedOn ?? ""));
+            });
 
           return jsonResponse({
             content: mapped,

@@ -797,7 +797,7 @@ Os avisos ficam **só dentro do app**: a tela de avisos lista as notificações 
 | `/login` | Ativação (CPF + código) |
 | `/` | Início: saudação, grupo, propriedade principal, últimos manejos e comunicados |
 | `/propriedades`, `/propriedades/:id` | Propriedades, áreas, trabalhadores, edição de produção, tamanho e roteiro de acesso |
-| `/registros` | Caderno de campo com filtro por tipo e detalhe (fotos, pendências e correções) |
+| `/registros` | Caderno de campo, do registro criado por último ao mais antigo, com filtro por tipo e detalhe (fotos, pendências e correções) |
 | `/registros/novo`, `/registros/:id/editar` | Formulário de registro |
 | `/visitas`, `/visitas/:id` | Visitas do SPG e resultado, só para o responsável pelo registro (funciona offline) |
 | `/notificacoes` | Avisos |
