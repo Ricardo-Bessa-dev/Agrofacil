@@ -1,14 +1,14 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import type { RecordWrite } from "@agrofacil/api-types";
+import type { RecordView, RecordWrite, UnitView } from "@agrofacil/api-types";
 import {
   formatDatePtBr,
   MISSING_FIELD_LABELS,
   todayIso,
   type AreaUnitCode,
 } from "@agrofacil/domain";
-import { api, fetchMobileRecordDetail, uploadRecordPhoto } from "../api/client";
+import { api, fetchMobileRecordDetail, queueRecordPhoto } from "../api/client";
 import { RecordTypeIcon } from "../components/RecordTypeIcon";
 
 type RecordType = "PLANTING" | "INPUT_APPLICATION" | "HARVEST" | "INPUT_PURCHASE" | "OUTFLOW";
@@ -41,6 +41,42 @@ const RECORD_TYPES: { type: RecordType; title: string; subtitle: string }[] = [
   },
 ];
 
+function checkedUnit(value: string, units: UnitView[]): string {
+  if (!units.some((unit) => unit.code === value)) {
+    throw new Error("Escolha uma unidade válida no catálogo.");
+  }
+  return value;
+}
+
+function QuantityUnitSelect({
+  units,
+  value,
+  onChange,
+}: {
+  units: UnitView[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      aria-label="Unidade da quantidade"
+      value={units.some((unit) => unit.code === value) ? value : ""}
+      onChange={(event) => onChange(event.target.value)}
+      className="form-select"
+      style={{ flex: 1 }}
+    >
+      <option value="">{units.length ? "Unidade" : "Catálogo indisponível"}</option>
+      {units
+        .filter((unit) => unit.code && (unit.active !== false || unit.code === value))
+        .map((unit) => (
+          <option key={unit.code} value={unit.code}>
+            {unit.namePlural ?? unit.code}
+          </option>
+        ))}
+    </select>
+  );
+}
+
 export function NewRecordPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -48,6 +84,7 @@ export function NewRecordPage() {
   const [searchParams] = useSearchParams();
   const editingRecordId = routeRecordId || searchParams.get("editId") || "";
   const isEditMode = Boolean(editingRecordId);
+  const [newRecordId] = useState(() => crypto.randomUUID());
 
   const [selectedType, setSelectedType] = useState<RecordType>("PLANTING");
   const [performedOn, setPerformedOn] = useState<string>(todayIso());
@@ -78,26 +115,26 @@ export function NewRecordPage() {
     "FERTILIZATION" | "PEST_DISEASE_CONTROL" | "SOIL_CORRECTION" | "OTHER"
   >("FERTILIZATION");
   const [applicationQtyVal, setApplicationQtyVal] = useState<string>("");
-  const [applicationQtyUnit, setApplicationQtyUnit] = useState<string>("L");
+  const [applicationQtyUnit, setApplicationQtyUnit] = useState<string>("LITER");
 
   // Específicos para Colheita
   const [harvestCropName, setHarvestCropName] = useState<string>("");
   const [harvestQtyVal, setHarvestQtyVal] = useState<string>("");
-  const [harvestQtyUnit, setHarvestQtyUnit] = useState<string>("KG");
+  const [harvestQtyUnit, setHarvestQtyUnit] = useState<string>("KILOGRAM");
   const [isFinal, setIsFinal] = useState<boolean>(false);
 
   // Específicos para Compra de Insumo
   const [purchaseInputId, setPurchaseInputId] = useState<string>("");
   const [purchaseInputName, setPurchaseInputName] = useState<string>("");
   const [purchaseQtyVal, setPurchaseQtyVal] = useState<string>("");
-  const [purchaseQtyUnit, setPurchaseQtyUnit] = useState<string>("KG");
+  const [purchaseQtyUnit, setPurchaseQtyUnit] = useState<string>("KILOGRAM");
   const [supplier, setSupplier] = useState<string>("");
 
   // Específicos para Saída
   const [outflowCropId, setOutflowCropId] = useState<string>("");
   const [outflowProductName, setOutflowProductName] = useState<string>("");
   const [outflowQtyVal, setOutflowQtyVal] = useState<string>("");
-  const [outflowQtyUnit, setOutflowQtyUnit] = useState<string>("KG");
+  const [outflowQtyUnit, setOutflowQtyUnit] = useState<string>("KILOGRAM");
   const [destination, setDestination] = useState<
     | "FAIR"
     | "COOPERATIVE"
@@ -263,17 +300,21 @@ export function NewRecordPage() {
     staleTime: 300_000,
   });
 
+  const unitsQuery = useQuery({
+    queryKey: ["catalog-units"],
+    queryFn: async () => {
+      const { data, response } = await api.GET("/catalog/units");
+      if (!response.ok) throw new Error("Não foi possível carregar as unidades.");
+      return (data ?? []).filter((unit) => unit.kind !== "AREA");
+    },
+  });
+
   const plots = plotsQuery.data ?? [];
   const crops = cropsQuery.data ?? [];
   const farmInputs = farmInputsQuery.data ?? [];
   const activePlantings = activePlantingsQuery.data ?? [];
-
-  // Auto-seleciona o primeiro plantio ativo para Colheita caso ainda não selecionado
-  useEffect(() => {
-    if (selectedType === "HARVEST" && !plantingId && activePlantings[0]?.id) {
-      setPlantingId(activePlantings[0].id);
-    }
-  }, [selectedType, plantingId, activePlantings]);
+  const selectedPlanting = activePlantings.find((planting) => planting.id === plantingId);
+  const quantityUnits = unitsQuery.data ?? [];
 
   const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -298,7 +339,7 @@ export function NewRecordPage() {
       return;
     }
 
-    if (selectedType === "HARVEST" && !plantingId && activePlantings.length === 0) {
+    if (selectedType === "HARVEST" && !plantingId) {
       setErrorMsg(
         "Para registrar uma colheita, é necessário ter um Plantio ativo cadastrado nesta propriedade.",
       );
@@ -340,7 +381,10 @@ export function NewRecordPage() {
           inputOtherName: !inputId || inputId === "OTHER" ? inputOtherName || undefined : undefined,
           purpose,
           quantity: applicationQtyVal
-            ? { value: Number(applicationQtyVal), unit: applicationQtyUnit }
+            ? {
+                value: Number(applicationQtyVal),
+                unit: checkedUnit(applicationQtyUnit, quantityUnits),
+              }
             : undefined,
         };
       } else if (selectedType === "HARVEST") {
@@ -353,9 +397,9 @@ export function NewRecordPage() {
             harvestCropName && !notes.includes(harvestCropName)
               ? `${harvestCropName}${notes ? ` — ${notes}` : ""}`
               : notes || undefined,
-          plantingId: plantingId || activePlantings[0]?.id || "",
+          plantingId,
           quantity: harvestQtyVal
-            ? { value: Number(harvestQtyVal), unit: harvestQtyUnit }
+            ? { value: Number(harvestQtyVal), unit: checkedUnit(harvestQtyUnit, quantityUnits) }
             : undefined,
           isFinal,
         };
@@ -372,7 +416,7 @@ export function NewRecordPage() {
               ? purchaseInputName || undefined
               : undefined,
           quantity: purchaseQtyVal
-            ? { value: Number(purchaseQtyVal), unit: purchaseQtyUnit }
+            ? { value: Number(purchaseQtyVal), unit: checkedUnit(purchaseQtyUnit, quantityUnits) }
             : undefined,
           supplier: supplier || undefined,
         };
@@ -384,18 +428,34 @@ export function NewRecordPage() {
           performedOn,
           notes: notes || undefined,
           plantingId: plantingId || undefined,
-          cropId: outflowCropId && outflowCropId !== "OTHER" ? outflowCropId : undefined,
+          cropId:
+            !plantingId && outflowCropId && outflowCropId !== "OTHER" ? outflowCropId : undefined,
           productOtherName:
-            !outflowCropId || outflowCropId === "OTHER"
+            !plantingId && (!outflowCropId || outflowCropId === "OTHER")
               ? outflowProductName || undefined
               : undefined,
           quantity: outflowQtyVal
-            ? { value: Number(outflowQtyVal), unit: outflowQtyUnit }
+            ? { value: Number(outflowQtyVal), unit: checkedUnit(outflowQtyUnit, quantityUnits) }
             : undefined,
           destination,
           buyerName: buyerName || undefined,
         };
       }
+
+      const original = editDetailQuery.data?.raw as RecordView | undefined;
+      if (original?.type === "PLANTING" && bodyPayload.type === "PLANTING") {
+        bodyPayload.propagationQuantity = original.propagationQuantity;
+      } else if (
+        original?.type === "INPUT_APPLICATION" &&
+        bodyPayload.type === "INPUT_APPLICATION"
+      ) {
+        bodyPayload.appliedArea = original.appliedArea;
+      } else if (original?.type === "HARVEST" && bodyPayload.type === "HARVEST") {
+        bodyPayload.harvestedArea = original.harvestedArea;
+      }
+      bodyPayload.id = editingRecordId || newRecordId;
+      bodyPayload.clientCreatedAt = original?.clientCreatedAt;
+      bodyPayload.location = original?.location;
 
       const resultCall = isEditMode
         ? await api.PUT("/records/{id}", {
@@ -430,8 +490,15 @@ export function NewRecordPage() {
       const targetRecordId =
         editingRecordId || ((savedData as { id?: string } | undefined)?.id ?? "");
 
+      let feedback =
+        response.status === 201 ? "Manejo salvo no celular. Envio pendente." : "Manejo salvo.";
       if (photoFile && targetRecordId) {
-        await uploadRecordPhoto(targetRecordId, photoFile);
+        try {
+          await queueRecordPhoto(targetRecordId, photoFile);
+          feedback += " A foto ficou na fila de envio.";
+        } catch {
+          feedback += " Não foi possível guardar a foto no celular. Adicione-a ao editar o manejo.";
+        }
       }
 
       await queryClient.invalidateQueries({ queryKey: ["records"] });
@@ -440,7 +507,7 @@ export function NewRecordPage() {
       await queryClient.invalidateQueries({
         queryKey: ["mobile-record-detail", editingRecordId],
       });
-      navigate("/registros", { replace: true });
+      navigate("/registros", { replace: true, state: { feedback } });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Erro ao salvar registro.");
     } finally {
@@ -522,11 +589,14 @@ export function NewRecordPage() {
               {RECORD_TYPES.map((t) => {
                 const isSelected = selectedType === t.type;
                 return (
-                  <div
+                  <button
+                    type="button"
+                    aria-pressed={isSelected}
                     key={t.type}
                     onClick={() => setSelectedType(t.type)}
                     style={{
                       display: "flex",
+                      textAlign: "left",
                       alignItems: "center",
                       gap: "12px",
                       padding: "12px 14px",
@@ -542,8 +612,8 @@ export function NewRecordPage() {
                     }}
                   >
                     <RecordTypeIcon type={t.type} size={38} />
-                    <div style={{ flex: 1 }}>
-                      <div
+                    <span style={{ flex: 1, display: "grid" }}>
+                      <span
                         style={{
                           fontSize: "14px",
                           fontWeight: 600,
@@ -551,12 +621,13 @@ export function NewRecordPage() {
                         }}
                       >
                         {t.title}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                      </span>
+                      <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
                         {t.subtitle}
-                      </div>
-                    </div>
-                    <div
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
                       style={{
                         width: "18px",
                         height: "18px",
@@ -567,7 +638,7 @@ export function NewRecordPage() {
                         backgroundColor: isSelected ? "var(--color-primary)" : "transparent",
                       }}
                     />
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -629,6 +700,7 @@ export function NewRecordPage() {
                 value={currentPropertyId}
                 onChange={(e) => {
                   setPropertyId(e.target.value);
+                  setPlantingId("");
                   setPlotId("");
                   setPlantingId("");
                 }}
@@ -699,6 +771,9 @@ export function NewRecordPage() {
                       ? "Selecione o plantio..."
                       : "Sem vínculo com plantio específico"}
                   </option>
+                  {plantingId && !selectedPlanting && (
+                    <option value={plantingId}>Plantio vinculado anteriormente</option>
+                  )}
                   {activePlantings.map((pl) => (
                     <option key={pl.id} value={pl.id}>
                       {pl.subject || "Plantio"} —{" "}
@@ -945,17 +1020,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
+                    units={quantityUnits}
                     value={applicationQtyUnit}
-                    onChange={(e) => setApplicationQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="L">Litros (L)</option>
-                    <option value="ML">Mililitros (mL)</option>
-                    <option value="KG">Quilos (kg)</option>
-                    <option value="G">Gramas (g)</option>
-                  </select>
+                    onChange={setApplicationQtyUnit}
+                  />
                 </div>
               </div>
             </div>
@@ -994,18 +1063,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
+                    units={quantityUnits}
                     value={harvestQtyUnit}
-                    onChange={(e) => setHarvestQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="CX">caixas</option>
-                    <option value="SACAS">sacas</option>
-                    <option value="DZ">dúzias</option>
-                    <option value="UN">unidades</option>
-                  </select>
+                    onChange={setHarvestQtyUnit}
+                  />
                 </div>
               </div>
 
@@ -1084,17 +1146,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
+                    units={quantityUnits}
                     value={purchaseQtyUnit}
-                    onChange={(e) => setPurchaseQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="SACAS">sacas</option>
-                    <option value="L">litros</option>
-                    <option value="UN">unidades</option>
-                  </select>
+                    onChange={setPurchaseQtyUnit}
+                  />
                 </div>
               </div>
 
@@ -1121,43 +1177,49 @@ export function NewRecordPage() {
                 Detalhes da Saída / Venda
               </h2>
 
-              <div className="form-group">
-                <label htmlFor="outflow-crop-select" className="form-label">
-                  Cultura do Catálogo
-                </label>
-                <select
-                  id="outflow-crop-select"
-                  value={outflowCropId}
-                  onChange={(e) => {
-                    setOutflowCropId(e.target.value);
-                    if (e.target.value && e.target.value !== "OTHER") setOutflowProductName("");
-                  }}
-                  className="form-select"
-                >
-                  <option value="">Outro produto / Digitar manualmente</option>
-                  {crops.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                  <option value="OTHER">Digitar nome do produto</option>
-                </select>
-              </div>
+              {plantingId ? (
+                <p>Cultura do plantio: {selectedPlanting?.subject || "plantio vinculado"}</p>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label htmlFor="outflow-crop-select" className="form-label">
+                      Cultura do Catálogo
+                    </label>
+                    <select
+                      id="outflow-crop-select"
+                      value={outflowCropId}
+                      onChange={(e) => {
+                        setOutflowCropId(e.target.value);
+                        if (e.target.value && e.target.value !== "OTHER") setOutflowProductName("");
+                      }}
+                      className="form-select"
+                    >
+                      <option value="">Outro produto / Digitar manualmente</option>
+                      {crops.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                      <option value="OTHER">Digitar nome do produto</option>
+                    </select>
+                  </div>
 
-              {(!outflowCropId || outflowCropId === "OTHER") && (
-                <div className="form-group">
-                  <label htmlFor="outflow-product" className="form-label">
-                    Produto Vendido / Destinado
-                  </label>
-                  <input
-                    id="outflow-product"
-                    type="text"
-                    placeholder="Ex: Polpa de Fruta, Mandioca embalada, Hortaliças"
-                    value={outflowProductName}
-                    onChange={(e) => setOutflowProductName(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
+                  {(!outflowCropId || outflowCropId === "OTHER") && (
+                    <div className="form-group">
+                      <label htmlFor="outflow-product" className="form-label">
+                        Produto Vendido / Destinado
+                      </label>
+                      <input
+                        id="outflow-product"
+                        type="text"
+                        placeholder="Ex: Polpa de Fruta, Mandioca embalada, Hortaliças"
+                        value={outflowProductName}
+                        onChange={(e) => setOutflowProductName(e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="form-group">
@@ -1172,17 +1234,11 @@ export function NewRecordPage() {
                     className="form-input"
                     style={{ flex: 2 }}
                   />
-                  <select
+                  <QuantityUnitSelect
+                    units={quantityUnits}
                     value={outflowQtyUnit}
-                    onChange={(e) => setOutflowQtyUnit(e.target.value)}
-                    className="form-select"
-                    style={{ flex: 1 }}
-                  >
-                    <option value="KG">kg</option>
-                    <option value="CX">caixas</option>
-                    <option value="UN">unidades</option>
-                    <option value="DZ">dúzias</option>
-                  </select>
+                    onChange={setOutflowQtyUnit}
+                  />
                 </div>
               </div>
 

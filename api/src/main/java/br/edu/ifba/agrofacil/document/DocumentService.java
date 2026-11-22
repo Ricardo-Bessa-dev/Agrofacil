@@ -153,6 +153,7 @@ public class DocumentService {
   @Transactional(readOnly = true)
   public Content content(CurrentUser user, UUID id) {
     var doc = find(user, id);
+    if (doc.getStorageKey().isEmpty()) throw ApiException.notFound();
     String filename =
         br.edu.ifba.agrofacil.report.ReportFile.slug(doc.getTitle())
             + "-"
@@ -165,6 +166,7 @@ public class DocumentService {
   @Transactional
   public DocumentView signedCopy(CurrentUser user, UUID id, String contentType, InputStream file) {
     var doc = find(user, id);
+    if (doc.getStorageKey().isEmpty()) throw ApiException.notFound();
     var kind =
         contentType != null && contentType.startsWith("image/")
             ? Attachment.Kind.PHOTO

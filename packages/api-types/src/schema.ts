@@ -1492,6 +1492,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/retention/farmers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewFarmerRetention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/retention/farmers/{id}/anonymize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["anonymizeFarmer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2621,18 +2653,6 @@ export interface components {
             /** Format: int64 */
             version?: number;
         };
-        Write: {
-            code?: string;
-            /** @enum {string} */
-            appliesTo: "PEER" | "VERIFICATION" | "BOTH";
-            question: string;
-            formalText: string;
-            help?: string;
-            legalReference?: string;
-            /** Format: int32 */
-            sortOrder?: number;
-            active?: boolean;
-        };
         View: {
             /** Format: uuid */
             id?: string;
@@ -3006,7 +3026,7 @@ export interface components {
             farmInputs?: components["schemas"]["FarmInputView"][];
             units?: components["schemas"]["UnitView"][];
             visits?: components["schemas"]["VisitView"][];
-            visitChecklistItems?: components["schemas"]["View"][];
+            visitChecklistItems?: components["schemas"]["VisitChecklistItemView"][];
         };
         NotificationView: {
             /** Format: uuid */
@@ -3366,6 +3386,57 @@ export interface components {
         PageResponseAnnouncementView: {
             content?: components["schemas"]["AnnouncementView"][];
             page?: components["schemas"]["PageMeta"];
+        };
+        VisitChecklistItemWrite: {
+            code?: string;
+            /** @enum {string} */
+            appliesTo: "PEER" | "VERIFICATION" | "BOTH";
+            question: string;
+            formalText: string;
+            help?: string;
+            legalReference?: string;
+            /** Format: int32 */
+            sortOrder?: number;
+            active?: boolean;
+        };
+        VisitChecklistItemView: {
+            code?: string;
+            /** @enum {string} */
+            appliesTo?: "PEER" | "VERIFICATION" | "BOTH";
+            question?: string;
+            formalText?: string;
+            help?: string;
+            legalReference?: string;
+            /** Format: int32 */
+            sortOrder?: number;
+            templateVersion?: string;
+            active?: boolean;
+        };
+        Write: {
+            name: string;
+            /** @enum {string} */
+            kind: "TECHNICIAN" | "CONSUMER" | "ORGANIZATION" | "OTHER";
+            organization?: string;
+            phone?: string;
+            /** Format: uuid */
+            groupId?: string;
+            notes?: string;
+            active?: boolean;
+            /** Format: int64 */
+            version?: number;
+        };
+        FarmerRetentionCandidate: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** Format: date-time */
+            departedAt?: string;
+            /** Format: int64 */
+            attachments?: number;
+            /** Format: int64 */
+            documents?: number;
+            /** Format: int64 */
+            sharedDocumentsToReview?: number;
         };
     };
     responses: never;
@@ -4605,7 +4676,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["View"][];
+                    "*/*": components["schemas"]["VisitChecklistItemView"][];
                 };
             };
         };
@@ -4619,7 +4690,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Write"];
+                "application/json": components["schemas"]["VisitChecklistItemWrite"];
             };
         };
         responses: {
@@ -4629,7 +4700,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["View"];
+                    "*/*": components["schemas"]["VisitChecklistItemView"];
                 };
             };
         };
@@ -5539,7 +5610,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Write"];
+                "application/json": components["schemas"]["VisitChecklistItemWrite"];
             };
         };
         responses: {
@@ -5549,7 +5620,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["View"];
+                    "*/*": components["schemas"]["VisitChecklistItemView"];
                 };
             };
         };
@@ -6250,6 +6321,46 @@ export interface operations {
         };
     };
     delete_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewFarmerRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FarmerRetentionCandidate"][];
+                };
+            };
+        };
+    };
+    anonymizeFarmer: {
         parameters: {
             query?: never;
             header?: never;

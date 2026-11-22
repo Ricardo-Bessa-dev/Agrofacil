@@ -473,8 +473,11 @@ function CreatePropertyModal({
           )}
           <form className="af-form-grid" onSubmit={handleSubmit}>
             <div className="af-field">
-              <label className="af-label">Agricultor responsável *</label>
+              <label className="af-label" htmlFor="property-farmer">
+                Agricultor responsável *
+              </label>
               <select
+                id="property-farmer"
                 className="af-select"
                 value={farmerId}
                 onChange={(e) => setFarmerId(e.target.value)}
@@ -490,8 +493,11 @@ function CreatePropertyModal({
             </div>
 
             <div className="af-field">
-              <label className="af-label">Nome da propriedade / sítio *</label>
+              <label className="af-label" htmlFor="property-name">
+                Nome da propriedade / sítio *
+              </label>
               <input
+                id="property-name"
                 className="af-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}

@@ -1,7 +1,7 @@
 // Cliente HTTP tipado com openapi-fetch para a aplicação mobile do agricultor.
 // Inclui ponte transparente para /sync/pull e /sync/push, cache offline em localStorage (ADR-02),
 // fila de mutações offline e upload de anexos fotográficos com verificação SHA-256.
-import createClient, { type Middleware } from "openapi-fetch";
+import createClient from "openapi-fetch";
 import type {
   AttachmentView,
   CorrectionRequestView,
@@ -15,12 +15,14 @@ import type {
   RecordView,
   SessionResponse,
 } from "@agrofacil/api-types";
+import { pendingPhotos, removePhoto, savePhoto, type PendingPhoto } from "./pending-photos";
 import { BAHIA_MUNICIPALITIES } from "../../../web/src/api/municipalities";
 
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly detail: string;
+  readonly problemDetail: string;
   readonly errors: FieldErrorItem[];
 
   constructor(status: number, body: unknown) {
@@ -42,6 +44,7 @@ export class ApiError extends Error {
     this.status = status;
     this.code = typeof obj.code === "string" ? obj.code : "UNKNOWN_ERROR";
     this.detail = detail;
+    this.problemDetail = baseDetail;
     this.errors = errs;
   }
 }
@@ -57,11 +60,12 @@ const STORAGE_KEYS = {
 
 export interface QueuedMutation {
   mutationId: string;
-  entity: "record" | "property" | "attachment" | "notification";
+  entity: "record" | "property" | "attachment" | "notification" | "visit";
   op: "UPSERT" | "DELETE";
   entityId: string;
   clientTimestamp: string;
   data?: Record<string, unknown>;
+  rejection?: string;
 }
 
 export interface MobileRecordDetail {
@@ -106,68 +110,204 @@ export function getStoredUser(): Me | null {
   }
 }
 
-export function saveSession(session: SessionResponse): void {
-  if (session.accessToken) {
-    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.accessToken);
-  }
-  if (session.refreshToken) {
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, session.refreshToken);
-  }
-  if (session.user) {
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(session.user));
-  }
+let sessionGeneration = 0;
+let onUnauthorizedCallback: (() => void) | null = null;
+let refreshing: { generation: number; promise: Promise<string | null> } | undefined;
+
+function accountId(): string | undefined {
+  return getStoredUser()?.id;
 }
 
-export function clearSession(): void {
-  localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.USER);
+function accountKey(key: string, owner: string): string {
+  return `${key}:${owner}`;
+}
+
+export function saveSession(session: SessionResponse): void {
+  const previous = getStoredUser();
+  if (session.user?.id && session.user.id !== previous?.id) {
+    sessionGeneration++;
+  }
+  if (session.accessToken) localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.accessToken);
+  if (session.refreshToken) localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, session.refreshToken);
+  if (session.user) localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(session.user));
+}
+
+async function activationDeviceKey(cpf: string): Promise<string> {
+  return accountKey(
+    STORAGE_KEYS.DEVICE_ID,
+    await computeSha256Hex(new TextEncoder().encode(cpf).buffer),
+  );
+}
+
+export async function deviceIdForActivation(cpf: string): Promise<string> {
+  const existing = getStoredUser();
+  return (
+    localStorage.getItem(await activationDeviceKey(cpf)) ??
+    (existing?.cpf?.replace(/\D/g, "") === cpf ? getStoredDeviceId() : crypto.randomUUID())
+  );
+}
+
+export async function rememberActivatedDevice(cpf: string, deviceId: string): Promise<void> {
+  localStorage.setItem(await activationDeviceKey(cpf), deviceId);
+  localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
+}
+
+export function invalidateStoredSession(): void {
+  sessionGeneration++;
   cachedPull = null;
 }
 
-export function getOfflineQueue(): QueuedMutation[] {
-  const raw = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
-  if (!raw) return [];
+export function clearSession(): void {
+  invalidateStoredSession();
+  localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.USER);
+  localStorage.removeItem(STORAGE_KEYS.DEVICE_ID);
+}
+
+function readStored<T>(key: string, owner: string): T | null {
   try {
-    return JSON.parse(raw) as QueuedMutation[];
-  } catch {
-    return [];
-  }
-}
-
-function setOfflineQueue(queue: QueuedMutation[]): void {
-  localStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(queue));
-  window.dispatchEvent(new CustomEvent("af-offline-queue-changed"));
-}
-
-function enqueueOfflineMutation(mutation: QueuedMutation): void {
-  const current = getOfflineQueue().filter(
-    (m) => !(m.entity === mutation.entity && m.entityId === mutation.entityId && m.op === "UPSERT"),
-  );
-  current.push(mutation);
-  setOfflineQueue(current);
-}
-
-function loadPersistedSnapshot(): PullResponse | null {
-  const raw = localStorage.getItem(STORAGE_KEYS.SYNC_SNAPSHOT);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as PullResponse;
+    const raw = localStorage.getItem(accountKey(key, owner));
+    return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
   }
 }
 
-function savePersistedSnapshot(snapshot: PullResponse): void {
+function legacySnapshot(owner: string): PullResponse | null {
   try {
-    localStorage.setItem(STORAGE_KEYS.SYNC_SNAPSHOT, JSON.stringify(snapshot));
+    const raw = localStorage.getItem(STORAGE_KEYS.SYNC_SNAPSHOT);
+    const value = raw ? (JSON.parse(raw) as PullResponse) : null;
+    if (value?.changes?.me?.id === owner) {
+      return { changes: value.changes };
+    }
   } catch {
-    // Ignora se exceder cota de armazenamento local
+    // Um cache ilegível é reconstruído no próximo pull.
+  }
+  return null;
+}
+
+function readQueue(owner: string): QueuedMutation[] {
+  const value = readStored<QueuedMutation[]>(STORAGE_KEYS.OFFLINE_QUEUE, owner);
+  return Array.isArray(value) ? value : [];
+}
+
+export function getOfflineQueue(): QueuedMutation[] {
+  const owner = accountId();
+  if (!owner) return [];
+  return readQueue(owner);
+}
+
+// A fila anterior não guardava o dono. Só recupera itens cujo destino consta do espelho autenticado.
+function recoverLegacyQueue(owner: string, changes: Changes): void {
+  const raw = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
+  if (!raw) return;
+  let legacy: QueuedMutation[];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    legacy = parsed as QueuedMutation[];
+  } catch {
+    return;
+  }
+  const keys = new Set((changes.properties ?? []).map((row) => row.id));
+  const records = new Set((changes.records ?? []).map((row) => row.id));
+  const pending = readQueue(owner);
+  const recovered = new Set<string>();
+  for (const item of legacy) {
+    const target = item.entity === "property" ? item.entityId : item.data?.propertyId;
+    const own = typeof target === "string" && keys.has(target);
+    if (own || (item.entity === "record" && records.has(item.entityId))) {
+      recovered.add(item.mutationId);
+      if (
+        !pending.some(
+          (current) => current.entity === item.entity && current.entityId === item.entityId,
+        )
+      ) {
+        pending.push(item);
+      }
+    }
+  }
+  if (recovered.size) {
+    setOfflineQueue(owner, pending);
+    const remaining = legacy.filter((item) => !recovered.has(item.mutationId));
+    if (remaining.length)
+      localStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(remaining));
+    else localStorage.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
   }
 }
 
-let refreshingPromise: Promise<SessionResponse | null> | null = null;
-let onUnauthorizedCallback: (() => void) | null = null;
+function setOfflineQueue(owner: string, queue: QueuedMutation[]): void {
+  localStorage.setItem(accountKey(STORAGE_KEYS.OFFLINE_QUEUE, owner), JSON.stringify(queue));
+  emitPendingChanges();
+}
+
+function enqueueOfflineMutation(owner: string, mutation: QueuedMutation): void {
+  const queue = readQueue(owner);
+  const index = queue.findIndex(
+    (item) => item.entity === mutation.entity && item.entityId === mutation.entityId,
+  );
+  if (index === -1) queue.push(mutation);
+  else queue[index] = mutation;
+  setOfflineQueue(owner, queue);
+}
+
+async function renewAccessToken(
+  generation: number,
+  failedToken: string | null,
+): Promise<string | null> {
+  if (generation !== sessionGeneration) return null;
+  const access = getStoredAccessToken();
+  if (access && access !== failedToken) return access;
+  if (refreshing?.generation === generation) return refreshing.promise;
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) return null;
+  const promise = (async () => {
+    const response = await window.fetch("/api/v1/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken, deviceId: getStoredDeviceId() }),
+    });
+    if (generation !== sessionGeneration) return null;
+    if (response.status === 401 || response.status === 403) {
+      clearSession();
+      onUnauthorizedCallback?.();
+      return null;
+    }
+    if (!response.ok) throw new ApiError(response.status, await response.json().catch(() => null));
+    const session = (await response.json()) as SessionResponse;
+    if (generation !== sessionGeneration) return null;
+    saveSession(session);
+    return session.accessToken ?? null;
+  })();
+  refreshing = { generation, promise };
+  try {
+    return await promise;
+  } finally {
+    if (refreshing?.promise === promise) refreshing = undefined;
+  }
+}
+
+async function sessionFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const request =
+    input instanceof Request ? input : new Request(new URL(input, window.location.origin), init);
+  const path = new URL(request.url).pathname;
+  if (path.startsWith("/api/v1/auth/") && !path.endsWith("/logout")) return window.fetch(request);
+  const generation = sessionGeneration;
+  const token = getStoredAccessToken();
+  const send = (access: string | null) => {
+    const copy = request.clone();
+    if (access) copy.headers.set("Authorization", `Bearer ${access}`);
+    return window.fetch(copy);
+  };
+  const result = await send(token);
+  if (generation !== sessionGeneration) return new Response(null, { status: 401 });
+  if (result.status !== 401) return result;
+  const access = await renewAccessToken(generation, token);
+  if (!access) return result;
+  const retry = await send(access);
+  return generation === sessionGeneration ? retry : new Response(null, { status: 401 });
+}
 
 export function setOnUnauthorized(cb: (() => void) | null): void {
   onUnauthorizedCallback = cb;
@@ -204,90 +344,210 @@ const municipalityNameById = new Map<number, string>(
   BAHIA_MUNICIPALITIES.map((m) => [m.id ?? 0, m.name ?? ""]),
 );
 
-let cachedPull: { at: number; data: PullResponse } | null = null;
-let inflightPull: Promise<PullResponse> | null = null;
+type Changes = NonNullable<PullResponse["changes"]>;
+type Tombstones = NonNullable<PullResponse["deleted"]>;
+
+function mergeRows<T>(
+  existing: T[] = [],
+  changes: T[] = [],
+  key: (row: T) => string | undefined,
+  deleted: Tombstones = [],
+  entity?: string,
+): T[] {
+  const rows = new Map(existing.map((row) => [key(row), row]));
+  for (const row of changes) rows.set(key(row), row);
+  for (const item of deleted) {
+    if (item.entity === entity) rows.delete(item.id);
+  }
+  return [...rows.values()];
+}
+
+function mergeChanges(previous: Changes, current: Changes, deleted: Tombstones): Changes {
+  const byId = (row: { id?: string }) => row.id;
+  return {
+    me: current.me ?? previous.me,
+    association: current.association ?? previous.association,
+    people: mergeRows(previous.people, current.people, byId),
+    properties: mergeRows(previous.properties, current.properties, byId, deleted, "property"),
+    plots: mergeRows(previous.plots, current.plots, byId, deleted, "plot"),
+    workers: mergeRows(previous.workers, current.workers, byId, deleted, "worker"),
+    certifications: mergeRows(
+      previous.certifications,
+      current.certifications,
+      byId,
+      deleted,
+      "certification",
+    ),
+    records: mergeRows(previous.records, current.records, byId, deleted, "record"),
+    attachments: mergeRows(previous.attachments, current.attachments, byId, deleted, "attachment"),
+    correctionRequests: mergeRows(previous.correctionRequests, current.correctionRequests, byId),
+    announcements: mergeRows(
+      previous.announcements,
+      current.announcements,
+      byId,
+      deleted,
+      "announcement",
+    ),
+    notifications: mergeRows(previous.notifications, current.notifications, byId),
+    crops: mergeRows(previous.crops, current.crops, byId),
+    farmInputs: mergeRows(previous.farmInputs, current.farmInputs, byId),
+    units: mergeRows(previous.units, current.units, (row) => row.code),
+    visits: mergeRows(previous.visits, current.visits, byId, deleted, "visit"),
+    visitChecklistItems: mergeRows(
+      previous.visitChecklistItems,
+      current.visitChecklistItems,
+      (row) => row.code,
+    ),
+  };
+}
+
+let cachedPull: { owner: string; at: number; data: PullResponse } | null = null;
+let inflightPull:
+  { generation: number; revision: number; promise: Promise<PullResponse> } | undefined;
+let pullRevision = 0;
 
 export function invalidateMobileSyncCache(): void {
-  cachedPull = null;
+  pullRevision++;
+  if (cachedPull) cachedPull.at = 0;
 }
 
-async function fetchSyncSnapshot(authHeader: string | null, force = false): Promise<PullResponse> {
-  const now = Date.now();
-  if (!force && cachedPull && now - cachedPull.at < 2500) {
-    return cachedPull.data;
-  }
-  if (inflightPull) {
-    return inflightPull;
-  }
-  inflightPull = (async () => {
+export async function fetchSyncSnapshot(): Promise<PullResponse> {
+  const owner = accountId();
+  if (!owner) throw new ApiError(401, null);
+  const generation = sessionGeneration;
+  const revision = pullRevision;
+  if (cachedPull?.owner === owner && Date.now() - cachedPull.at < 2500) return cachedPull.data;
+  if (inflightPull?.generation === generation && inflightPull.revision === revision)
+    return inflightPull.promise;
+  const fallback =
+    cachedPull?.owner === owner
+      ? cachedPull.data
+      : (readStored<PullResponse>(STORAGE_KEYS.SYNC_SNAPSHOT, owner) ?? legacySnapshot(owner));
+  if (fallback && typeof navigator !== "undefined" && !navigator.onLine) return fallback;
+  const promise = (async () => {
+    let cursor = fallback?.cursor ?? "0";
+    let changes = fallback?.cursor ? (fallback.changes ?? {}) : {};
+    let didReset = false;
     try {
-      const headers: Record<string, string> = { Accept: "application/json" };
-      if (authHeader) {
-        headers["Authorization"] = authHeader;
+      while (true) {
+        const response = await sessionFetch(
+          `/api/v1/sync/pull?cursor=${encodeURIComponent(cursor)}&limit=1000`,
+        );
+        if (!response.ok) throw new ApiError(response.status, null);
+        const page = (await response.json()) as PullResponse;
+        if (sessionGeneration !== generation) throw new ApiError(401, null);
+        if (revision !== pullRevision) return fetchSyncSnapshot();
+        if (page.reset) {
+          if (didReset)
+            throw new Error("O servidor solicitou a reinicialização do espelho novamente.");
+          didReset = true;
+          cursor = "0";
+          changes = {};
+          localStorage.removeItem(accountKey(STORAGE_KEYS.SYNC_SNAPSHOT, owner));
+          if (cachedPull?.owner === owner) cachedPull = null;
+          continue;
+        }
+        changes = mergeChanges(changes, page.changes ?? {}, page.deleted ?? []);
+        if (!page.hasMore) {
+          const snapshot = { ...page, changes, deleted: [] };
+          if (revision === pullRevision) {
+            cachedPull = { owner, at: Date.now(), data: snapshot };
+            try {
+              localStorage.setItem(
+                accountKey(STORAGE_KEYS.SYNC_SNAPSHOT, owner),
+                JSON.stringify(snapshot),
+              );
+              recoverLegacyQueue(owner, changes);
+              if (legacySnapshot(owner)) localStorage.removeItem(STORAGE_KEYS.SYNC_SNAPSHOT);
+            } catch {
+              // O espelho permanece disponível em memória quando a cota é excedida.
+            }
+          }
+          return snapshot;
+        }
+        if (!page.cursor || page.cursor === cursor) throw new Error("A sincronização não avançou.");
+        cursor = page.cursor;
       }
-      const res = await window.fetch("/api/v1/sync/pull?cursor=0&limit=1000", {
-        method: "GET",
-        headers,
-      });
-      if (!res.ok) {
-        throw new Error(`Sync pull failed with status ${res.status}`);
-      }
-      const data = (await res.json()) as PullResponse;
-      cachedPull = { at: Date.now(), data };
-      savePersistedSnapshot(data);
-      return data;
-    } catch (err) {
-      const fallback = cachedPull?.data ?? loadPersistedSnapshot();
-      if (fallback) {
+    } catch (error) {
+      if (
+        generation === sessionGeneration &&
+        !didReset &&
+        fallback &&
+        !(error instanceof ApiError && (error.status === 401 || error.status === 403))
+      )
         return fallback;
-      }
-      throw err;
-    } finally {
-      inflightPull = null;
+      throw error;
     }
   })();
-  return inflightPull;
-}
-
-/**
- * Sincroniza mutações pendentes na fila offline quando a conexão é restabelecida.
- */
-export async function flushOfflineQueue(): Promise<{ synced: number; remaining: number }> {
-  const queue = getOfflineQueue();
-  if (queue.length === 0) {
-    return { synced: 0, remaining: 0 };
-  }
-  const token = getStoredAccessToken();
-  if (!token) {
-    return { synced: 0, remaining: queue.length };
-  }
+  inflightPull = { generation, revision, promise };
   try {
-    const res = await window.fetch("/api/v1/sync/push", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        deviceId: getStoredDeviceId(),
-        mutations: queue,
-      }),
-    });
-    if (!res.ok) {
-      return { synced: 0, remaining: queue.length };
-    }
-    setOfflineQueue([]);
-    cachedPull = null;
-    return { synced: queue.length, remaining: 0 };
-  } catch {
-    return { synced: 0, remaining: queue.length };
+    return await promise;
+  } finally {
+    if (inflightPull?.promise === promise) inflightPull = undefined;
   }
 }
 
-if (typeof window !== "undefined") {
-  window.addEventListener("online", () => {
-    void flushOfflineQueue();
+async function pushMutations(batch: QueuedMutation[]): Promise<PushResponse> {
+  const response = await sessionFetch("/api/v1/sync/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      deviceId: getStoredDeviceId(),
+      mutations: batch.map(({ rejection: _rejection, ...mutation }) => mutation),
+    }),
   });
+  if (!response.ok) throw new ApiError(response.status, await response.json().catch(() => null));
+  return (await response.json()) as PushResponse;
+}
+
+let flushing:
+  { generation: number; promise: Promise<{ synced: number; remaining: number }> } | undefined;
+
+export async function flushOfflineQueue(): Promise<{ synced: number; remaining: number }> {
+  const owner = accountId();
+  const generation = sessionGeneration;
+  if (!owner) return { synced: 0, remaining: 0 };
+  if (flushing?.generation === generation) return flushing.promise;
+  const promise = (async () => {
+    const attempted = new Set<string>();
+    let synced = 0;
+    while (generation === sessionGeneration) {
+      const batch = readQueue(owner)
+        .filter((item) => !item.rejection && !attempted.has(item.mutationId))
+        .slice(0, 100);
+      if (!batch.length) break;
+      for (const item of batch) attempted.add(item.mutationId);
+      try {
+        const response = await pushMutations(batch);
+        const results = new Map(response.results?.map((result) => [result.mutationId, result]));
+        synced += batch.filter((item) => results.get(item.mutationId)?.status === "APPLIED").length;
+        const remaining = readQueue(owner).flatMap((item) => {
+          const result = results.get(item.mutationId);
+          if (result?.status === "APPLIED") return [];
+          if (result?.status === "REJECTED")
+            return [
+              {
+                ...item,
+                rejection: result.error?.message ?? "A API recusou este envio.",
+              },
+            ];
+          return [item];
+        });
+        setOfflineQueue(owner, remaining);
+        if (synced) invalidateMobileSyncCache();
+      } catch {
+        break;
+      }
+    }
+    if (generation === sessionGeneration) await flushPhotos(owner, generation);
+    return { synced, remaining: readQueue(owner).length };
+  })();
+  flushing = { generation, promise };
+  try {
+    return await promise;
+  } finally {
+    if (flushing?.promise === promise) flushing = undefined;
+  }
 }
 
 async function computeSha256Hex(buffer: ArrayBuffer): Promise<string> {
@@ -304,89 +564,126 @@ async function computeSha256Hex(buffer: ArrayBuffer): Promise<string> {
  * 1) Registra o metadado + SHA-256 via POST /api/v1/sync/push (entidade "attachment")
  * 2) Envia o binário via PUT /api/v1/files/{attachmentId}/content
  */
-export async function uploadRecordPhoto(recordId: string, file: File): Promise<string> {
-  const token = getStoredAccessToken();
-  const authHeader = token ? `Bearer ${token}` : null;
-  const arrayBuffer = await file.arrayBuffer();
-  const sha256 = await computeSha256Hex(arrayBuffer);
-  const attachmentId = crypto.randomUUID();
-  const contentType = file.type || "image/jpeg";
+function emitPendingChanges(): void {
+  window.dispatchEvent(new CustomEvent("af-offline-queue-changed"));
+}
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
-  }
+export async function getPendingPhotos(): Promise<PendingPhoto[]> {
+  const owner = accountId();
+  return owner ? pendingPhotos(owner).catch(() => []) : [];
+}
 
-  const pushRes = await window.fetch("/api/v1/sync/push", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      deviceId: getStoredDeviceId(),
-      mutations: [
-        {
-          mutationId: crypto.randomUUID(),
-          entity: "attachment",
-          op: "UPSERT",
-          entityId: attachmentId,
-          clientTimestamp: new Date().toISOString(),
-          data: {
-            id: attachmentId,
-            ownerType: "RECORD",
-            ownerId: recordId,
-            kind: "PHOTO",
-            contentType,
-            sizeBytes: file.size,
-            sha256,
-          },
+export async function queueRecordPhoto(recordId: string, file: File): Promise<void> {
+  const owner = accountId();
+  if (!owner) throw new ApiError(401, null);
+  await savePhoto({
+    owner,
+    file,
+    recordId,
+    id: crypto.randomUUID(),
+    mutationId: crypto.randomUUID(),
+    registered: false,
+  });
+  emitPendingChanges();
+  if (navigator.onLine) void flushOfflineQueue();
+}
+
+async function sendPhoto(photo: PendingPhoto, generation: number): Promise<void> {
+  const contentType = photo.file.type || "image/jpeg";
+  if (!photo.registered) {
+    const sha256 = await computeSha256Hex(await photo.file.arrayBuffer());
+    if (generation !== sessionGeneration) return;
+    const result = await pushMutations([
+      {
+        mutationId: photo.mutationId,
+        entity: "attachment",
+        op: "UPSERT",
+        entityId: photo.id,
+        clientTimestamp: new Date().toISOString(),
+        data: {
+          id: photo.id,
+          ownerType: "RECORD",
+          ownerId: photo.recordId,
+          kind: "PHOTO",
+          contentType,
+          sizeBytes: photo.file.size,
+          sha256,
         },
-      ],
-    }),
-  });
-
-  if (!pushRes.ok) {
-    throw new Error("Não foi possível registrar o anexo da foto.");
+      },
+    ]);
+    if (result.results?.[0]?.status !== "APPLIED") {
+      const message = result.results?.[0]?.error?.message;
+      if (message) await savePhoto({ ...photo, error: message });
+      return;
+    }
+    await savePhoto({ ...photo, registered: true, error: undefined });
   }
-
-  const pushData = (await pushRes.json()) as PushResponse;
-  const firstResult = pushData.results?.[0];
-  if (firstResult?.status === "REJECTED") {
-    throw new Error(firstResult.error?.message ?? "Foto recusada pela validação da API.");
-  }
-
-  const uploadHeaders: Record<string, string> = {
-    "Content-Type": contentType,
-  };
-  if (authHeader) {
-    uploadHeaders["Authorization"] = authHeader;
-  }
-
-  const binRes = await window.fetch(`/api/v1/files/${attachmentId}/content`, {
+  if (generation !== sessionGeneration) return;
+  const response = await sessionFetch(`/api/v1/files/${photo.id}/content`, {
     method: "PUT",
-    headers: uploadHeaders,
-    body: arrayBuffer,
+    headers: { "Content-Type": contentType },
+    body: photo.file,
   });
-
-  if (!binRes.ok) {
-    throw new Error("Não foi possível enviar o arquivo de imagem.");
+  if (response.ok) {
+    await removePhoto(photo);
+    invalidateMobileSyncCache();
+  } else if (response.status >= 400 && response.status < 500 && response.status !== 401) {
+    const problem = await response.json().catch(() => null);
+    await savePhoto({
+      ...photo,
+      registered: true,
+      error: new ApiError(response.status, problem).detail,
+    });
   }
+}
 
-  cachedPull = null;
-  return attachmentId;
+async function flushPhotos(owner: string, generation: number): Promise<void> {
+  const photos = await pendingPhotos(owner).catch(() => []);
+  const recordsWaiting = new Set(
+    readQueue(owner)
+      .filter((item) => item.entity === "record")
+      .map((item) => item.entityId),
+  );
+  for (const photo of photos) {
+    if (generation !== sessionGeneration) return;
+    if (!recordsWaiting.has(photo.recordId)) {
+      try {
+        await sendPhoto(photo, generation);
+      } catch {
+        // O binário continua disponível na próxima tentativa.
+      }
+    }
+  }
+  if (photos.length) emitPendingChanges();
+}
+
+export async function discardPendingPhoto(id: string): Promise<void> {
+  const photo = (await getPendingPhotos()).find((item) => item.id === id);
+  if (photo) {
+    await removePhoto(photo);
+    emitPendingChanges();
+  }
 }
 
 /**
  * Busca os detalhes completos de um registro de manejo (incluindo anexos e pedidos de correção)
  * a partir do espelho de sincronização do agricultor.
  */
-export async function fetchMobileRecordDetail(recordId: string): Promise<MobileRecordDetail | null> {
-  const token = getStoredAccessToken();
-  const pull = await fetchSyncSnapshot(token ? `Bearer ${token}` : null);
+export async function fetchMobileRecordDetail(
+  recordId: string,
+): Promise<MobileRecordDetail | null> {
+  const pull = await fetchSyncSnapshot();
   const rawRecords = pull.changes?.records ?? [];
-  const found = rawRecords.find((r) => r.id === recordId) as RecordView | undefined;
+  const pending = getOfflineQueue().find(
+    (item) => item.entity === "record" && item.entityId === recordId,
+  );
+  const serverRecord = rawRecords.find((r) => r.id === recordId);
+  const found = (pending?.data ? { ...serverRecord, ...pending.data } : serverRecord) as
+    RecordView | undefined;
   if (!found) return null;
 
   const attachments = (pull.changes?.attachments ?? []).filter(
-    (a) => a.ownerType === "RECORD" && a.ownerId === recordId,
+    (a) => a.ownerType === "RECORD" && a.ownerId === recordId && a.uploaded,
   );
   const correctionRequests = (pull.changes?.correctionRequests ?? []).filter(
     (c) => c.recordId === recordId,
@@ -411,57 +708,64 @@ export async function fetchMobileRecordDetail(recordId: string): Promise<MobileR
 /**
  * Atualiza ou cadastra uma propriedade do agricultor via /sync/push (entidade "property").
  */
-export async function upsertFarmerProperty(
-  propertyId: string,
-  payload: PropertyWrite,
-): Promise<void> {
-  const token = getStoredAccessToken();
-  const authHeader = token ? `Bearer ${token}` : null;
-  const nowIso = new Date().toISOString();
-  const dataPayload: Record<string, unknown> = {
-    ...payload,
-    id: propertyId,
-  };
+export async function upsertFarmerProperty(propertyId: string, payload: PropertyWrite) {
+  return submitMutation("property", propertyId, { ...payload, id: propertyId });
+}
 
+export async function submitMutation(
+  entity: QueuedMutation["entity"],
+  entityId: string,
+  data: Record<string, unknown>,
+): Promise<"applied" | "queued"> {
+  const owner = accountId();
+  const generation = sessionGeneration;
+  if (!owner) throw new ApiError(401, null);
   const mutation: QueuedMutation = {
     mutationId: crypto.randomUUID(),
-    entity: "property",
+    entity,
     op: "UPSERT",
-    entityId: propertyId,
-    clientTimestamp: nowIso,
-    data: dataPayload,
+    entityId,
+    clientTimestamp: new Date().toISOString(),
+    data,
   };
-
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    enqueueOfflineMutation(mutation);
-    return;
+  const queue = () => {
+    if (generation !== sessionGeneration) throw new ApiError(401, null);
+    enqueueOfflineMutation(owner, mutation);
+    return "queued" as const;
+  };
+  if (!navigator.onLine) return queue();
+  if (getOfflineQueue().some((item) => !item.rejection)) {
+    const status = queue();
+    void flushOfflineQueue();
+    return status;
   }
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
+  let response: PushResponse;
+  try {
+    response = await pushMutations([mutation]);
+  } catch (error) {
+    if (error instanceof ApiError && error.status < 500) throw error;
+    return queue();
   }
-
-  const pushRes = await window.fetch("/api/v1/sync/push", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      deviceId: getStoredDeviceId(),
-      mutations: [mutation],
-    }),
-  });
-
-  if (!pushRes.ok) {
-    throw new Error("Não foi possível atualizar os dados da propriedade.");
+  if (generation !== sessionGeneration) throw new ApiError(401, null);
+  const result = response.results?.find((item) => item.mutationId === mutation.mutationId);
+  if (result?.status === "REJECTED") {
+    throw new ApiError(422, {
+      code: result.error?.code,
+      detail: result.error?.message,
+      errors: result.error?.errors,
+    });
   }
-
-  const pushData = (await pushRes.json()) as PushResponse;
-  const firstResult = pushData.results?.[0];
-  if (firstResult?.status === "REJECTED") {
-    throw new Error(firstResult.error?.message ?? "Dados da propriedade inválidos.");
-  }
-
-  cachedPull = null;
+  if (result?.status !== "APPLIED") return queue();
+  const currentQueue = readQueue(owner);
+  // Remove a versão recusada que o usuário acabou de corrigir.
+  setOfflineQueue(
+    owner,
+    currentQueue.filter(
+      (item) => !(item.rejection && item.entity === entity && item.entityId === entityId),
+    ),
+  );
+  invalidateMobileSyncCache();
+  return "applied";
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -474,76 +778,24 @@ function jsonResponse(body: unknown, status = 200): Response {
 async function submitRecordMutation(
   entityId: string,
   bodyData: Record<string, unknown>,
-  authHeader: string | null,
 ): Promise<Response> {
-  const nowIso = new Date().toISOString();
-  const recordPayload: Record<string, unknown> = {
+  const recordPayload = {
     ...bodyData,
     id: entityId,
-    clientCreatedAt: (bodyData.clientCreatedAt as string | undefined) ?? nowIso,
+    clientCreatedAt: bodyData.clientCreatedAt ?? new Date().toISOString(),
   };
-
-  if (recordPayload.type === "HARVEST" && !recordPayload.plantingId) {
-    const pull = await fetchSyncSnapshot(authHeader);
-    const plantings = (pull.changes?.records ?? []).filter(
-      (r) => r.type === "PLANTING" && r.propertyId === recordPayload.propertyId,
-    );
-    if (plantings[0]?.id) {
-      recordPayload.plantingId = plantings[0].id;
-    }
-  }
-
-  const mutation: QueuedMutation = {
-    mutationId: crypto.randomUUID(),
-    entity: "record",
-    op: "UPSERT",
-    entityId,
-    clientTimestamp: nowIso,
-    data: recordPayload,
-  };
-
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    enqueueOfflineMutation(mutation);
-    return jsonResponse({ id: entityId, ...recordPayload, offlineQueued: true }, 201);
-  }
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
-  }
-
   try {
-    const pushRes = await window.fetch("/api/v1/sync/push", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        deviceId: getStoredDeviceId(),
-        mutations: [mutation],
-      }),
-    });
-
-    if (!pushRes.ok) {
-      return pushRes;
-    }
-
-    const pushData = (await pushRes.json()) as PushResponse;
-    const firstResult = pushData.results?.[0];
-    if (firstResult?.status === "REJECTED") {
-      return jsonResponse(
-        {
-          code: firstResult.error?.code ?? "VALIDATION_ERROR",
-          detail: firstResult.error?.message ?? "Não foi possível salvar o registro.",
-          errors: firstResult.error?.errors ?? [],
-        },
-        422,
-      );
-    }
-
-    cachedPull = null;
-    return jsonResponse({ id: entityId, ...recordPayload }, 200);
-  } catch {
-    enqueueOfflineMutation(mutation);
-    return jsonResponse({ id: entityId, ...recordPayload, offlineQueued: true }, 201);
+    const status = await submitMutation("record", entityId, recordPayload);
+    return jsonResponse(
+      { ...recordPayload, offlineQueued: status === "queued" },
+      status === "queued" ? 201 : 200,
+    );
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+    return jsonResponse(
+      { code: error.code, detail: error.problemDetail, errors: error.errors },
+      error.status,
+    );
   }
 }
 
@@ -557,9 +809,6 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   const url = new URL(req.url, window.location.origin);
   const path = url.pathname.replace(/^\/api\/v1/, "");
   const method = req.method.toUpperCase();
-  const authHeader =
-    req.headers.get("Authorization") ??
-    (getStoredAccessToken() ? `Bearer ${getStoredAccessToken()}` : null);
 
   // Leitura via /sync/pull
   if (method === "GET") {
@@ -572,13 +821,20 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       path === "/announcements" ||
       path === "/notifications" ||
       path === "/catalog/crops" ||
-      path === "/catalog/farm-inputs"
+      path === "/catalog/farm-inputs" ||
+      path === "/catalog/units"
     ) {
       try {
-        const pull = await fetchSyncSnapshot(authHeader);
+        const pull = await fetchSyncSnapshot();
         const changes = pull.changes;
+        const pendingProperties = new Map(
+          getOfflineQueue()
+            .filter((item) => item.entity === "property")
+            .map((item) => [item.entityId, item.data]),
+        );
         const props = (changes?.properties ?? []).map((p) => ({
           ...p,
+          ...(p.id ? pendingProperties.get(p.id) : undefined),
           address: p.address
             ? {
                 ...p.address,
@@ -631,6 +887,12 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
         if (path === "/catalog/crops") {
           return jsonResponse(crops);
+        }
+
+        if (path === "/catalog/units") {
+          return jsonResponse(
+            [...(changes?.units ?? [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+          );
         }
 
         if (path === "/catalog/farm-inputs") {
@@ -736,8 +998,7 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
               } else if (r.type === "HARVEST") {
                 const planting = recAny.plantingId
                   ? (recordById.get(recAny.plantingId as string) as
-                      | Record<string, unknown>
-                      | undefined)
+                      Record<string, unknown> | undefined)
                   : undefined;
                 subject =
                   (planting?.cropId ? cropById.get(planting.cropId as string) : undefined) ??
@@ -781,8 +1042,12 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
             },
           });
         }
-      } catch {
-        // Se falhar, cai para a chamada normal
+      } catch (error) {
+        const status = error instanceof ApiError ? error.status : 503;
+        return jsonResponse(
+          { detail: "Não foi possível consultar os dados sincronizados." },
+          status,
+        );
       }
     }
   }
@@ -791,7 +1056,7 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   if (method === "POST" && path === "/records") {
     const bodyData = (await req.clone().json()) as Record<string, unknown>;
     const entityId = (typeof bodyData.id === "string" && bodyData.id) || crypto.randomUUID();
-    return submitRecordMutation(entityId, bodyData, authHeader);
+    return submitRecordMutation(entityId, bodyData);
   }
 
   // Edição de manejo existente via /sync/push (atende pedidos de correção e completa campos)
@@ -799,118 +1064,25 @@ async function mobileSyncFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   if (method === "PUT" && recordPutMatch) {
     const entityId = recordPutMatch[1]!;
     const bodyData = (await req.clone().json()) as Record<string, unknown>;
-    return submitRecordMutation(entityId, bodyData, authHeader);
+    return submitRecordMutation(entityId, bodyData);
   }
 
   // Marcar notificações como lidas via /sync/push
   if (method === "POST" && path === "/notifications/read-all") {
-    const pull = await fetchSyncSnapshot(authHeader);
+    const pull = await fetchSyncSnapshot();
     const unread = (pull.changes?.notifications ?? []).filter((n) => !n.readAt && n.id);
-    if (unread.length > 0) {
-      const nowIso = new Date().toISOString();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (authHeader) {
-        headers["Authorization"] = authHeader;
-      }
-      await window.fetch("/api/v1/sync/push", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          deviceId: getStoredDeviceId(),
-          mutations: unread.map((n) => ({
-            mutationId: crypto.randomUUID(),
-            entity: "notification",
-            op: "UPSERT",
-            entityId: n.id,
-            clientTimestamp: nowIso,
-            data: { readAt: nowIso },
-          })),
-        }),
-      });
-      cachedPull = null;
+    for (const item of unread) {
+      if (item.id)
+        await submitMutation("notification", item.id, { readAt: new Date().toISOString() });
     }
     return new Response(null, { status: 204 });
   }
 
-  return window.fetch(req);
+  return sessionFetch(req);
 }
-
-const authMiddleware: Middleware = {
-  async onRequest({ request }) {
-    const token = getStoredAccessToken();
-    if (token) {
-      request.headers.set("Authorization", `Bearer ${token}`);
-    }
-    return request;
-  },
-
-  async onResponse({ response, request }) {
-    if (response.status !== 401) {
-      return response;
-    }
-
-    const url = new URL(request.url);
-    if (url.pathname.includes("/auth/")) {
-      return response;
-    }
-
-    const refreshToken = getStoredRefreshToken();
-    if (!refreshToken) {
-      clearSession();
-      onUnauthorizedCallback?.();
-      return response;
-    }
-
-    if (!refreshingPromise) {
-      refreshingPromise = (async () => {
-        try {
-          const deviceId = getStoredDeviceId();
-          const refreshRes = await window.fetch("/api/v1/auth/refresh", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken, deviceId }),
-          });
-
-          if (!refreshRes.ok) {
-            clearSession();
-            onUnauthorizedCallback?.();
-            return null;
-          }
-
-          const session = (await refreshRes.json()) as SessionResponse;
-          saveSession(session);
-          return session;
-        } catch {
-          clearSession();
-          onUnauthorizedCallback?.();
-          return null;
-        } finally {
-          refreshingPromise = null;
-        }
-      })();
-    }
-
-    const session = await refreshingPromise;
-    if (!session?.accessToken) {
-      return response;
-    }
-
-    const newHeaders = new Headers(request.headers);
-    newHeaders.set("Authorization", `Bearer ${session.accessToken}`);
-    return mobileSyncFetch(
-      new Request(request.url, {
-        method: request.method,
-        headers: newHeaders,
-        body: request.body,
-      }),
-    );
-  },
-};
 
 export const api = createClient<paths>({
   baseUrl: "/api/v1",
   querySerializer: serializeSpringQuery,
   fetch: mobileSyncFetch,
 });
-
-api.use(authMiddleware);

@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, flushOfflineQueue, getOfflineQueue } from "../api/client";
+import {
+  api,
+  discardPendingPhoto,
+  flushOfflineQueue,
+  getOfflineQueue,
+  getPendingPhotos,
+} from "../api/client";
+import type { PendingPhoto } from "../api/pending-photos";
 import { useAuth } from "../auth/useAuth";
 import navHome from "../assets/figma/nav-home.svg";
 import navHomeActive from "../assets/figma/nav-home-active.svg";
@@ -19,7 +26,11 @@ export function MobileShell() {
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
-  const [pendingCount, setPendingCount] = useState<number>(() => getOfflineQueue().length);
+  const [pending, setPending] = useState(getOfflineQueue);
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const pendingCount = pending.length + photos.length;
+  const [syncFeedback, setSyncFeedback] = useState<string>();
+  const rejected = pending.filter((item) => item.rejection);
   const [syncing, setSyncing] = useState(false);
   const [acceptingTerms, setAcceptingTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -27,9 +38,11 @@ export function MobileShell() {
   useEffect(() => {
     const updateStatus = () => {
       setIsOnline(navigator.onLine);
-      setPendingCount(getOfflineQueue().length);
+      setPending(getOfflineQueue());
+      void getPendingPhotos().then(setPhotos);
     };
 
+    updateStatus();
     window.addEventListener("online", updateStatus);
     window.addEventListener("offline", updateStatus);
     window.addEventListener("af-offline-queue-changed", updateStatus);
@@ -43,10 +56,16 @@ export function MobileShell() {
   const handleManualSync = async () => {
     setSyncing(true);
     try {
-      await flushOfflineQueue();
-      setPendingCount(getOfflineQueue().length);
-      await queryClient.invalidateQueries({ queryKey: ["records"] });
-      await queryClient.invalidateQueries({ queryKey: ["recent-records"] });
+      const result = await flushOfflineQueue();
+      const remainingPhotos = await getPendingPhotos();
+      setPending(getOfflineQueue());
+      setPhotos(remainingPhotos);
+      await queryClient.invalidateQueries();
+      setSyncFeedback(
+        result.remaining || remainingPhotos.length
+          ? "Ainda há itens pendentes. Confira os detalhes abaixo."
+          : "Sincronização concluída.",
+      );
     } finally {
       setSyncing(false);
     }
@@ -99,8 +118,8 @@ export function MobileShell() {
         >
           <span>
             {!isOnline
-              ? `📡 Modo sem internet (${pendingCount} manejo(s) salvo(s) no celular)`
-              : `🔄 ${pendingCount} manejo(s) aguardando sincronização`}
+              ? `📡 Modo sem internet (${pendingCount} item(ns) pendente(s))`
+              : `🔄 ${pendingCount} item(ns) pendente(s)`}
           </span>
           {isOnline && pendingCount > 0 && (
             <button
@@ -122,6 +141,45 @@ export function MobileShell() {
             </button>
           )}
         </div>
+      )}
+
+      {syncFeedback && (
+        <p role="status" className="mobile-card">
+          {syncFeedback}
+        </p>
+      )}
+      {(rejected.length > 0 || photos.length > 0) && location.pathname === "/registros" && (
+        <section className="mobile-card" aria-label="Envios pendentes">
+          <h2>Envios pendentes</h2>
+          <ul>
+            {rejected.map((item) => (
+              <li key={item.mutationId}>
+                {item.rejection}{" "}
+                {item.entity === "record" && (
+                  <Link to={`/registros/${item.entityId}/editar`}>Corrigir manejo</Link>
+                )}
+                {item.entity === "property" && (
+                  <Link to={`/propriedades/${item.entityId}`}>Corrigir propriedade</Link>
+                )}
+                {item.entity === "visit" && (
+                  <Link to={`/visitas/${item.entityId}`}>Corrigir visita</Link>
+                )}
+              </li>
+            ))}
+            {photos.map((photo) => (
+              <li key={photo.id}>
+                {photo.error ?? "Foto aguardando envio."}{" "}
+                <button
+                  type="button"
+                  className="btn-subtle"
+                  onClick={() => void discardPendingPhoto(photo.id)}
+                >
+                  Descartar foto pendente
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <main className="mobile-shell-content">

@@ -160,7 +160,7 @@ public class RecordRules {
         }
       }
       case OutflowWrite o -> {
-        if (o.cropId() == null && isBlank(o.productOtherName())) {
+        if (o.plantingId() == null && o.cropId() == null && isBlank(o.productOtherName())) {
           errors.add(required("cropId", "Escolha o produto."));
         }
       }
@@ -196,8 +196,11 @@ public class RecordRules {
     switch (w) {
       case PlantingWrite p ->
           crop(user, p.cropId(), existing instanceof Planting e ? e.getCropId() : null, errors);
-      case OutflowWrite o ->
+      case OutflowWrite o -> {
+        if (o.plantingId() == null) {
           crop(user, o.cropId(), existing instanceof Outflow e ? e.getCropId() : null, errors);
+        }
+      }
       case InputApplicationWrite a ->
           input(
               user,

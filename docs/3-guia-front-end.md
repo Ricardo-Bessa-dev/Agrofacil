@@ -2,15 +2,23 @@
 
 O front tem dois apps no mesmo monorepo. Este guia está dividido assim:
 
-- **[Parte A](#parte-a-experiência-do-agricultor-ux): a experiência do agricultor (UX).** Telas, textos, acessibilidade e testes com agricultores. Define *o que* o app mostra.
+- **[Parte A](#parte-a-experiência-do-agricultor-ux): a experiência do agricultor (UX).** Telas, textos, acessibilidade e testes com agricultores. Define _o que_ o app mostra.
 - **[Parte B](#parte-b-comum): o que é comum.** O monorepo, os tipos gerados da API e o pacote `domain`, com as regras compartilhadas.
-- **[Parte C](#parte-c-app-do-agricultor-expo): o app do agricultor.** Expo / React Native, offline-first.
+- **[Parte C](#parte-c-app-do-agricultor-expo): proposta nativa histórica.** O app atual usa a PWA descrita abaixo.
 - **[Parte D](#parte-d-painel-do-coordenador-vite--react): o painel do coordenador.** Vite / React, desktop-first.
 - **[Parte E](#parte-e-ordem-de-implementação-do-front): a ordem de implementação.**
 
 > **Leia antes:** o contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)) e a sincronização ([doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline), para o mobile). Depois, a [Parte A](#parte-a-experiência-do-agricultor-ux) deste guia: ela define as telas do app, e as Partes B a D mostram como construí-las.
 
 **Os três documentos:** [doc 1: arquitetura, domínio e contrato](1-arquitetura-e-contrato.md) · [doc 2: guia da API](2-guia-api.md) · **doc 3: guia do front-end (este)**
+
+## Implementação atual da PWA
+
+O app do agricultor em `apps/mobile` é React e Vite. O navegador instala o manifesto e o service worker do build. As rotas e imagens entram no cache de instalação, e a API permanece fora desse cache. A primeira ativação e carga dos dados precisam de internet.
+
+O app guarda o espelho e a fila por agricultor e usa IndexedDB para os binários das fotos pendentes. A leitura segue o cursor e aplica exclusões do servidor. O envio informa separadamente a gravação do registro e o estado da foto. As unidades de quantidade usam o catálogo sincronizado, e o vínculo de Saída/Venda usa a cultura do plantio validada pela API. A área de visitas usa o roteiro sincronizado e só exibe o formulário de resultado para o responsável.
+
+Para inspecionar o build local, rode `pnpm --filter @agrofacil/mobile build` e `pnpm --filter @agrofacil/mobile preview --port 5174` com a API na porta 8080. O service worker é registrado no build de produção. A Parte C preserva a proposta nativa histórica em Expo e SQLite. As telas de UX continuam como referência.
 
 ## Sumário
 
@@ -97,6 +105,7 @@ Tela 6 – Pronto
 ```
 
 Notas:
+
 - **Sem internet na ativação** é o único momento em que o app precisa de rede. Mostre "Você precisa de internet só agora, para entrar pela primeira vez. Depois o app funciona sem internet."
 - O coordenador costuma **fazer a ativação junto com o agricultor**, entregando o código pessoalmente. O tour de 3 telas é para ele mostrar.
 
@@ -166,6 +175,7 @@ Todas as telas do assistente seguem o mesmo molde:
 ```
 
 Regras comuns:
+
 - **GPS:** começa a ser capturado em segundo plano ao abrir o fluxo (RN26). Não aparece na tela.
 - **Data:** botões `Hoje` (marcado), `Ontem` e `Outro dia` (calendário).
 - **Rascunho:** o fluxo é salvo a cada passo. Se o app fechar, ao abrir de novo aparece "Você estava registrando uma colheita. Quer continuar?" `[Continuar] [Descartar]`.
@@ -174,68 +184,68 @@ Regras comuns:
 
 #### A.5.1 🌱 Plantei (`PLANTING`)
 
-| # | Pergunta | Opções | Obrig.? |
-|---|---|---|---|
-| 1 | Onde você plantou? | Cartões "Propriedade · Área". **Pula** se só existir uma área. A última usada vem marcada | Sim |
-| 2 | O que você plantou? | Grade de culturas com ícone. "Outro" abre um campo de texto | Sim |
-| 3 | Quando você plantou? | Hoje / Ontem / Outro dia | Sim |
-| 4 | Plantou semente ou muda? | Semente / Muda / Rama ou maniva / Outro. Depois: "Quantas?" com número e unidade | Não |
-| 5 | De onde veio a semente (ou muda)? | 🏡 Guardei da minha roça / 🤝 Banco ou troca de sementes / 🌿 Comprei ou ganhei **orgânica** / 🏪 Comprei ou ganhei **comum** | Não (recomendado) |
-| 6 | Qual o tamanho da área que você plantou? | Atalho "A área toda (2 tarefas)", se a área tiver tamanho. Senão, número + `Tarefa` / `m²` / `Hectare` | Não (recomendado) |
-| 7 | Quando acha que vai colher? | Em 1 mês / 2 meses / 3 meses / Outra data / Não sei | Não (recomendado) |
-| 8 | Quer acrescentar algo? | Foto / Recado / Escrever | Não |
-| 9 | Confirmação | | |
+| #   | Pergunta                                 | Opções                                                                                                                        | Obrig.?           |
+| --- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| 1   | Onde você plantou?                       | Cartões "Propriedade · Área". **Pula** se só existir uma área. A última usada vem marcada                                     | Sim               |
+| 2   | O que você plantou?                      | Grade de culturas com ícone. "Outro" abre um campo de texto                                                                   | Sim               |
+| 3   | Quando você plantou?                     | Hoje / Ontem / Outro dia                                                                                                      | Sim               |
+| 4   | Plantou semente ou muda?                 | Semente / Muda / Rama ou maniva / Outro. Depois: "Quantas?" com número e unidade                                              | Não               |
+| 5   | De onde veio a semente (ou muda)?        | 🏡 Guardei da minha roça / 🤝 Banco ou troca de sementes / 🌿 Comprei ou ganhei **orgânica** / 🏪 Comprei ou ganhei **comum** | Não (recomendado) |
+| 6   | Qual o tamanho da área que você plantou? | Atalho "A área toda (2 tarefas)", se a área tiver tamanho. Senão, número + `Tarefa` / `m²` / `Hectare`                        | Não (recomendado) |
+| 7   | Quando acha que vai colher?              | Em 1 mês / 2 meses / 3 meses / Outra data / Não sei                                                                           | Não (recomendado) |
+| 8   | Quer acrescentar algo?                   | Foto / Recado / Escrever                                                                                                      | Não               |
+| 9   | Confirmação                              |                                                                                                                               |                   |
 
 Ao salvar com previsão de colheita, o app **agenda um lembrete local** para as 7h do dia previsto ([§A.7](#a7-avisos-e-lembretes)).
 
 #### A.5.2 💧 Usei adubo ou remédio (`INPUT_APPLICATION`)
 
-| # | Pergunta | Opções | Obrig.? |
-|---|---|---|---|
-| 1 | Usou em qual plantação? | Cartões dos plantios **ativos**: ícone da cultura, área e "plantado há 3 semanas". Depois, "Na área toda (sem plantação)", que pede a área. No fim, "Ver plantações terminadas" | Sim |
-| 2 | O que você usou? | "Seus produtos" (histórico) primeiro. Depois as categorias: Adubo / Biofertilizante / Calda ou remédio natural / Corretivo do solo. "Outro" abre texto | Sim |
-| 3 | Para quê? | Adubar / Combater praga ou doença / Corrigir o solo / Outro. **Vem marcado** pelo tipo do produto | Não (recomendado) |
-| 4 | Quanto você usou? | Número + Litros / kg / Sacos / Latas / Carroças / mais… | Não (recomendado) |
-| 5 | Quando? | Hoje / Ontem / Outro dia | Sim |
-| 6–7 | Extras e confirmação | | |
+| #   | Pergunta                | Opções                                                                                                                                                                          | Obrig.?           |
+| --- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| 1   | Usou em qual plantação? | Cartões dos plantios **ativos**: ícone da cultura, área e "plantado há 3 semanas". Depois, "Na área toda (sem plantação)", que pede a área. No fim, "Ver plantações terminadas" | Sim               |
+| 2   | O que você usou?        | "Seus produtos" (histórico) primeiro. Depois as categorias: Adubo / Biofertilizante / Calda ou remédio natural / Corretivo do solo. "Outro" abre texto                          | Sim               |
+| 3   | Para quê?               | Adubar / Combater praga ou doença / Corrigir o solo / Outro. **Vem marcado** pelo tipo do produto                                                                               | Não (recomendado) |
+| 4   | Quanto você usou?       | Número + Litros / kg / Sacos / Latas / Carroças / mais…                                                                                                                         | Não (recomendado) |
+| 5   | Quando?                 | Hoje / Ontem / Outro dia                                                                                                                                                        | Sim               |
+| 6–7 | Extras e confirmação    |                                                                                                                                                                                 |                   |
 
 Se o produto do catálogo tiver `needsAuthorization`, **não bloqueie nem assuste**. Na confirmação, mostre em tom neutro: "A associação pode pedir mais informações sobre este produto." O coordenador vê o registro destacado no painel.
 
 #### A.5.3 🧺 Colhi (`HARVEST`)
 
-| # | Pergunta | Opções | Obrig.? |
-|---|---|---|---|
-| 1 | Colheu qual plantação? | Plantios ativos, **ordenados pela previsão de colheita mais próxima**. "Ver plantações terminadas" no fim | Sim |
-| 2 | Quando? | Hoje / Ontem / Outro dia | Sim |
-| 3 | Quanto você colheu? | Número + Molhos / Caixas / kg / Sacos / Dúzias / Unidades. A unidade da última colheita **desta cultura** já vem marcada | Não (recomendado) |
-| 4 | Terminou de colher esta plantação? | "Não, ainda vou colher mais" / "Sim, terminei". O "Sim" encerra o plantio (RN12) | Sim (padrão: Não) |
-| 5–6 | Extras e confirmação | | |
+| #   | Pergunta                           | Opções                                                                                                                   | Obrig.?           |
+| --- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| 1   | Colheu qual plantação?             | Plantios ativos, **ordenados pela previsão de colheita mais próxima**. "Ver plantações terminadas" no fim                | Sim               |
+| 2   | Quando?                            | Hoje / Ontem / Outro dia                                                                                                 | Sim               |
+| 3   | Quanto você colheu?                | Número + Molhos / Caixas / kg / Sacos / Dúzias / Unidades. A unidade da última colheita **desta cultura** já vem marcada | Não (recomendado) |
+| 4   | Terminou de colher esta plantação? | "Não, ainda vou colher mais" / "Sim, terminei". O "Sim" encerra o plantio (RN12)                                         | Sim (padrão: Não) |
+| 5–6 | Extras e confirmação               |                                                                                                                          |                   |
 
 Pelo lembrete "Já colheu a alface?" → **Sim**, o fluxo abre direto no passo 3, com o plantio e a data de hoje preenchidos.
 
 #### A.5.4 🚚 Vendi ou entreguei (`OUTFLOW`)
 
-| # | Pergunta | Opções | Obrig.? |
-|---|---|---|---|
-| 1 | Para qual propriedade? | **Pula** se houver só uma | Sim |
-| 2 | O que saiu da roça? | Culturas **colhidas recentemente** primeiro; depois a grade completa | Sim |
-| 3 | Para onde foi? | Feira / Cooperativa / Merenda escolar (PNAE) / Compra do governo (PAA) / Atravessador / Vendi direto / Consumo da família / Doação / Outro | Não (recomendado) |
-| 4 | Quanto? | Número + unidade | Não (recomendado) |
-| 5 | Quando? | Hoje / Ontem / Outro dia | Sim |
-| 6 | Extras | + "Para quem vendeu? (opcional)" | Não |
-| 7 | Confirmação | | |
+| #   | Pergunta               | Opções                                                                                                                                     | Obrig.?           |
+| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| 1   | Para qual propriedade? | **Pula** se houver só uma                                                                                                                  | Sim               |
+| 2   | O que saiu da roça?    | Culturas **colhidas recentemente** primeiro; depois a grade completa                                                                       | Sim               |
+| 3   | Para onde foi?         | Feira / Cooperativa / Merenda escolar (PNAE) / Compra do governo (PAA) / Atravessador / Vendi direto / Consumo da família / Doação / Outro | Não (recomendado) |
+| 4   | Quanto?                | Número + unidade                                                                                                                           | Não (recomendado) |
+| 5   | Quando?                | Hoje / Ontem / Outro dia                                                                                                                   | Sim               |
+| 6   | Extras                 | + "Para quem vendeu? (opcional)"                                                                                                           | Não               |
+| 7   | Confirmação            |                                                                                                                                            |                   |
 
 #### A.5.5 🛒 Comprei produto para a roça (`INPUT_PURCHASE`)
 
-| # | Pergunta | Opções | Obrig.? |
-|---|---|---|---|
-| 1 | Tire uma foto da nota ou da embalagem | Câmera grande / "Não tenho foto" | Não (recomendado) |
-| 2 | Para qual propriedade? | Pula se houver só uma | Sim |
-| 3 | O que você comprou? | Igual ao passo 2 da aplicação | Sim |
-| 4 | Quanto? | Número + unidade | Não (recomendado) |
-| 5 | De quem comprou? | Texto curto, com sugestões dos fornecedores já usados. **Pula sozinho** se houver foto | Não |
-| 6 | Quando? | Hoje / Ontem / Outro dia | Sim |
-| 7 | Confirmação | | |
+| #   | Pergunta                              | Opções                                                                                 | Obrig.?           |
+| --- | ------------------------------------- | -------------------------------------------------------------------------------------- | ----------------- |
+| 1   | Tire uma foto da nota ou da embalagem | Câmera grande / "Não tenho foto"                                                       | Não (recomendado) |
+| 2   | Para qual propriedade?                | Pula se houver só uma                                                                  | Sim               |
+| 3   | O que você comprou?                   | Igual ao passo 2 da aplicação                                                          | Sim               |
+| 4   | Quanto?                               | Número + unidade                                                                       | Não (recomendado) |
+| 5   | De quem comprou?                      | Texto curto, com sugestões dos fornecedores já usados. **Pula sozinho** se houver foto | Não               |
+| 6   | Quando?                               | Hoje / Ontem / Outro dia                                                               | Sim               |
+| 7   | Confirmação                           |                                                                                        |                   |
 
 #### A.5.6 Confirmação e sucesso
 
@@ -280,15 +290,16 @@ Pelo lembrete "Já colheu a alface?" → **Sim**, o fluxo abre direto no passo 3
 
 **Lista:** um cartão por propriedade, com nome, município e a **frase da certificação**:
 
-| Status | Frase | Cor + ícone |
-|---|---|---|
-| `VALID` | "Certificação em dia até 23/10/2027" | verde ✓ |
-| `EXPIRING` | "Certificação vence em 20 dias (23/11)" | amarelo ⚠ |
-| `EXPIRED` | "Certificação vencida desde 23/10" | vermelho ✕ |
-| `SUSPENDED` | "Certificação suspensa. Fale com a associação" | vermelho ⏸ |
-| sem certificação | "Sem certificação cadastrada" | cinza |
+| Status           | Frase                                          | Cor + ícone |
+| ---------------- | ---------------------------------------------- | ----------- |
+| `VALID`          | "Certificação em dia até 23/10/2027"           | verde ✓     |
+| `EXPIRING`       | "Certificação vence em 20 dias (23/11)"        | amarelo ⚠   |
+| `EXPIRED`        | "Certificação vencida desde 23/10"             | vermelho ✕  |
+| `SUSPENDED`      | "Certificação suspensa. Fale com a associação" | vermelho ⏸  |
+| sem certificação | "Sem certificação cadastrada"                  | cinza       |
 
 **Detalhe** (o "Propriedade - Exemplo" do protótipo):
+
 - **Áreas:** nome, tamanho e status em linguagem simples: "Orgânica", "Em conversão até 03/2027", "Não orgânica", "A definir pela associação".
 - **Plantações ativas**, com atalho para registrar.
 - **Certificação:** validade, produtos e pessoas vinculadas. O histórico fica em "Ver anteriores".
@@ -297,6 +308,7 @@ Pelo lembrete "Já colheu a alface?" → **Sim**, o fluxo abre direto no passo 3
 - **Botões:** `Editar` e `Apagar`.
 
 **Cadastrar propriedade** (tela que não existia no protótipo), em assistente:
+
 1. "Qual o nome da propriedade?" (ex.: Sítio Boa Vista).
 2. "Você está na propriedade agora?"
    - **Sim:** captura o GPS, mostra "Localização salva ✓ (precisão de 8 m)" e permite tentar de novo.
@@ -309,6 +321,7 @@ Pelo lembrete "Já colheu a alface?" → **Sim**, o fluxo abre direto no passo 3
 Depois de salvar, aparece a mensagem "A associação vai cadastrar as áreas da sua propriedade. Enquanto isso, você já pode registrar na Área principal."
 
 **Apagar propriedade** (RF08/RF09):
+
 - Confirmação com o nome digitado? **Não**, é difícil demais para o público. Use dois passos: um botão "Apagar" e depois um diálogo com "Apagar o Sítio Boa Vista? Os registros continuam guardados na associação." `[Não]` `[Sim, apagar]`.
 - Com certificação válida: "Esta propriedade tem certificação válida. Para apagar, fale com a associação." `[WhatsApp]`.
 
@@ -316,18 +329,19 @@ Depois de salvar, aparece a mensagem "A associação vai cadastrar as áreas da 
 
 **Avisos (sino):** uma lista única, com ícone por tipo:
 
-| Tipo | Ícone | Ao tocar |
-|---|---|---|
-| Certificação vencendo, vencida ou suspensa | ⚠ | Detalhe da propriedade |
-| Comunicado da associação | 📢 | Texto completo, com foto |
-| Dica de manejo | 💡 | Texto completo |
-| Pedido de correção | ✏ | Detalhe do registro |
-| Registro alterado pela associação | ℹ | Detalhe do registro |
-| Visita (período de visitas, visita marcada, véspera, mudança, cancelamento) | 🤝 | Detalhe da visita ([§A.13](#a13-visitas-do-grupo-e-da-comissão-spg)) |
+| Tipo                                                                        | Ícone | Ao tocar                                                             |
+| --------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------- |
+| Certificação vencendo, vencida ou suspensa                                  | ⚠     | Detalhe da propriedade                                               |
+| Comunicado da associação                                                    | 📢    | Texto completo, com foto                                             |
+| Dica de manejo                                                              | 💡    | Texto completo                                                       |
+| Pedido de correção                                                          | ✏     | Detalhe do registro                                                  |
+| Registro alterado pela associação                                           | ℹ     | Detalhe do registro                                                  |
+| Visita (período de visitas, visita marcada, véspera, mudança, cancelamento) | 🤝    | Detalhe da visita ([§A.13](#a13-visitas-do-grupo-e-da-comissão-spg)) |
 
 O aviso "Sincronização concluída" do protótipo foi **removido**: o status de envio já aparece no topo da tela inicial, e um aviso a mais só gera ruído.
 
 **Notificações no celular:**
+
 - **Push** (vindo do servidor): comunicados, dicas, certificação, pedidos de correção e visitas.
 - **Lembretes locais**, que funcionam sem internet:
   - colheita prevista: "Já colheu a alface da Horta de baixo?", com as ações `Sim, registrar` e `Ainda não` (o "Ainda não" pergunta de novo em 3 dias);
@@ -349,30 +363,31 @@ O aviso "Sincronização concluída" do protótipo foi **removido**: o status de
 
 ### A.9 Vocabulário
 
-| Evite | Use |
-|---|---|
-| Manejo, registrar manejo | "O que você fez na roça?" / Registrar |
-| Aplicação de insumo | Usei adubo ou remédio |
-| Insumo | Produto, adubo, remédio, semente |
-| Aquisição de insumo | Comprei produto para a roça |
-| Saída / comercialização | Vendi ou entreguei |
-| Lote / talhão / gleba | Área (o agricultor pode usar o nome que quiser, ex.: "Roça de baixo") |
-| Cultivar | Cultura / o que plantou |
-| Material de propagação | Semente ou muda |
-| Sincronizar / sincronização | Enviar para a associação |
-| Offline | Sem internet |
-| Erro / inválido / falha | "Não deu certo", "confira", "precisa de atenção" |
-| Autenticar / login | Entrar |
-| Status pendente | Esperando internet |
-| Obrigatório | (não diga; só não mostre o "Pular") |
-| Excluir / deletar | Apagar |
-| Visita de pares | Visita do grupo |
-| Visita de verificação / Comissão de Avaliação | Visita da comissão |
-| Roteiro / checklist | Perguntas da visita |
-| Não conformidade | Algo que precisa melhorar |
-| Visitador | Quem vai visitar |
+| Evite                                         | Use                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| Manejo, registrar manejo                      | "O que você fez na roça?" / Registrar                                 |
+| Aplicação de insumo                           | Usei adubo ou remédio                                                 |
+| Insumo                                        | Produto, adubo, remédio, semente                                      |
+| Aquisição de insumo                           | Comprei produto para a roça                                           |
+| Saída / comercialização                       | Vendi ou entreguei                                                    |
+| Lote / talhão / gleba                         | Área (o agricultor pode usar o nome que quiser, ex.: "Roça de baixo") |
+| Cultivar                                      | Cultura / o que plantou                                               |
+| Material de propagação                        | Semente ou muda                                                       |
+| Sincronizar / sincronização                   | Enviar para a associação                                              |
+| Offline                                       | Sem internet                                                          |
+| Erro / inválido / falha                       | "Não deu certo", "confira", "precisa de atenção"                      |
+| Autenticar / login                            | Entrar                                                                |
+| Status pendente                               | Esperando internet                                                    |
+| Obrigatório                                   | (não diga; só não mostre o "Pular")                                   |
+| Excluir / deletar                             | Apagar                                                                |
+| Visita de pares                               | Visita do grupo                                                       |
+| Visita de verificação / Comissão de Avaliação | Visita da comissão                                                    |
+| Roteiro / checklist                           | Perguntas da visita                                                   |
+| Não conformidade                              | Algo que precisa melhorar                                             |
+| Visitador                                     | Quem vai visitar                                                      |
 
 Outras regras de texto:
+
 - Frases curtas, na segunda pessoa ("Você colheu…"), sem siglas. PNAE e PAA vêm com explicação: "Merenda escolar (PNAE)".
 - Datas como "hoje", "ontem" e "20/11". Nunca "2026-11-20".
 - Números com vírgula decimal ("2,5 tarefas").
@@ -393,6 +408,7 @@ Outras regras de texto:
 ### A.11 Painel do coordenador: princípios de UX
 
 O detalhamento das telas está na [§D](#parte-d-painel-do-coordenador-vite--react). Princípios:
+
 - **Desktop-first** (1280 px ou mais), com menu lateral fixo. Deve funcionar até 1024 px. Celular não é prioridade.
 - **Tudo é lista com filtro:** os filtros ficam na URL, para poder compartilhar ou voltar com o botão do navegador. Ordenação por coluna. Exportar CSV na própria lista.
 - **O que precisa de ação aparece primeiro:** certificações vencendo, visitas urgentes ou sem resultado, pedidos de correção abertos, agricultores sem registrar há 30 dias, itens sem catálogo.
@@ -406,11 +422,13 @@ O detalhamento das telas está na [§D](#parte-d-painel-do-coordenador-vite--rea
 Faça os testes com pelo menos **5 agricultores** da associação a cada versão importante, seguindo o Guia de Estrutura do projeto.
 
 **Condições:**
+
 - no campo, ou num lugar parecido;
 - em celular Android de entrada;
 - com o modo avião ligado em parte do teste.
 
 **Roteiro (tarefas):**
+
 1. Entrar no app com o CPF e o código (com o coordenador junto).
 2. Registrar que plantou alface hoje.
 3. Registrar que colheu 20 molhos de alface ontem.
@@ -423,11 +441,11 @@ Faça os testes com pelo menos **5 agricultores** da associação a cada versão
 
 **Medidas:**
 
-| Medida | Meta |
-|---|---|
-| Concluiu sem ajuda? | ≥ 4 de 5 |
-| Tempo da tarefa 3 | < 30 s |
-| Erros (toques errados, voltas) | Anotar |
+| Medida                                              | Meta                  |
+| --------------------------------------------------- | --------------------- |
+| Concluiu sem ajuda?                                 | ≥ 4 de 5              |
+| Tempo da tarefa 3                                   | < 30 s                |
+| Erros (toques errados, voltas)                      | Anotar                |
 | Frase do agricultor ("achei fácil", "não entendi…") | Anotar ao pé da letra |
 
 **Técnica:** peça para a pessoa pensar em voz alta e **não ajude** durante a tarefa. Anote onde ela travou. Toda travada vira um ajuste de tela ou de texto antes do próximo teste.
@@ -435,6 +453,7 @@ Faça os testes com pelo menos **5 agricultores** da associação a cada versão
 ### A.13 Visitas do grupo e da comissão (SPG)
 
 As regras estão na [doc 1, Parte 6](1-arquitetura-e-contrato.md#parte-6-certificação-participativa-spg-visitas-e-documentos). No app, o agricultor encontra as visitas em dois papéis:
+
 - **quem recebe** a visita na própria roça;
 - **quem vai visitar** a roça de outro.
 
@@ -453,6 +472,7 @@ Não há aba nova. As visitas aparecem como **cartão na tela inicial**, acima d
 ```
 
 O detalhe mostra:
+
 - quando é e o tipo, em palavras simples;
 - quem vem;
 - o que deixar à mão: "Deixe à mão as notas de compra e mostre onde guarda os adubos e remédios. Os seus registros já estão no app.";
@@ -471,6 +491,7 @@ Depois da visita, o cartão vira "Visita feita em 14/11 ✓" e mostra **"O que o
 ```
 
 **Detalhe da visita** (funciona sem internet):
+
 - **Quando** e **quem vai junto**.
 - **Como chegar:** o roteiro de acesso, `Abrir no mapa` e `Ligar para José`.
 - **O que José registrou**, em frases curtas montadas a partir do resumo (`brief`):
@@ -506,14 +527,14 @@ Usa o **mesmo molde do assistente de registro** ([§A.5](#a5-fluxos-de-registro)
 └──────────────────────────────────────┘
 ```
 
-| # | Passo | Como |
-|---|---|---|
-| 1 | "Quem foi na visita?" | Lista de nomes com caixas grandes, já marcados os visitadores da visita |
-| 2…n | Uma tela por pergunta do roteiro ([doc 1 §6.6](1-arquitetura-e-contrato.md#66-roteiro-da-visita-modelo-in19-v1)) | Quatro botões grandes. Ao tocar, vai sozinho para a próxima. Se for **Não**, abre "Quer explicar?" com 🎤 / 📷 / ✏, e dá para pular |
-| n+1 | "Encontraram algo que precisa melhorar?" | Sim / Não. Se Sim: "O que precisa melhorar?" (áudio ou texto, obrigatório) |
-| n+2 | "Quer deixar alguma recomendação?" | Áudio ou texto. Pode pular |
-| n+3 | Fotos da visita | `📷 Tirar foto` (opcional) |
-| — | Confirmação | "Visita ao Sítio Boa Vista, hoje. 12 Sim, 1 Não, 1 Não se aplica. Precisa melhorar: separar a calda dos outros produtos." `[ ✏ Corrigir ]` `[ ✓ Salvar visita ]` |
+| #   | Passo                                                                                                            | Como                                                                                                                                                             |
+| --- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | "Quem foi na visita?"                                                                                            | Lista de nomes com caixas grandes, já marcados os visitadores da visita                                                                                          |
+| 2…n | Uma tela por pergunta do roteiro ([doc 1 §6.6](1-arquitetura-e-contrato.md#66-roteiro-da-visita-modelo-in19-v1)) | Quatro botões grandes. Ao tocar, vai sozinho para a próxima. Se for **Não**, abre "Quer explicar?" com 🎤 / 📷 / ✏, e dá para pular                              |
+| n+1 | "Encontraram algo que precisa melhorar?"                                                                         | Sim / Não. Se Sim: "O que precisa melhorar?" (áudio ou texto, obrigatório)                                                                                       |
+| n+2 | "Quer deixar alguma recomendação?"                                                                               | Áudio ou texto. Pode pular                                                                                                                                       |
+| n+3 | Fotos da visita                                                                                                  | `📷 Tirar foto` (opcional)                                                                                                                                       |
+| —   | Confirmação                                                                                                      | "Visita ao Sítio Boa Vista, hoje. 12 Sim, 1 Não, 1 Não se aplica. Precisa melhorar: separar a calda dos outros produtos." `[ ✏ Corrigir ]` `[ ✓ Salvar visita ]` |
 
 **Sucesso:** "Visita salva! A associação vai imprimir o papel para todos assinarem na reunião do grupo."
 
@@ -521,14 +542,14 @@ O responsável pode **corrigir** a visita pelo app por 7 dias. Depois disso, apa
 
 #### A.13.4 Textos dos avisos
 
-| Aviso | Texto |
-|---|---|
+| Aviso              | Texto                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | Período de visitas | "Está chegando a época das visitas da certificação do Sítio Boa Vista. A associação vai combinar as datas com o grupo." |
-| Você vai visitar | "Você vai visitar o Sítio Boa Vista, de José, na quinta, 14/11." |
-| Visita na sua roça | "Visita do grupo na sua roça: quinta, 14/11, com João e Ana." |
-| Véspera | "Amanhã: visita ao Sítio Boa Vista." / "Amanhã tem visita do grupo na sua roça." |
-| Mudou | "A visita ao Sítio Boa Vista mudou para sábado, 16/11." |
-| Cancelada | "A visita ao Sítio Boa Vista de 14/11 foi cancelada." |
+| Você vai visitar   | "Você vai visitar o Sítio Boa Vista, de José, na quinta, 14/11."                                                        |
+| Visita na sua roça | "Visita do grupo na sua roça: quinta, 14/11, com João e Ana."                                                           |
+| Véspera            | "Amanhã: visita ao Sítio Boa Vista." / "Amanhã tem visita do grupo na sua roça."                                        |
+| Mudou              | "A visita ao Sítio Boa Vista mudou para sábado, 16/11."                                                                 |
+| Cancelada          | "A visita ao Sítio Boa Vista de 14/11 foi cancelada."                                                                   |
 
 ## Parte B: comum
 
@@ -588,6 +609,7 @@ Os pacotes `domain` e `api-types` são consumidos **direto do código-fonte Type
   - app: `expo lint` (ESLint com `eslint-config-expo`).
 
   O **Prettier** cuida da formatação (`pnpm format`); o lint não opina sobre estilo.
+
 - **pnpm 12 via Corepack:** a versão está no `packageManager`. O pnpm bloqueia versões publicadas há pouco tempo (`minimumReleaseAge`); as exceções que ele precisou acrescentar ficam comentadas no `pnpm-workspace.yaml`.
 - `.editorconfig`: 2 espaços, LF, UTF-8, nova linha no fim. O `.java` usa o que o google-java-format define.
 - **Todo arquivo começa com um comentário de uma frase** dizendo o que faz. Funções exportadas têm JSDoc.
@@ -651,18 +673,21 @@ Exemplo:
 import type { RecordWrite } from "@agrofacil/api-types";
 
 const RECOMMENDED: Record<RecordWrite["type"], (r: any) => string[]> = {
-  PLANTING: (r) => [
-    !r.plantedArea && "plantedArea",
-    !r.seedOrigin && "seedOrigin",
-    !r.expectedHarvestOn && "expectedHarvestOn",
-  ].filter(Boolean) as string[],
-  INPUT_APPLICATION: (r) => [!r.quantity && "quantity", !r.purpose && "purpose"].filter(Boolean) as string[],
+  PLANTING: (r) =>
+    [
+      !r.plantedArea && "plantedArea",
+      !r.seedOrigin && "seedOrigin",
+      !r.expectedHarvestOn && "expectedHarvestOn",
+    ].filter(Boolean) as string[],
+  INPUT_APPLICATION: (r) =>
+    [!r.quantity && "quantity", !r.purpose && "purpose"].filter(Boolean) as string[],
   HARVEST: (r) => [!r.quantity && "quantity"].filter(Boolean) as string[],
-  INPUT_PURCHASE: (r) => [
-    !r.quantity && "quantity",
-    !r.supplier && !r.hasPhoto && "supplierOrReceipt",
-  ].filter(Boolean) as string[],
-  OUTFLOW: (r) => [!r.quantity && "quantity", !r.destination && "destination"].filter(Boolean) as string[],
+  INPUT_PURCHASE: (r) =>
+    [!r.quantity && "quantity", !r.supplier && !r.hasPhoto && "supplierOrReceipt"].filter(
+      Boolean,
+    ) as string[],
+  OUTFLOW: (r) =>
+    [!r.quantity && "quantity", !r.destination && "destination"].filter(Boolean) as string[],
 };
 
 /** Campos recomendados que faltam. A lista vazia significa registro "Completo". */
@@ -762,20 +787,20 @@ apps/mobile/
 
 Construa um conjunto **pequeno** de componentes próprios, sem biblioteca de UI pesada, para controlar tamanho, contraste e acessibilidade ([§A.10](#a10-acessibilidade-e-visual)).
 
-| Componente | Uso |
-|---|---|
-| `BigActionButton` | Os 5 botões da tela inicial (ícone + texto, ≥ 56 dp) |
-| `ChoiceGrid` | Grade de opções com ícone (culturas, produtos, destinos), com "Mais usados" no topo e "Outro" |
-| `ChoiceList` | Lista de cartões grandes (plantios, áreas, propriedades) |
-| `NumberStepper` | `[−] 30 [+]` com passo inteligente (1 até 20, depois 5) e toque no número para abrir o teclado |
-| `UnitChips` | Botões de unidade, filtrados pelo tipo de medida (área ou quantidade) |
-| `QuickDate` | Hoje / Ontem / Outro dia |
-| `WizardScaffold` | Cabeçalho com voltar, título e bolinhas de progresso; pergunta grande + 🔊; rodapé com Pular / Próximo |
-| `SyncBadge` | ✓ enviado / ⏱ esperando internet / ! precisa de atenção |
-| `CertificationBanner` | O aviso fixo da RN21 |
-| `Callout` | Caixa amarela de pedido de correção ou aviso |
-| `SpeakButton` | Lê um texto com `expo-speech` |
-| `ConfirmDialog` | Diálogo com frase clara e botões "Não" / "Sim, apagar" |
+| Componente            | Uso                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `BigActionButton`     | Os 5 botões da tela inicial (ícone + texto, ≥ 56 dp)                                                   |
+| `ChoiceGrid`          | Grade de opções com ícone (culturas, produtos, destinos), com "Mais usados" no topo e "Outro"          |
+| `ChoiceList`          | Lista de cartões grandes (plantios, áreas, propriedades)                                               |
+| `NumberStepper`       | `[−] 30 [+]` com passo inteligente (1 até 20, depois 5) e toque no número para abrir o teclado         |
+| `UnitChips`           | Botões de unidade, filtrados pelo tipo de medida (área ou quantidade)                                  |
+| `QuickDate`           | Hoje / Ontem / Outro dia                                                                               |
+| `WizardScaffold`      | Cabeçalho com voltar, título e bolinhas de progresso; pergunta grande + 🔊; rodapé com Pular / Próximo |
+| `SyncBadge`           | ✓ enviado / ⏱ esperando internet / ! precisa de atenção                                                |
+| `CertificationBanner` | O aviso fixo da RN21                                                                                   |
+| `Callout`             | Caixa amarela de pedido de correção ou aviso                                                           |
+| `SpeakButton`         | Lê um texto com `expo-speech`                                                                          |
+| `ConfirmDialog`       | Diálogo com frase clara e botões "Não" / "Sim, apagar"                                                 |
 
 ```ts
 // Tokens visuais do app; tamanhos pensados para leitura no sol e dedos grandes (§A.10).
@@ -807,8 +832,10 @@ export const theme = {
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
 const localSyncColumns = {
-  localStatus: text("local_status", { enum: ["SYNCED", "PENDING", "ERROR"] }).notNull().default("SYNCED"),
-  localError: text("local_error"),            // JSON
+  localStatus: text("local_status", { enum: ["SYNCED", "PENDING", "ERROR"] })
+    .notNull()
+    .default("SYNCED"),
+  localError: text("local_error"), // JSON
   serverVersion: integer("server_version"),
   deletedLocally: integer("deleted_locally", { mode: "boolean" }).notNull().default(false),
 };
@@ -819,15 +846,15 @@ export const records = sqliteTable("records", {
   number: integer("number"),
   propertyId: text("property_id").notNull(),
   plotId: text("plot_id"),
-  plantingId: text("planting_id"),             // copiado do payload para facilitar consultas
+  plantingId: text("planting_id"), // copiado do payload para facilitar consultas
   performedOn: text("performed_on").notNull(), // "2026-10-24"
   completeness: text("completeness").notNull(),
   missingFields: text("missing_fields").notNull(), // JSON array
-  cycleStatus: text("cycle_status"),           // só plantios
+  cycleStatus: text("cycle_status"), // só plantios
   expectedHarvestOn: text("expected_harvest_on"),
-  subjectKey: text("subject_key"),             // cropId / inputId / texto "Outro", para "mais usados"
+  subjectKey: text("subject_key"), // cropId / inputId / texto "Outro", para "mais usados"
   createdById: text("created_by_id"),
-  payload: text("payload").notNull(),          // JSON com o Record completo do contrato
+  payload: text("payload").notNull(), // JSON com o Record completo do contrato
   updatedAt: text("updated_at"),
   ...localSyncColumns,
 });
@@ -856,11 +883,19 @@ export const outbox = sqliteTable("outbox", {
 export async function saveRecord(record: RecordWrite, ctx: SaveContext): Promise<void> {
   const missing = missingFields({ ...record, hasPhoto: ctx.hasPhoto });
   await db.transaction(async (tx) => {
-    await tx.insert(records).values(toRow(record, missing)).onConflictDoUpdate({
-      target: records.id,
-      set: toRow(record, missing),
+    await tx
+      .insert(records)
+      .values(toRow(record, missing))
+      .onConflictDoUpdate({
+        target: records.id,
+        set: toRow(record, missing),
+      });
+    await enqueueMutation(tx, {
+      entity: "record",
+      entityId: record.id,
+      op: "UPSERT",
+      data: record,
     });
-    await enqueueMutation(tx, { entity: "record", entityId: record.id, op: "UPSERT", data: record });
   });
   scheduleSync(); // gatilho com 2 s de espera (doc 1 §4.4.1)
 }
@@ -932,7 +967,7 @@ export async function requestSync(): Promise<void> {
       await syncOnce();
     } while (rerunRequested);
   } catch (e) {
-    await recordSyncFailure(e);   // guarda em sync_state; a tela inicial mostra "esperando internet"
+    await recordSyncFailure(e); // guarda em sync_state; a tela inicial mostra "esperando internet"
   } finally {
     running = false;
   }
@@ -953,8 +988,8 @@ async function pushAll(): Promise<void> {
     const { data, error, response } = await api.POST("/sync/push", {
       body: { deviceId: await session.deviceId(), mutations: batch.map(toMutation) },
     });
-    if (error) throw new SyncHttpError(response.status, error);   // rede/5xx/401 tratados acima
-    await outboxRepository.applyResults(data.results);            // APPLIED → remove; REJECTED → marca ERROR
+    if (error) throw new SyncHttpError(response.status, error); // rede/5xx/401 tratados acima
+    await outboxRepository.applyResults(data.results); // APPLIED → remove; REJECTED → marca ERROR
   }
 }
 
@@ -962,9 +997,11 @@ async function pullAll(): Promise<void> {
   let hasMore = true;
   while (hasMore) {
     const cursor = await syncStateRepository.cursor();
-    const { data, error, response } = await api.GET("/sync/pull", { params: { query: { cursor } } });
+    const { data, error, response } = await api.GET("/sync/pull", {
+      params: { query: { cursor } },
+    });
     if (error) throw new SyncHttpError(response.status, error);
-    await mirrorRepository.applyPull(data);   // transação: upserts (pulando quem tem pendência), lápides, cursor
+    await mirrorRepository.applyPull(data); // transação: upserts (pulando quem tem pendência), lápides, cursor
     await visitsRepository.pruneOthersDoneBefore(daysAgo(30)); // RN36: resumo de outra roça sai do celular
     hasMore = data.hasMore;
   }
@@ -972,6 +1009,7 @@ async function pullAll(): Promise<void> {
 ```
 
 **Gatilhos** (`src/sync/triggers.ts`), registrados uma vez no layout do `(app)`:
+
 - `NetInfo.addEventListener`, quando `isInternetReachable` passa de `false` para `true`;
 - `AppState.addEventListener("change")` para `active`;
 - **tarefa em segundo plano:**
@@ -1026,18 +1064,18 @@ Um componente genérico `Wizard` com uma **definição declarativa** por tipo. I
 // Definição declarativa de um passo do assistente de registro.
 export type WizardStep<D> = {
   id: string;
-  question: (draft: D, ctx: WizardContext) => string;        // texto grande e o que o 🔊 lê
-  isVisible?: (draft: D, ctx: WizardContext) => boolean;     // ex.: esconder "Onde?" se há uma área só
-  isOptional?: boolean;                                      // mostra "Pular"
-  Component: React.FC<StepProps<D>>;                          // ChoiceGrid, NumberStepper…
+  question: (draft: D, ctx: WizardContext) => string; // texto grande e o que o 🔊 lê
+  isVisible?: (draft: D, ctx: WizardContext) => boolean; // ex.: esconder "Onde?" se há uma área só
+  isOptional?: boolean; // mostra "Pular"
+  Component: React.FC<StepProps<D>>; // ChoiceGrid, NumberStepper…
 };
 
 export type WizardDefinition<D, Out = RecordWrite> = {
-  type?: RecordWrite["type"];                                // só nos registros
-  title: string;                                             // "Colheita"
+  type?: RecordWrite["type"]; // só nos registros
+  title: string; // "Colheita"
   initialDraft: (ctx: WizardContext, preset?: Partial<D>) => D; // hoje, última unidade, plantio do lembrete…
   steps: WizardStep<D>[];
-  toWrite: (draft: D, ctx: WizardContext) => Out;            // valida com o esquema zod do domain
+  toWrite: (draft: D, ctx: WizardContext) => Out; // valida com o esquema zod do domain
 };
 ```
 
@@ -1056,14 +1094,30 @@ export const harvestWizard: WizardDefinition<HarvestDraft> = {
       isOptional: true,
       Component: QuantityStep,
     },
-    { id: "final", question: (d, ctx) => `Terminou de colher ${ctx.plantingLabel(d.plantingId)}?`, Component: YesNoStep },
-    { id: "extras", question: () => "Quer acrescentar algo?", isOptional: true, Component: ExtrasStep },
+    {
+      id: "final",
+      question: (d, ctx) => `Terminou de colher ${ctx.plantingLabel(d.plantingId)}?`,
+      Component: YesNoStep,
+    },
+    {
+      id: "extras",
+      question: () => "Quer acrescentar algo?",
+      isOptional: true,
+      Component: ExtrasStep,
+    },
   ],
-  toWrite: (d, ctx) => harvestWriteSchema.parse({ ...d, id: ctx.recordId, type: "HARVEST", propertyId: ctx.propertyOf(d.plantingId) }),
+  toWrite: (d, ctx) =>
+    harvestWriteSchema.parse({
+      ...d,
+      id: ctx.recordId,
+      type: "HARVEST",
+      propertyId: ctx.propertyOf(d.plantingId),
+    }),
 };
 ```
 
 O `Wizard`:
+
 - calcula os passos visíveis;
 - mostra o progresso;
 - salva o rascunho na tabela `drafts` a cada mudança;
@@ -1071,6 +1125,7 @@ O `Wizard`:
 - chama `saveRecord` e vai para a tela de sucesso, com `Haptics.notificationAsync(Success)`.
 
 **Rotas:**
+
 - `registrar/[type]?preset=<json>` permite abrir já preenchido. É assim que funcionam o lembrete "Já colheu?", o "Registrar de novo" e o "+ Colheita" no detalhe do plantio.
 - **Editar** usa o mesmo assistente, começando na lista de respostas da confirmação.
 - **Completar** mostra só os passos dos `missingFields`.
@@ -1079,7 +1134,10 @@ O `Wizard`:
 
 ```ts
 // Monta o assistente da visita: um passo por pergunta ativa do roteiro, mais os passos fixos (doc 3 §A.13.3).
-export function buildVisitWizard(visit: Visit, items: VisitChecklistItem[]): WizardDefinition<VisitDraft, VisitResultWrite> {
+export function buildVisitWizard(
+  visit: Visit,
+  items: VisitChecklistItem[],
+): WizardDefinition<VisitDraft, VisitResultWrite> {
   const questions = items
     .filter((i) => i.active && (i.appliesTo === "BOTH" || i.appliesTo === visit.type))
     .sort((a, b) => a.sortOrder - b.sortOrder);
@@ -1088,10 +1146,28 @@ export function buildVisitWizard(visit: Visit, items: VisitChecklistItem[]): Wiz
     initialDraft: (ctx) => ({ doneOn: ctx.today, attended: visitorIds(visit), answers: {} }),
     steps: [
       { id: "attended", question: () => "Quem foi na visita?", Component: PeoplePickerStep },
-      ...questions.map((q) => ({ id: q.code, question: () => q.question, Component: ChecklistAnswerStep })),
-      { id: "issues", question: () => "Encontraram algo que precisa melhorar?", Component: IssuesStep },
-      { id: "advice", question: () => "Quer deixar alguma recomendação?", isOptional: true, Component: TextOrAudioStep },
-      { id: "photos", question: () => "Quer tirar fotos da visita?", isOptional: true, Component: PhotosStep },
+      ...questions.map((q) => ({
+        id: q.code,
+        question: () => q.question,
+        Component: ChecklistAnswerStep,
+      })),
+      {
+        id: "issues",
+        question: () => "Encontraram algo que precisa melhorar?",
+        Component: IssuesStep,
+      },
+      {
+        id: "advice",
+        question: () => "Quer deixar alguma recomendação?",
+        isOptional: true,
+        Component: TextOrAudioStep,
+      },
+      {
+        id: "photos",
+        question: () => "Quer tirar fotos da visita?",
+        isOptional: true,
+        Component: PhotosStep,
+      },
     ],
     toWrite: (d) => visitResultSchema.parse(toVisitResult(d, questions)),
   };
@@ -1112,6 +1188,7 @@ export function buildVisitWizard(visit: Visit, items: VisitChecklistItem[]): Wiz
   3. envie em `PUT /me/device`.
 
   Repita a cada abertura, porque o token pode mudar.
+
 - **Ao tocar numa notificação** (`addNotificationResponseReceivedListener`), leia o `data.type` e navegue: registro → `registro/[id]`, certificação → `propriedade/[id]`, visita → `visita/[id]`, comunicado → `avisos`.
 - **Lembretes locais** ([§A.7](#a7-avisos-e-lembretes)), com `Notifications.scheduleNotificationAsync`:
   - **colheita prevista:** gatilho de data às 7h do `expectedHarvestOn`. O identificador é o id do plantio, para reagendar ou cancelar ao editar, ao encerrar o plantio ou ao apagar;
@@ -1121,27 +1198,28 @@ export function buildVisitWizard(visit: Visit, items: VisitChecklistItem[]): Wiz
 
 ### C.10 Telas principais
 
-| Tela | Fonte de dados (sempre local) | Observações |
-|---|---|---|
-| Início | `useLiveQuery` de lembretes, últimos registros, status da fila e certificações | [§A.4](#a4-tela-inicial) |
-| Registros | `records` com filtros por tipo, agrupados por mês, em `FlashList` | Puxar para atualizar dispara o sync |
-| Detalhe do registro | `records` + `attachments` + `correctionRequests` + `people` | Fotos lidas do arquivo local; se ainda não existir, baixe com `/files/{id}/content` |
-| Propriedades | `properties` + `certifications` (status calculado com o `domain`) | |
-| Detalhe da propriedade | `plots`, `workers`, `certifications`, plantios ativos | Mapa estático: `react-native-maps` só se a equipe quiser; para o MVP basta o botão "Abrir no mapa" com `geo:lat,lng` |
-| Avisos | `notifications` + `announcements` | Ao abrir, marca como lido (mutação `notification`) |
-| Meus dados | `me` | A edição exige internet, com aviso claro |
-| Detalhe da visita | `visits` (com o `brief`) + `people` | [§A.13](#a13-visitas-do-grupo-e-da-comissão-spg). "Ligar" usa `tel:`; "Abrir no mapa" usa `geo:lat,lng` |
-| Modo visita | `visits` + `visitChecklistItems` | Assistente gerado pelo `buildVisitWizard` (§C.8) |
+| Tela                   | Fonte de dados (sempre local)                                                  | Observações                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Início                 | `useLiveQuery` de lembretes, últimos registros, status da fila e certificações | [§A.4](#a4-tela-inicial)                                                                                             |
+| Registros              | `records` com filtros por tipo, agrupados por mês, em `FlashList`              | Puxar para atualizar dispara o sync                                                                                  |
+| Detalhe do registro    | `records` + `attachments` + `correctionRequests` + `people`                    | Fotos lidas do arquivo local; se ainda não existir, baixe com `/files/{id}/content`                                  |
+| Propriedades           | `properties` + `certifications` (status calculado com o `domain`)              |                                                                                                                      |
+| Detalhe da propriedade | `plots`, `workers`, `certifications`, plantios ativos                          | Mapa estático: `react-native-maps` só se a equipe quiser; para o MVP basta o botão "Abrir no mapa" com `geo:lat,lng` |
+| Avisos                 | `notifications` + `announcements`                                              | Ao abrir, marca como lido (mutação `notification`)                                                                   |
+| Meus dados             | `me`                                                                           | A edição exige internet, com aviso claro                                                                             |
+| Detalhe da visita      | `visits` (com o `brief`) + `people`                                            | [§A.13](#a13-visitas-do-grupo-e-da-comissão-spg). "Ligar" usa `tel:`; "Abrir no mapa" usa `geo:lat,lng`              |
+| Modo visita            | `visits` + `visitChecklistItems`                                               | Assistente gerado pelo `buildVisitWizard` (§C.8)                                                                     |
 
 ### C.11 Testes do mobile
 
-| Tipo | Ferramenta | O que testar |
-|---|---|---|
-| Unitário | Jest (`jest-expo`) | Repositórios (com SQLite em memória ou mock), compactação da fila, aplicação do pull, definições do assistente |
-| Componentes | React Native Testing Library | `NumberStepper`, `ChoiceGrid`, `Wizard` (navegar, pular, voltar, confirmar) |
-| Ponta a ponta | **Maestro** (fluxos YAML) | Os 9 roteiros da [§A.12](#a12-testes-com-agricultores), incluindo o modo avião (a visita feita sem internet) |
+| Tipo          | Ferramenta                   | O que testar                                                                                                   |
+| ------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Unitário      | Jest (`jest-expo`)           | Repositórios (com SQLite em memória ou mock), compactação da fila, aplicação do pull, definições do assistente |
+| Componentes   | React Native Testing Library | `NumberStepper`, `ChoiceGrid`, `Wizard` (navegar, pular, voltar, confirmar)                                    |
+| Ponta a ponta | **Maestro** (fluxos YAML)    | Os 9 roteiros da [§A.12](#a12-testes-com-agricultores), incluindo o modo avião (a visita feita sem internet)   |
 
 ### C.12 Build e distribuição
+
 - **EAS Build** com o perfil `preview` (`"android": { "buildType": "apk" }`) gera um APK para instalar direto nos celulares, sem Play Store.
 - **Variáveis:** `EXPO_PUBLIC_API_URL` por perfil (`development` → IP da máquina na rede local; `preview` → URL do túnel HTTPS, [doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)).
 - **Versão:** `version` no `app.config.ts`. Suba a `app.min-mobile-version` da API só quando uma mudança quebrar a compatibilidade.
@@ -1215,13 +1293,13 @@ apps/web/src/
   - se o refresh falhar, limpa o cache do TanStack Query e vai para `/entrar?voltar=<rota atual>`.
 - **Telas de autenticação:**
 
-| Rota | Tela |
-|---|---|
-| `/entrar` | E-mail e senha |
-| `/entrar/codigo` | 6 caixas para o código, "Reenviar" com contador de 60 s e a dica `emailHint` |
-| `/esqueci-senha` | Pede o e-mail |
-| `/redefinir-senha?token=` | Nova senha |
-| `/convite?token=` | Nome e senha |
+| Rota                      | Tela                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `/entrar`                 | E-mail e senha                                                               |
+| `/entrar/codigo`          | 6 caixas para o código, "Reenviar" com contador de 60 s e a dica `emailHint` |
+| `/esqueci-senha`          | Pede o e-mail                                                                |
+| `/redefinir-senha?token=` | Nova senha                                                                   |
+| `/convite?token=`         | Nome e senha                                                                 |
 
 - **Logout:** `POST /auth/logout`, depois limpe o cache e vá para `/entrar`.
 
@@ -1233,14 +1311,15 @@ export function useFarmers(filters: FarmerFilters) {
   return useQuery({
     queryKey: ["farmers", filters],
     queryFn: () => unwrap(api.GET("/farmers", { params: { query: filters } })),
-    placeholderData: keepPreviousData,      // a tabela não "pisca" ao trocar de página
+    placeholderData: keepPreviousData, // a tabela não "pisca" ao trocar de página
   });
 }
 
 export function useCreateAccessCode(farmerId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => unwrap(api.POST("/farmers/{id}/access-codes", { params: { path: { id: farmerId } } })),
+    mutationFn: () =>
+      unwrap(api.POST("/farmers/{id}/access-codes", { params: { path: { id: farmerId } } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["farmers", farmerId] }),
   });
 }
@@ -1253,25 +1332,26 @@ export function useCreateAccessCode(farmerId: string) {
 
 ### D.5 Rotas e menu
 
-| Menu | Rota | Tela |
-|---|---|---|
-| Painel | `/` | Dashboard |
-| Agricultores | `/agricultores`, `/agricultores/novo`, `/agricultores/:id` | Lista, cadastro, detalhe com abas |
-| Propriedades | `/propriedades`, `/propriedades/:id` | Lista com alternância Tabela/Mapa; detalhe |
-| Registros | `/registros`, `/registros/novo`, `/registros/:id` | Lista com filtros, registrar pelo agricultor, detalhe + histórico |
-| Certificações | `/certificacoes`, `/certificacoes/nova`, `/certificacoes/:id` | |
-| Grupos | `/grupos`, `/grupos/:id` | |
-| Visitas | `/visitas`, `/visitas/agenda`, `/visitas/:id` | Planejamento, agenda e detalhe |
-| Documentos | `/documentos` | Gerar, listar, cópia assinada, conferir código |
-| Pessoas do SPG | `/spg/colaboradores`, `/spg/comissao`, `/spg/impedimentos` | |
-| Comunicados | `/comunicados` | Lista + modal de novo comunicado |
-| Catálogo | `/catalogo/culturas`, `/catalogo/insumos`, `/catalogo/unidades`, `/catalogo/roteiro`, `/catalogo/sem-catalogo` | |
-| Relatórios | `/relatorios` | |
-| Configurações | `/configuracoes` (associação), `/configuracoes/coordenadores` | |
+| Menu           | Rota                                                                                                           | Tela                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Painel         | `/`                                                                                                            | Dashboard                                                         |
+| Agricultores   | `/agricultores`, `/agricultores/novo`, `/agricultores/:id`                                                     | Lista, cadastro, detalhe com abas                                 |
+| Propriedades   | `/propriedades`, `/propriedades/:id`                                                                           | Lista com alternância Tabela/Mapa; detalhe                        |
+| Registros      | `/registros`, `/registros/novo`, `/registros/:id`                                                              | Lista com filtros, registrar pelo agricultor, detalhe + histórico |
+| Certificações  | `/certificacoes`, `/certificacoes/nova`, `/certificacoes/:id`                                                  |                                                                   |
+| Grupos         | `/grupos`, `/grupos/:id`                                                                                       |                                                                   |
+| Visitas        | `/visitas`, `/visitas/agenda`, `/visitas/:id`                                                                  | Planejamento, agenda e detalhe                                    |
+| Documentos     | `/documentos`                                                                                                  | Gerar, listar, cópia assinada, conferir código                    |
+| Pessoas do SPG | `/spg/colaboradores`, `/spg/comissao`, `/spg/impedimentos`                                                     |                                                                   |
+| Comunicados    | `/comunicados`                                                                                                 | Lista + modal de novo comunicado                                  |
+| Catálogo       | `/catalogo/culturas`, `/catalogo/insumos`, `/catalogo/unidades`, `/catalogo/roteiro`, `/catalogo/sem-catalogo` |                                                                   |
+| Relatórios     | `/relatorios`                                                                                                  |                                                                   |
+| Configurações  | `/configuracoes` (associação), `/configuracoes/coordenadores`                                                  |                                                                   |
 
 ### D.6 Telas
 
 **Painel (`/`)**, a partir de `GET /dashboard/summary`, atualizado a cada 60 s com `refetchInterval` e `refetchIntervalInBackground: false`:
+
 - **Linha de indicadores:**
   - agricultores ativos;
   - certificações em dia, vencendo e vencidas;
@@ -1281,12 +1361,14 @@ export function useCreateAccessCode(farmerId: string) {
   - visitas urgentes e visitas sem resultado.
 
   Cada indicador é clicável e abre a lista já filtrada.
+
 - **Gráfico de rosca:** certificações por status (RF19).
 - **Gráfico de barras:** registros por semana (12 semanas).
 - **Tabela "Vencendo em breve":** próximos vencimentos, com o botão "Renovar".
 - **Lista "Precisam de atenção":** agricultores sem registro há 30 dias, sem aparelho ativo, e os itens sem catálogo.
 
 **Agricultores:**
+
 - **Lista:** nome, CPF mascarado, grupo, município, nº de propriedades, último envio, último registro, incompletos e pior status de certificação. Filtros: busca, grupo, status, município.
 - **Novo:** formulário de uma tela com nome, CPF (máscara e validação com o `domain`), telefone, e-mail opcional, grupo, CAF opcional e endereço com município pesquisável.
   - Ao salvar, **abre direto o modal do código de acesso**.
@@ -1298,6 +1380,7 @@ export function useCreateAccessCode(farmerId: string) {
   - **Aparelhos:** lista com "Revogar" e o botão **"Gerar código de acesso"**.
 
   Ações no topo: Desativar / Reativar.
+
 - **Modal do código:**
 
 ```text
@@ -1314,6 +1397,7 @@ export function useCreateAccessCode(farmerId: string) {
 ```
 
 **Propriedades:**
+
 - **Lista e mapa.** No mapa (react-leaflet com tiles do OpenStreetMap e atribuição visível), um marcador colorido por status da certificação, com popup com link.
 - **Detalhe (abas):**
   - **Dados:** edição. A localização usa um `MapPicker`: clique no mapa ou digite lat/lng;
@@ -1326,6 +1410,7 @@ export function useCreateAccessCode(farmerId: string) {
 - **Excluir:** confirmação. Mostra o erro RN07 com um texto claro.
 
 **Registros:**
+
 - **Lista:** colunas Nº, data, tipo (ícone + rótulo), agricultor, propriedade/área, assunto, quantidade, completude, correções e origem (📱 / 💻). Filtros: tipo, agricultor, propriedade, período, incompletos, com correção aberta e origem. Botão "Exportar CSV" com os filtros atuais.
 - **Detalhe:**
   - campos formatados, fotos (miniaturas que abrem em tamanho grande), áudio (`<audio controls>` com o blob) e mapa pequeno com o ponto do GPS;
@@ -1339,6 +1424,7 @@ export function useCreateAccessCode(farmerId: string) {
   - mostra o aviso da [§A.11](#a11-painel-do-coordenador-princípios-de-ux).
 
 **Certificações:**
+
 - **Lista:** propriedade, agricultor, nº, emissão, validade, dias restantes, status (badge) e filtros (status, vencendo em N dias).
 - **Formulário:**
   - propriedade (pesquisável);
@@ -1358,6 +1444,7 @@ export function useCreateAccessCode(farmerId: string) {
 **Grupos:** lista com nº de agricultores e o alerta "menos de 3" (RN01). O detalhe mostra os agricultores, com "Mover para outro grupo".
 
 **Visitas do SPG** ([doc 1, Parte 6](1-arquitetura-e-contrato.md#parte-6-certificação-participativa-spg-visitas-e-documentos)):
+
 - **Planejamento (`/visitas`)**, a partir de `GET /visits/status`:
   - uma linha por propriedade: agricultor, grupo, vencimento, "Visitas do grupo 1 de 2", "Visita da comissão 0 de 1", visitas marcadas e a situação (badge verde, amarela ou vermelha);
   - filtros: grupo, situação, "só com período de visitas aberto";
@@ -1380,7 +1467,8 @@ Sugestão de visitadores                        (a escolha final é sua, depois 
                                              [ Cancelar ]  [ Marcar visita ]
 ```
 
-  3. Ao salvar, o painel mostra o botão **"Avisar pelo WhatsApp"** para cada visitador, com um link `wa.me` montado no front e a mensagem pronta. Ele **não** aparece para o visitado numa visita sem aviso.
+3. Ao salvar, o painel mostra o botão **"Avisar pelo WhatsApp"** para cada visitador, com um link `wa.me` montado no front e a mensagem pronta. Ele **não** aparece para o visitado numa visita sem aviso.
+
 - **Agenda (`/visitas/agenda`):** lista por data (e calendário mensal opcional), com filtros de grupo, tipo e situação. Visitas com a data passada e sem resultado aparecem em vermelho.
 - **Detalhe da visita (`/visitas/:id`):**
   - cabeçalho com tipo, data, situação, "sem aviso" e participantes (com os motivos da sugestão num tooltip);
@@ -1411,15 +1499,18 @@ Sugestão de visitadores                        (a escolha final é sua, depois 
 **Comunicados:** lista com tipo, título, destino (todos ou grupo), data e autor. O modal "Novo" tem tipo (Aviso / Dica), título, texto (contador de caracteres), destino, imagem opcional e **pré-visualização de como aparece no celular**.
 
 **Catálogo:**
+
 - culturas e insumos em tabelas editáveis (nome, categoria/tipo, ícone, ativo, referência normativa, precisa de autorização, caseiro);
 - unidades com ativar/desativar e ordem;
 - **"Sem catálogo"**: textos livres agrupados com nº de ocorrências e um botão **"Associar a…"** com um select do catálogo, ou "Criar item com este nome".
 
 **Relatórios:**
+
 - cartões, um por relatório ([doc 1 §3.14](1-arquitetura-e-contrato.md#314-relatórios)), com os filtros e o botão "Baixar PDF" / "Baixar planilha";
 - o download usa `fetch` com o token e transforma a resposta em blob, com o nome tirado do `Content-Disposition`.
 
 **Configurações:**
+
 - dados da associação, incluindo o **WhatsApp**, que o app usa no link "Fale com a associação";
 - tamanho da tarefa (m²);
 - dias de alerta;
@@ -1429,6 +1520,7 @@ Sugestão de visitadores                        (a escolha final é sua, depois 
 - coordenadores: lista, convidar e desativar.
 
 ### D.7 Padrões de UI do painel
+
 - **Tabelas:** use o `mantine-datatable` com paginação do servidor (`page`, `size`, `sort` vão para a URL e para a consulta). A ordenação só vale em colunas que a API ordena.
 - **Badges de status:** **as mesmas cores e frases do app** ([§A.6](#a6-propriedades-rf04rf09)), tiradas de `certificationPhrase` e `labels` do `domain`.
 - **Datas:** dayjs com o locale `pt-br`. Exiba `20/11/2026` e use datas relativas só em "último envio" ("há 2 dias").
@@ -1438,31 +1530,32 @@ Sugestão de visitadores                        (a escolha final é sua, depois 
 
 ### D.8 Testes do painel
 
-| Tipo | Ferramenta | O que testar |
-|---|---|---|
-| Unitário / componentes | Vitest + Testing Library + **MSW** (respostas falsas da API) | Formulários (validação + erros do servidor), filtros na URL, modal do código |
-| Ponta a ponta | Playwright, com a API rodando de verdade via Docker Compose | Login com 2FA (o código é lido da API do Mailpit), cadastrar agricultor, gerar código, criar certificação, registrar pelo agricultor, marcar visita com a sugestão, digitar o resultado e gerar o documento de aprovação |
+| Tipo                   | Ferramenta                                                   | O que testar                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unitário / componentes | Vitest + Testing Library + **MSW** (respostas falsas da API) | Formulários (validação + erros do servidor), filtros na URL, modal do código                                                                                                                                             |
+| Ponta a ponta          | Playwright, com a API rodando de verdade via Docker Compose  | Login com 2FA (o código é lido da API do Mailpit), cadastrar agricultor, gerar código, criar certificação, registrar pelo agricultor, marcar visita com a sugestão, digitar o resultado e gerar o documento de aprovação |
 
 Os handlers do MSW também permitem **desenvolver o painel antes da API ficar pronta**. Escreva-os a partir dos exemplos do [doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front).
 
 ### D.9 Build
+
 `pnpm --filter @agrofacil/web build` gera `apps/web/dist/`, que o nginx serve ([doc 2, Parte 3](2-guia-api.md#parte-3-ambiente-e-implantação)). A URL da API é relativa (`/api/v1`), então o mesmo build funciona em qualquer endereço.
 
 ---
 
 ## Parte E: ordem de implementação do front
 
-| Marco | Mobile | Web |
-|---|---|---|
-| F0 | Monorepo, lint, `domain` com testes, `api-types` gerado | idem |
-| F1 | Tema, componentes base, navegação com dados falsos | Layout, rotas, login + 2FA (contra MSW ou a API M2) |
-| F2 | Banco local, repositórios, assistentes dos 5 tipos **offline** (sem API) | Agricultores, código de acesso, grupos |
-| F3 | Ativação, sessão, digital | Propriedades, áreas, trabalhadores, mapa |
-| F4 | Motor de sync (push, pull, arquivos) contra a API M6 | Registros: lista, detalhe, histórico, registrar pelo agricultor, pedidos de correção |
-| F5 | Lembretes locais, push, avisos, certificação na tela inicial | Certificações, comunicados, notificações |
-| F6 | Propriedades (cadastro e detalhe), Meus dados, voz | Painel inicial, catálogo, relatórios, configurações |
-| F7 | Testes com agricultores ([§A.12](#a12-testes-com-agricultores)) e ajustes | Testes com o coordenador e ajustes |
-| F8 | Visitas: cartões na tela inicial, detalhe com o resumo e modo visita offline (contra a API M10) | Planejamento, marcar visita com sugestão, agenda, resultado, documentos, pessoas do SPG, roteiro |
+| Marco | Mobile                                                                                          | Web                                                                                              |
+| ----- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| F0    | Monorepo, lint, `domain` com testes, `api-types` gerado                                         | idem                                                                                             |
+| F1    | Tema, componentes base, navegação com dados falsos                                              | Layout, rotas, login + 2FA (contra MSW ou a API M2)                                              |
+| F2    | Banco local, repositórios, assistentes dos 5 tipos **offline** (sem API)                        | Agricultores, código de acesso, grupos                                                           |
+| F3    | Ativação, sessão, digital                                                                       | Propriedades, áreas, trabalhadores, mapa                                                         |
+| F4    | Motor de sync (push, pull, arquivos) contra a API M6                                            | Registros: lista, detalhe, histórico, registrar pelo agricultor, pedidos de correção             |
+| F5    | Lembretes locais, push, avisos, certificação na tela inicial                                    | Certificações, comunicados, notificações                                                         |
+| F6    | Propriedades (cadastro e detalhe), Meus dados, voz                                              | Painel inicial, catálogo, relatórios, configurações                                              |
+| F7    | Testes com agricultores ([§A.12](#a12-testes-com-agricultores)) e ajustes                       | Testes com o coordenador e ajustes                                                               |
+| F8    | Visitas: cartões na tela inicial, detalhe com o resumo e modo visita offline (contra a API M10) | Planejamento, marcar visita com sugestão, agenda, resultado, documentos, pessoas do SPG, roteiro |
 
 O F8 pode começar antes da API M10 com o MSW e um `brief` de exemplo. Teste o modo visita com um grupo de verdade antes de fechar o roteiro.
 

@@ -29,10 +29,15 @@ const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
 );
 
+const VisitsPage = lazy(() =>
+  import("./pages/VisitsPage").then((m) => ({ default: m.VisitsPage })),
+);
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
+      networkMode: "always",
       refetchOnWindowFocus: false,
     },
   },
@@ -73,6 +78,8 @@ export function App() {
                   <Route path="/propriedades" element={<PropertiesPage />} />
                   <Route path="/registros" element={<RecordsPage />} />
                   <Route path="/perfil" element={<ProfilePage />} />
+                  <Route path="/visitas" element={<VisitsPage />} />
+                  <Route path="/visitas/:id" element={<VisitsPage />} />
                 </Route>
 
                 {/* Telas internas sem bottom nav para melhor aproveitamento do espaço */}

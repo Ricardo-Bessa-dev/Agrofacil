@@ -39,3 +39,66 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm -r build
+      - name: Conferir os tipos versionados
+        run: |
+          pnpm --filter @agrofacil/api-types exec openapi-typescript openapi.json -o "$RUNNER_TEMP/agrofacil-schema.ts"
+          diff -u packages/api-types/src/schema.ts "$RUNNER_TEMP/agrofacil-schema.ts"
+
+  e2e:
+    name: Fluxo principal e restauração
+    runs-on: ubuntu-latest
+    env:
+      BOOTSTRAP_COORDINATOR_EMAIL: coordenacao@example.test
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      APP_PUBLIC_URL: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - run: ./mvnw -B -DskipTests package
+        working-directory: api
+      - name: Instalar navegador de testes
+        run: |
+          npm install --prefix "$RUNNER_TEMP/agrofacil-e2e" --no-audit --no-fund playwright@1.58.2
+          "$RUNNER_TEMP/agrofacil-e2e/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Subir a aplicação e testar
+        run: |
+          set -euo pipefail
+          docker compose -f infra/docker-compose.dev.yml up -d
+          for attempt in {1..30}; do
+            if docker compose -f infra/docker-compose.dev.yml exec -T postgres pg_isready -U agrofacil -d agrofacil; then break; fi
+            sleep 1
+          done
+          export JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+          export STORAGE_DIR="$RUNNER_TEMP/agrofacil-files"
+          mkdir -p "$STORAGE_DIR"
+          java -jar api/target/agrofacil-api-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev > "$RUNNER_TEMP/agrofacil-api.log" 2>&1 &
+          api_pid=$!
+          pnpm --filter @agrofacil/web preview --port 5173 --strictPort > "$RUNNER_TEMP/agrofacil-web.log" 2>&1 &
+          pnpm --filter @agrofacil/mobile preview --port 5174 --strictPort > "$RUNNER_TEMP/agrofacil-mobile.log" 2>&1 &
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          curl --retry 90 --retry-delay 1 --retry-all-errors -fsS http://localhost:8080/api/v1/actuator/health
+          curl --retry 15 --retry-delay 1 --retry-all-errors -fsS http://localhost:5173/ > /dev/null
+          curl --retry 15 --retry-delay 1 --retry-all-errors -fsS http://localhost:5174/sw.js > /dev/null
+          curl -fsS http://localhost:8080/api/v1/openapi.json > "$RUNNER_TEMP/agrofacil-openapi.json"
+          NODE_PATH="$RUNNER_TEMP/agrofacil-e2e/node_modules" node --test testes/e2e/fluxo-principal.cjs
+          node packages/api-types/check-openapi.mjs "$RUNNER_TEMP/agrofacil-openapi.json"
+          kill "$api_pid"
+          wait "$api_pid" || test "$?" = 143
+          bash testes/e2e/restauracao.sh "$STORAGE_DIR" "$RUNNER_TEMP"
+      - name: Logs da aplicação
+        if: failure()
+        run: |
+          for log in "$RUNNER_TEMP"/agrofacil-{api,web,mobile}.log; do
+            if [[ -f "$log" ]]; then tail -120 "$log"; fi
+          done

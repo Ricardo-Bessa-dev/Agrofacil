@@ -1,9 +1,15 @@
 import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Me } from "@agrofacil/api-types";
 import { onlyDigits } from "@agrofacil/domain";
 import {
   api,
   clearSession,
+  deviceIdForActivation,
+  rememberActivatedDevice,
+  flushOfflineQueue,
+  invalidateMobileSyncCache,
+  invalidateStoredSession,
   getStoredAccessToken,
   getStoredDeviceId,
   getStoredUser,
@@ -23,47 +29,70 @@ export interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<Me | null>(() => getStoredUser());
   const [isLoading, setIsLoading] = useState<boolean>(() => Boolean(getStoredAccessToken()));
 
   const refreshProfile = useCallback(async () => {
     try {
-      const { data, error } = await api.GET("/me");
-      if (error || !data) {
-        throw new Error("Falha ao carregar perfil.");
+      const { data, response } = await api.GET("/me");
+      if (response.status === 401 || response.status === 403) {
+        if (!getStoredAccessToken()) setUser(null);
+        return;
       }
+      if (!data || !getStoredAccessToken()) return;
       setUser(data);
       saveSession({ user: data });
     } catch {
-      clearSession();
-      setUser(null);
+      // Mantém o perfil salvo em caso de falha de rede.
     }
   }, []);
 
   useEffect(() => {
     setOnUnauthorized(() => {
+      queryClient.clear();
       setUser(null);
     });
 
-    const token = getStoredAccessToken();
-    if (!token) {
+    if (getStoredAccessToken()) {
+      void refreshProfile().finally(() => setIsLoading(false));
+    } else {
       setIsLoading(false);
-      return;
     }
+    return () => setOnUnauthorized(null);
+  }, [queryClient, refreshProfile]);
 
-    refreshProfile().finally(() => {
-      setIsLoading(false);
-    });
-  }, [refreshProfile]);
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== "af_mobile_user") return;
+      const stored = getStoredUser();
+      if (stored?.id === user?.id) return;
+      invalidateStoredSession();
+      queryClient.clear();
+      setUser(stored);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [queryClient, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const sync = async () => {
+      invalidateMobileSyncCache();
+      await flushOfflineQueue();
+      await queryClient.invalidateQueries();
+    };
+    const onOnline = () => void sync();
+    window.addEventListener("online", onOnline);
+    if (navigator.onLine) onOnline();
+    return () => window.removeEventListener("online", onOnline);
+  }, [queryClient, user?.id]);
 
   const activate = useCallback(
     async (cpf: string, code: string) => {
       const cleanCpf = onlyDigits(cpf);
       const cleanCode = code.trim();
-      const deviceId = getStoredDeviceId();
-      const isIos =
-        typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
+      const deviceId = await deviceIdForActivation(cleanCpf);
       const { data, error, response } = await api.POST("/auth/farmer/activate", {
         body: {
           cpf: cleanCpf,
@@ -74,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               typeof navigator !== "undefined"
                 ? navigator.userAgent.slice(0, 50)
                 : "Celular do Agricultor",
-            platform: isIos ? "IOS" : "ANDROID",
+            platform: "WEB",
             appVersion: "1.0.0",
           },
         },
@@ -92,6 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(detail);
       }
 
+      await rememberActivatedDevice(cleanCpf, deviceId);
+      queryClient.clear();
       saveSession(data);
       if (data.user) {
         setUser(data.user);
@@ -99,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await refreshProfile();
       }
     },
-    [refreshProfile],
+    [queryClient, refreshProfile],
   );
 
   const logout = useCallback(async () => {
@@ -112,9 +143,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ignora erro no logout para garantir saída local
     } finally {
       clearSession();
+      queryClient.clear();
       setUser(null);
     }
-  }, []);
+  }, [queryClient]);
 
   return (
     <AuthContext.Provider

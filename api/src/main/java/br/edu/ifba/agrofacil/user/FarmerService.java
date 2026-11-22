@@ -16,6 +16,7 @@ import br.edu.ifba.agrofacil.common.web.IdName;
 import br.edu.ifba.agrofacil.common.web.JsonPatch;
 import br.edu.ifba.agrofacil.common.web.PageResponse;
 import br.edu.ifba.agrofacil.common.web.VersionCheck;
+import br.edu.ifba.agrofacil.config.AppProperties;
 import br.edu.ifba.agrofacil.group.GroupRepository;
 import br.edu.ifba.agrofacil.group.SpgGroup;
 import br.edu.ifba.agrofacil.property.PropertyService;
@@ -24,6 +25,7 @@ import jakarta.persistence.criteria.Predicate;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -63,6 +65,7 @@ public class FarmerService {
   private final PasswordEncoder passwordEncoder;
   private final JsonPatch jsonPatch;
   private final Clock clock;
+  private final AppProperties props;
 
   public FarmerService(
       UserRepository users,
@@ -77,7 +80,8 @@ public class FarmerService {
       FarmerStats stats,
       PasswordEncoder passwordEncoder,
       JsonPatch jsonPatch,
-      Clock clock) {
+      Clock clock,
+      AppProperties props) {
     this.users = users;
     this.profiles = profiles;
     this.groups = groups;
@@ -91,6 +95,7 @@ public class FarmerService {
     this.passwordEncoder = passwordEncoder;
     this.jsonPatch = jsonPatch;
     this.clock = clock;
+    this.props = props;
   }
 
   /** Lista paginada com os indicadores de cada agricultor. */
@@ -208,7 +213,7 @@ public class FarmerService {
   @Transactional
   public void deactivate(CurrentUser user, UUID id) {
     var farmer = findFarmer(user, id);
-    farmer.setStatus(UserStatus.INACTIVE);
+    farmer.depart(clock.instant());
     deviceService.revokeAll(id, user.id());
     accessCodes
         .findByFarmerIdAndUsedAtIsNullAndRevokedAtIsNull(id)
@@ -218,7 +223,7 @@ public class FarmerService {
 
   @Transactional
   public void reactivate(CurrentUser user, UUID id) {
-    findFarmer(user, id).setStatus(UserStatus.ACTIVE);
+    findFarmer(user, id).rejoin();
   }
 
   /**
@@ -263,6 +268,20 @@ public class FarmerService {
     if (municipalityId != null && !municipalities.exists(municipalityId)) {
       throw ApiException.validation(
           "address.municipalityId", "NOT_FOUND", "Município não encontrado.");
+    }
+    if (write.phone() != null
+        && !Objects.equals(write.phone(), farmer.getPhone())
+        && !write.phone().matches("\\+55[1-9][0-9]9[0-9]{8}")) {
+      throw ApiException.validation(
+          "phone", "INVALID_PHONE", "Informe um celular com DDD e 11 dígitos.");
+    }
+    if (write.groupJoinedYear() != null
+        && !Objects.equals(write.groupJoinedYear(), profile.getGroupJoinedYear())
+        && write.groupJoinedYear() > Year.now(clock.withZone(props.zone())).getValue()) {
+      throw ApiException.validation(
+          "groupJoinedYear",
+          "YEAR_IN_FUTURE",
+          "O ano de ingresso não pode ser posterior ao ano atual.");
     }
     farmer.setEmail(write.email());
     farmer.setPhone(write.phone());

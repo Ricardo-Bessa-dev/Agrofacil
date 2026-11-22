@@ -1141,6 +1141,88 @@ export function SettingsPage() {
           </form>
         </div>
       </div>
+      <FarmerRetentionPanel />
     </div>
+  );
+}
+
+function FarmerRetentionPanel() {
+  const queryClient = useQueryClient();
+  const candidates = useQuery({
+    queryKey: ["farmer-retention"],
+    queryFn: () => unwrap(api.GET("/retention/farmers")),
+    enabled: false,
+  });
+  const anonymize = useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        api.POST("/retention/farmers/{id}/anonymize", {
+          params: { path: { id } },
+        }),
+      ),
+    onSuccess: async () => {
+      await candidates.refetch();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["farmers"] }),
+        queryClient.invalidateQueries({ queryKey: ["documents"] }),
+      ]);
+    },
+  });
+
+  return (
+    <section className="af-card">
+      <h2 className="af-card-title">Retenção de dados</h2>
+      <p>Confira os agricultores desligados cujo prazo de retenção já terminou.</p>
+      <button
+        type="button"
+        className="af-btn af-btn--outline af-btn--sm"
+        disabled={candidates.isFetching}
+        onClick={() => void candidates.refetch()}
+      >
+        {candidates.isFetching ? "Consultando…" : "Simular anonimização"}
+      </button>
+      {candidates.isError && <p role="alert">Não foi possível consultar a simulação.</p>}
+      {candidates.isSuccess && !candidates.data.length && (
+        <p role="status">Nenhum agricultor elegível.</p>
+      )}
+      {anonymize.isError && <p role="alert">{anonymize.error.message}</p>}
+      {anonymize.isSuccess && (
+        <p role="status">Cadastro anonimizado. Arquivos encaminhados para exclusão.</p>
+      )}
+      {candidates.data?.length ? (
+        <ul>
+          {candidates.data.map((item) => (
+            <li key={item.id}>
+              <strong>{item.name}</strong>
+              {item.departedAt && ` · desligamento em ${formatDateTimePtBr(item.departedAt)}`}
+              {` · ${item.attachments ?? 0} anexo(s) · ${item.documents ?? 0} documento(s) vinculados`}
+              {!!item.sharedDocumentsToReview && (
+                <p>
+                  {item.sharedDocumentsToReview} documento(s) compartilhado(s) com possível
+                  referência. Revise-os antes de confirmar.
+                </p>
+              )}
+              <button
+                type="button"
+                className="af-btn af-btn--outline af-btn--sm"
+                disabled={anonymize.isPending || !item.id}
+                onClick={() => {
+                  if (
+                    item.id &&
+                    window.confirm(
+                      `Anonimizar os dados de ${item.name} e encaminhar seus arquivos vinculados para exclusão? Esta ação é permanente.`,
+                    )
+                  ) {
+                    anonymize.mutate(item.id);
+                  }
+                }}
+              >
+                Confirmar anonimização
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }

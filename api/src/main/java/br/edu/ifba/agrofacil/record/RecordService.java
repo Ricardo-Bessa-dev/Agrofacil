@@ -116,7 +116,11 @@ public class RecordService {
         GeoPointValue.from(location),
         location == null ? null : location.capturedAt(),
         write.clientCreatedAt());
-    applyFields(record, write, associations.get(property.getAssociationId()).getTarefaM2());
+    applyFields(
+        record,
+        write,
+        placement.planting(),
+        associations.get(property.getAssociationId()).getTarefaM2());
     record.refreshCompleteness(attachments.recordHasPhoto(id)); // RN09
     // Toca a linha-mãe para a versão subir mesmo quando só o subtipo mudou (doc 2, Parte 2).
     record.touch();
@@ -227,7 +231,8 @@ public class RecordService {
   }
 
   /** Copia os campos do tipo, convertendo áreas para m² (RN14) e arredondando (RN28). */
-  private static void applyFields(ManagementRecord record, RecordWrite write, BigDecimal tarefaM2) {
+  private static void applyFields(
+      ManagementRecord record, RecordWrite write, Planting planting, BigDecimal tarefaM2) {
     switch (write) {
       case PlantingWrite p ->
           ((Planting) record)
@@ -267,8 +272,10 @@ public class RecordService {
       case OutflowWrite o ->
           ((Outflow) record)
               .setFields(
-                  o.cropId(),
-                  blankToNull(o.productOtherName()),
+                  planting == null ? o.cropId() : planting.getCropId(),
+                  planting == null
+                      ? blankToNull(o.productOtherName())
+                      : planting.getCropOtherName(),
                   o.plantingId(),
                   QuantityValue.from(o.quantity()),
                   o.destination(),

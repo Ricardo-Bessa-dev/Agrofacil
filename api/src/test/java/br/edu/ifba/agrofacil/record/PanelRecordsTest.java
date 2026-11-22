@@ -252,4 +252,22 @@ class PanelRecordsTest extends IntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("PLOT_NAME_IN_USE"));
   }
+
+  @Test
+  void linkedOutflowUsesPlantingProductAndCatalogUnit() throws Exception {
+    var plantingId = planting(today.toString());
+    call(
+            HttpMethod.POST,
+            "/records",
+            coordinator.accessToken(),
+            """
+            {"type":"OUTFLOW","propertyId":"%s","performedOn":"%s",
+             "plantingId":"%s","productOtherName":"Produto que não corresponde",
+             "quantity":{"value":2.5,"unit":"KILOGRAM"},"destination":"FAIR"}
+            """
+                .formatted(propertyId, today, plantingId))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.productOtherName").value("Alface crespa"))
+        .andExpect(jsonPath("$.quantity.unit").value("KILOGRAM"));
+  }
 }

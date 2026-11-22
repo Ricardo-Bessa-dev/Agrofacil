@@ -1,6 +1,7 @@
 // Formatos do roteiro da visita no contrato (doc 1 §3.15).
 package br.edu.ifba.agrofacil.spg.checklist;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -17,6 +18,7 @@ public final class ChecklistDtos {
    * @param question texto do app (falado pelo 🔊)
    * @param formalText texto do PDF
    */
+  @Schema(name = "VisitChecklistItemWrite")
   public record Write(
       @Pattern(regexp = "[A-Z][A-Z0-9_]{2,59}") String code,
       @NotNull VisitChecklistItem.AppliesTo appliesTo,
@@ -27,6 +29,7 @@ public final class ChecklistDtos {
       @Min(0) @Max(9999) Integer sortOrder,
       Boolean active) {}
 
+  @Schema(name = "VisitChecklistItemView")
   public record View(
       String code,
       VisitChecklistItem.AppliesTo appliesTo,

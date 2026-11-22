@@ -2,7 +2,7 @@
 
 Este guia leva do projeto vazio até a API completa do contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)) e depois até ela rodando, com HTTPS e backup. Ele assume que a equipe conhece Java e o básico de Spring. O que é específico do Agrofácil vem com código.
 
-> **Antes de começar:** leia o modelo e as RNs ([doc 1, Parte 2](1-arquitetura-e-contrato.md#parte-2-modelo-de-domínio-e-regras-de-negócio)), o contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)), a sincronização ([doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline)) e a segurança e LGPD ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)). Este guia mostra *como* implementar; o *quê* está lá.
+> **Antes de começar:** leia o modelo e as RNs ([doc 1, Parte 2](1-arquitetura-e-contrato.md#parte-2-modelo-de-domínio-e-regras-de-negócio)), o contrato ([doc 1, Parte 3](1-arquitetura-e-contrato.md#parte-3-contrato-api-front)), a sincronização ([doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline)) e a segurança e LGPD ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)). Este guia mostra _como_ implementar; o _quê_ está lá.
 
 **Os três documentos:** [doc 1: arquitetura, domínio e contrato](1-arquitetura-e-contrato.md) · **doc 2: guia da API (este)** · [doc 3: guia do front-end](3-guia-front-end.md)
 
@@ -10,22 +10,23 @@ Este guia leva do projeto vazio até a API completa do contrato ([doc 1, Parte 3
 
 - **[Parte 1. Construção da API (Spring Boot)](#parte-1-construção-da-api-spring-boot)**: [1.1 Pré-requisitos](#11-pré-requisitos) · [1.2 Criando o projeto](#12-criando-o-projeto) · [1.3 Configuração](#13-configuração) · [1.4 Estrutura de pacotes](#14-estrutura-de-pacotes) · [1.5 Banco e migrações (Flyway)](#15-banco-e-migrações-flyway) · [1.6 Entidades JPA](#16-entidades-jpa) · [1.7 Segurança e autenticação](#17-segurança-e-autenticação) · [1.8 Validação e erros](#18-validação-e-erros) · [1.9 Padrão de um recurso REST (exemplo: agricultores)](#19-padrão-de-um-recurso-rest-exemplo-agricultores) · [1.10 Registros de manejo](#110-registros-de-manejo) · [1.11 Sincronização](#111-sincronização) · [1.12 Rotinas, notificações, push e e-mail](#112-rotinas-notificações-push-e-e-mail) · [1.13 Arquivos](#113-arquivos) · [1.14 Relatórios](#114-relatórios) · [1.15 Visitas e documentos do SPG](#115-visitas-e-documentos-do-spg) · [1.16 OpenAPI e geração de tipos](#116-openapi-e-geração-de-tipos) · [1.17 Testes](#117-testes) · [1.18 Ordem de implementação sugerida](#118-ordem-de-implementação-sugerida) · [1.19 Checklist antes de cada PR](#119-checklist-antes-de-cada-pr)
 - **[Parte 2. DDL de referência (migração V1)](#parte-2-ddl-de-referência-migração-v1)**
-- **[Parte 3. Ambiente e implantação](#parte-3-ambiente-e-implantação)**: [3.1 Visão dos ambientes](#31-visão-dos-ambientes) · [3.2 Desenvolvimento local](#32-desenvolvimento-local) · [3.3 Demonstração: Docker Compose completo](#33-demonstração-docker-compose-completo) · [3.4 nginx: painel + API na mesma origem](#34-nginx-painel--api-na-mesma-origem) · [3.5 HTTPS para os celulares no campo: túnel](#35-https-para-os-celulares-no-campo-túnel) · [3.6 Backup e restauração](#36-backup-e-restauração) · [3.7 Distribuição do app (APK)](#37-distribuição-do-app-apk) · [3.8 Caminho para produção real](#38-caminho-para-produção-real) · [3.9 Variáveis de ambiente (`infra/.env.example`)](#39-variáveis-de-ambiente-infraenvexample)
+- **[Parte 3. Ambiente e implantação](#parte-3-ambiente-e-implantação)**: [3.1 Visão dos ambientes](#31-visão-dos-ambientes) · [3.2 Desenvolvimento local](#32-desenvolvimento-local) · [3.3 Demonstração: Docker Compose completo](#33-demonstração-docker-compose-completo) · [3.4 nginx: painel + API na mesma origem](#34-nginx-painel--api-na-mesma-origem) · [3.5 HTTPS para os celulares no campo: túnel](#35-https-para-os-celulares-no-campo-túnel) · [3.6 Backup e restauração](#36-backup-e-restauração) · [3.7 Distribuição da PWA](#37-distribuição-da-pwa) · [3.8 Caminho para produção real](#38-caminho-para-produção-real) · [3.9 Variáveis de ambiente (`infra/.env.example`)](#39-variáveis-de-ambiente-infraenvexample)
 
 ## Parte 1. Construção da API (Spring Boot)
 
 ### 1.1 Pré-requisitos
 
-| Ferramenta | Versão |
-|---|---|
-| JDK | 21 (Temurin) |
-| Maven | O wrapper do projeto (`./mvnw`) |
+| Ferramenta              | Versão                                                  |
+| ----------------------- | ------------------------------------------------------- |
+| JDK                     | 21 (Temurin)                                            |
+| Maven                   | O wrapper do projeto (`./mvnw`)                         |
 | Docker + Docker Compose | Para o Postgres, o Mailpit e os testes (Testcontainers) |
-| IDE | IntelliJ IDEA ou VS Code com o Extension Pack for Java |
+| IDE                     | IntelliJ IDEA ou VS Code com o Extension Pack for Java  |
 
 ### 1.2 Criando o projeto
 
 Em [start.spring.io](https://start.spring.io), escolha:
+
 - **Project:** Maven. **Language:** Java. **Spring Boot:** a versão 4.x estável mais recente. **Java:** 21. **Packaging:** Jar.
 - **Group:** `br.edu.ifba`. **Artifact:** `agrofacil-api`. **Package name:** `br.edu.ifba.agrofacil`.
 - **Dependências:** Spring Web, Spring Data JPA, PostgreSQL Driver, Flyway Migration, Validation, Spring Security, OAuth2 Resource Server, Java Mail Sender, Thymeleaf, Spring Boot Actuator, Testcontainers, Docker Compose Support.
@@ -110,8 +111,8 @@ spring:
     username: ${DB_USER:agrofacil}
     password: ${DB_PASSWORD:agrofacil}
   jpa:
-    open-in-view: false            # evita consultas escondidas na serialização
-    hibernate.ddl-auto: validate   # o esquema é só do Flyway
+    open-in-view: false # evita consultas escondidas na serialização
+    hibernate.ddl-auto: validate # o esquema é só do Flyway
     properties:
       hibernate.jdbc.time_zone: UTC
       org.hibernate.envers.audit_table_suffix: _aud
@@ -127,25 +128,25 @@ spring:
     max-request-size: 11MB
   threads.virtual.enabled: true
   docker.compose:
-    file: ../infra/docker-compose.dev.yml   # relativo à pasta api/
-    lifecycle-management: start-only       # não derruba o banco quando a API para
+    file: ../infra/docker-compose.dev.yml # relativo à pasta api/
+    lifecycle-management: start-only # não derruba o banco quando a API para
 
 server:
   servlet.context-path: /api/v1
-  forward-headers-strategy: framework   # atrás do nginx/túnel
+  forward-headers-strategy: framework # atrás do nginx/túnel
 
 management:
   endpoints.web.exposure.include: health
   endpoint.health.probes.enabled: true
-  health.mail.enabled: false   # SMTP fora do ar não deve marcar a API como caída; e-mail falho só vai para o log
+  health.mail.enabled: false # SMTP fora do ar não deve marcar a API como caída; e-mail falho só vai para o log
 
 app:
   timezone: America/Bahia
-  public-url: ${APP_PUBLIC_URL:http://localhost:5173}   # usado nos links dos e-mails
+  public-url: ${APP_PUBLIC_URL:http://localhost:5173} # usado nos links dos e-mails
   min-mobile-version: ${APP_MIN_MOBILE_VERSION:1.0.0}
   terms-version: "2026-10"
   jwt:
-    secret: ${JWT_SECRET:}               # 32+ bytes em base64; nunca no git. Vazio = a API não sobe (@NotBlank)
+    secret: ${JWT_SECRET:} # 32+ bytes em base64; nunca no git. Vazio = a API não sobe (@NotBlank)
     access-ttl: PT15M
   farmer-session:
     refresh-idle-ttl: P180D
@@ -165,6 +166,7 @@ springdoc:
 Leia o bloco `app.*` com uma classe `@ConfigurationProperties(prefix = "app")` (record Java), nunca com `@Value` espalhado. Assim toda configuração fica num lugar só.
 
 **Perfis:**
+
 - `dev`: Swagger ligado e logs SQL opcionais.
 - `prod`: Swagger desligado (`springdoc.api-docs.enabled: false`), cookies `Secure` e `JWT_SECRET` obrigatório.
 
@@ -207,6 +209,7 @@ br.edu.ifba.agrofacil
 ```
 
 Regras de dependência:
+
 - `controller` → `service` → `repository`.
 - O controller **nunca** acessa um repositório direto e **nunca** devolve uma entidade: só DTOs (records Java).
 - Regras de negócio ficam em métodos que dá para testar sem Spring (`CompletenessRules`, `UnitConversion`, `CertificationStatusCalculator`, `VisitCycleCalculator`, `VisitorEligibility`, `VisitorScoring`).
@@ -497,14 +500,15 @@ O código é gerado com `SecureRandom`: `String.format("%06d", random.nextInt(1_
 
 #### 1.7.4 Tokens
 
-| | Mobile | Web |
-|---|---|---|
-| Acesso | JWT de 15 min com `sub`, `role`, `assoc` e `dev` | JWT de 15 min com `sub`, `role` e `assoc` |
-| Refresh | 32 bytes aleatórios em base64url, no corpo da resposta | O mesmo, no cookie `af_refresh` |
-| Guardado no banco | `SHA-256(token)` em `refresh_token` | Idem |
-| Validade | 180 dias sem uso (renovada a cada refresh) | 12 h sem uso, no máximo 7 dias desde o login |
+|                   | Mobile                                                 | Web                                          |
+| ----------------- | ------------------------------------------------------ | -------------------------------------------- |
+| Acesso            | JWT de 15 min com `sub`, `role`, `assoc` e `dev`       | JWT de 15 min com `sub`, `role` e `assoc`    |
+| Refresh           | 32 bytes aleatórios em base64url, no corpo da resposta | O mesmo, no cookie `af_refresh`              |
+| Guardado no banco | `SHA-256(token)` em `refresh_token`                    | Idem                                         |
+| Validade          | 180 dias sem uso (renovada a cada refresh)             | 12 h sem uso, no máximo 7 dias desde o login |
 
 Rotação (RN04), no `TokenService.refresh`:
+
 1. Procure pelo hash.
 2. Se não existe, está expirado ou está revogado → `REFRESH_INVALID`.
 3. Se já tem `used_at`, é **reutilização**: revogue a família inteira e responda `REFRESH_INVALID`.
@@ -512,6 +516,7 @@ Rotação (RN04), no `TokenService.refresh`:
 5. Marque `used_at`, crie um token novo na mesma família e devolva.
 
 > **Tolerância de rede:** se o app enviar o refresh e perder a resposta, a próxima tentativa parece reutilização e derruba a sessão, o que obrigaria o agricultor a pedir outro código. Para evitar isso:
+>
 > - aceite a reutilização se ela vier dentro de **30 s** do `used_at`, do **mesmo aparelho**;
 > - nesse caso, revogue só o sucessor anterior (que o app nunca recebeu) e emita um novo;
 > - depois dos 30 s, vale a regra normal e a família inteira é revogada.
@@ -519,6 +524,7 @@ Rotação (RN04), no `TokenService.refresh`:
 Cookie do web (`ResponseCookie`): `httpOnly(true).secure(isProd).sameSite("Strict").path("/api/v1/auth").maxAge(Duration.ofDays(7))`. Em `/auth/refresh` e `/auth/logout`, quando o token vem por cookie, exija `X-Requested-With: agrofacil-web` (CSRF).
 
 #### 1.7.5 Login do coordenador com 2FA
+
 1. `login`: confira o limite de tentativas, procure o usuário e confira a senha com `passwordEncoder.matches`. Se o usuário não existir, rode um `matches` contra um hash falso para que o tempo de resposta seja igual. Depois crie o `login_challenge` com o hash do código e envie o e-mail **depois do commit** ([§1.12.3](#1123-e-mail)).
 2. `verify`: confira a expiração, as tentativas (5) e o código. Marque o desafio como usado, grave `last_login_at` e crie a sessão web.
 3. **Primeiro coordenador:** um `ApplicationRunner` verifica se não há coordenadores e se `app.bootstrap.coordinator-email` está definido. Se sim, cria o usuário e um token de **convite**, e envia o e-mail. Em `dev`, o link também vai para o log (o Mailpit mostra o e-mail em `http://localhost:8025`).
@@ -543,11 +549,13 @@ public class RateLimiter {
 Para obter o IP do cliente atrás do nginx ou do túnel, use `request.getRemoteAddr()` com `server.forward-headers-strategy: framework`. Só confie no `X-Forwarded-For` vindo do proxy.
 
 #### 1.7.7 Versão mínima do app
+
 O `AppVersionFilter` lê `X-App-Version`. Se a versão for menor que `app.min-mobile-version`, ele responde 426 `APP_UPDATE_REQUIRED`. Requisições sem o cabeçalho (o painel web) passam.
 
 ### 1.8 Validação e erros
 
 **Duas camadas:**
+
 1. **Bean Validation** nos DTOs de entrada: formato e tamanho (`@NotNull`, `@Size`, `@Positive`, `@Digits(integer = 9, fraction = 3)`, `@PastOrPresent`…).
 2. **Regras de negócio** no serviço: datas relativas ao plantio, escopo, transições de estado. Elas lançam `ValidationException(List<FieldError>)` ou `ApiException(ErrorCode)`.
 
@@ -670,6 +678,7 @@ public class RecordService {
 ```
 
 Pontos de atenção:
+
 - **Conversão de áreas** (`UnitConversion.toSquareMeters(value, unit, association.tarefaM2)`) é uma função pura com testes. Ela rejeita unidades que não são de área.
 - **Colheita final (RN12):** depois de salvar uma colheita, recalcule o plantio: se existir alguma colheita final não excluída, o plantio fica `FINISHED`, com `finished_on` igual à data da colheita final mais recente; senão, fica `ACTIVE`. Faça o mesmo ao excluir uma colheita.
 - **JSON polimórfico:** os DTOs são `sealed interface RecordView permits PlantingView, …` com `@JsonTypeInfo(use = NAME, include = EXISTING_PROPERTY, property = "type", visible = true)` e `@JsonSubTypes`. No springdoc, anote com `@Schema(oneOf = {...}, discriminatorProperty = "type", discriminatorMapping = {...})` para o OpenAPI gerar uma união discriminada que o `openapi-typescript` entende. Faça o mesmo para `RecordWrite`.
@@ -719,6 +728,7 @@ public class SyncPushService {
 - Notificações e push gerados durante o push só saem **depois do commit** de cada mutação ([§1.12.3](#1123-e-mail)).
 
 #### 1.11.2 Pull
+
 - Um método por tabela no `SyncPullService`, todos com a mesma forma: `findChanges(scope, cursor, limit)` ordenado por `sync_seq`. Cuidado: consultas por `sync_seq` **não** filtram `deleted_at`, porque as excluídas viram lápides.
 - Converta tudo para os **mesmos DTOs** usados no painel (`PropertyView`, `RecordView`…). Assim o mobile e o web enxergam o mesmo formato.
 - O cursor é o `sync_seq` como texto. Trate o cursor recebido como opaco: se não for um número válido, responda `reset: true`.
@@ -747,6 +757,7 @@ public class CertificationAlertJob {
 ```
 
 O `AlertPlanner.nextAlert` é uma **função pura**, testada com vários cenários:
+
 - `daysToExpire = expiresOn - today`.
 - Se `daysToExpire < 0` e o alerta `0` não foi enviado → envia o alerta "venceu" (`days = 0`).
 - Senão, pegue o **menor** limite `N >= daysToExpire` ainda não enviado. Envie só ele, e marque os limites maiores como enviados, para não mandar três alertas de uma vez depois de alguns dias sem a rotina rodar.
@@ -754,19 +765,27 @@ O `AlertPlanner.nextAlert` é uma **função pura**, testada com vários cenári
 Habilite `@EnableScheduling` numa classe de configuração. Como há uma só instância da API, não é preciso lock distribuído. Os avisos das visitas do SPG ficam numa rotina própria, às 07:05 ([§1.15.5](#1155-rotina-de-avisos-rn30)).
 
 #### 1.12.2 Notificações e push
+
 - `NotificationService.notify(userIds, type, title, body, data)` grava as linhas de `notification` e publica um evento `NotificationsCreated`.
 - O `ExpoPushSender` escuta com `@TransactionalEventListener(phase = AFTER_COMMIT)` + `@Async`. Ele busca os `push_token` dos aparelhos ativos e envia em lotes de até 100 para `POST https://exp.host/--/api/v2/push/send`:
 
 ```json
-[{ "to": "ExponentPushToken[xxxx]", "title": "Sua certificação vence em 30 dias",
-   "body": "Sítio Boa Vista: vence em 23/11. Fale com a associação para renovar.",
-   "data": { "type": "CERTIFICATION_EXPIRING", "certificationId": "..." }, "sound": "default" }]
+[
+  {
+    "to": "ExponentPushToken[xxxx]",
+    "title": "Sua certificação vence em 30 dias",
+    "body": "Sítio Boa Vista: vence em 23/11. Fale com a associação para renovar.",
+    "data": { "type": "CERTIFICATION_EXPIRING", "certificationId": "..." },
+    "sound": "default"
+  }
+]
 ```
 
 - Se a resposta trouxer `DeviceNotRegistered`, limpe o `push_token` desse aparelho.
 - Falha no push **não** é erro de negócio: registre no log e siga. A notificação continua no app (pull).
 
 #### 1.12.3 E-mail
+
 - O `EmailSender` usa o `JavaMailSender`, com templates Thymeleaf de texto simples em `templates/mail/`.
 - Use os mesmos `@TransactionalEventListener(AFTER_COMMIT)` + `@Async`, para nunca enviar e-mail de algo que deu rollback.
 - E-mails da API: código 2FA, convite, redefinição de senha e alertas de certificação para os coordenadores. Também para o agricultor, se ele tiver e-mail.
@@ -793,10 +812,12 @@ public interface FileStorage {
   6. marque `uploaded_at`.
 
   Se já existe um arquivo com o mesmo hash, responda `204` sem regravar (idempotência).
+
 - **Download:** `ResponseEntity<StreamingResponseBody>` com `Content-Type` do metadado, `Cache-Control: private` e `Content-Disposition: inline`.
 - **Futuro:** um `S3FileStorage` (MinIO ou provedor de nuvem) troca a implementação sem mexer no resto.
 
 ### 1.14 Relatórios
+
 - **PDF:**
   1. monte um modelo de dados (record Java) com tudo o que o relatório mostra;
   2. renderize um template Thymeleaf (`templates/report/field-notebook.html`) com CSS simples para impressão (A4, fonte de 11 pt, tabelas com borda);
@@ -849,6 +870,7 @@ O serviço junta as contagens de visitas `PLANNED` e os `warnings` (sem localiza
 #### 1.15.2 Sugestão de visitadores (RN32, RN33)
 
 Separe em três partes. Assim a regra fica testável e o motivo de cada sugestão sai pronto em português:
+
 1. **`VisitorEligibility`** (função pura): aplica as regras fixas da RN32 e devolve `eligible` ou `excluded(motivo)`. A mesma classe valida o `POST /visits` e o `PATCH`. A sugestão e a gravação nunca divergem.
 2. **`VisitorScoring`** (função pura): calcula a pontuação e os motivos.
 3. **`VisitorSuggestionService`**: busca os candidatos, as propriedades deles, o histórico de visitas de 12 meses e a agenda de 30 dias **em lote**, e chama as duas funções.
@@ -908,11 +930,13 @@ public final class VisitorScoring {
   - pela rotina diária, para as visitas `PLANNED` dos próximos 14 dias.
 
   Só grave se o JSON mudou: uma escrita desnecessária muda o `sync_seq` e força o pull nos celulares.
+
 - **Quem recebe:** o `brief` vai no DTO da visita **só** para os participantes e para o coordenador. Para o agricultor visitado, o mesmo DTO vai com `brief = null`.
 
 #### 1.15.4 Resultado pelo app (mutação `visit`)
 
 O `VisitMutationHandler` segue o mesmo padrão dos outros handlers ([§1.11.1](#1111-push)):
+
 1. Carrega a visita e confere se o usuário é o `recorder` e se ela não está `CANCELLED`. Senão → `REJECTED NOT_FOUND`.
 2. Confere o prazo de 7 dias depois de `done_on` (`VISIT_NOT_EDITABLE`).
 3. Chama `VisitService.recordResult(visit, write, Source.MOBILE, user)`, **o mesmo método** do `PUT /visits/{id}/result`. Ele valida o roteiro (`CHECKLIST_INCOMPLETE`), grava e muda para `DONE`.
@@ -970,6 +994,7 @@ document/
 4. **Substitua o anterior:** na mesma transação, o documento anterior do mesmo `kind` e assunto vira `SUPERSEDED`, com `superseded_by_id`.
 
 Regras dos templates:
+
 - **Rodapé em todas as páginas:** use `@page { @bottom-center { content: ... counter(page) " de " counter(pages); } }`. O openhtmltopdf suporta essas margens de página.
 - **Escape:** só texto com `th:text`, nunca `th:utext`. Os campos vêm de agricultores e coordenadores.
 - **Decisão (D7):** a seção da decisão é **estática** no template, só com caixas vazias. O modelo de dados nem tem esse campo (ADR-15).
@@ -981,20 +1006,21 @@ Regras dos templates:
 
 #### 1.15.7 Testes do SPG
 
-| Teste | Tipo |
-|---|---|
-| `VisitCycleCalculator`: sem certificação, período fechado/aberto, URGENT com 30 e 31 dias, contagem fora do ciclo ignorada | Unitário |
-| `VisitorEligibility`: cada exclusão da RN32, verificação com e sem `verification_same_group_allowed` | Unitário |
-| `VisitorScoring`: com e sem GPS, rodízio, troca, equilíbrio, desempate estável | Unitário |
-| `VerificationCodes`: alfabeto e tamanho; colisão tratada com nova tentativa | Unitário |
-| Visita sem aviso não gera notificação nem entra no pull do visitado (RN31) | Integração |
-| `POST /visits` com visitador impedido → `422 VISITOR_NOT_ELIGIBLE` | Integração |
-| Resultado pelo app de quem não é o responsável → `REJECTED` | Integração |
-| Gerar D7 duas vezes → o primeiro fica `SUPERSEDED`; o PDF não contém nenhuma decisão marcada | Integração |
-| Gerar D5 de visita `PLANNED` → `422 DOCUMENT_PRECONDITION_FAILED` | Integração |
-| O agricultor não acessa nenhuma rota de `/visits`, `/documents`, `/collaborators`, `/committee-members`, `/member-conflicts` (403) | Segurança |
+| Teste                                                                                                                              | Tipo       |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `VisitCycleCalculator`: sem certificação, período fechado/aberto, URGENT com 30 e 31 dias, contagem fora do ciclo ignorada         | Unitário   |
+| `VisitorEligibility`: cada exclusão da RN32, verificação com e sem `verification_same_group_allowed`                               | Unitário   |
+| `VisitorScoring`: com e sem GPS, rodízio, troca, equilíbrio, desempate estável                                                     | Unitário   |
+| `VerificationCodes`: alfabeto e tamanho; colisão tratada com nova tentativa                                                        | Unitário   |
+| Visita sem aviso não gera notificação nem entra no pull do visitado (RN31)                                                         | Integração |
+| `POST /visits` com visitador impedido → `422 VISITOR_NOT_ELIGIBLE`                                                                 | Integração |
+| Resultado pelo app de quem não é o responsável → `REJECTED`                                                                        | Integração |
+| Gerar D7 duas vezes → o primeiro fica `SUPERSEDED`; o PDF não contém nenhuma decisão marcada                                       | Integração |
+| Gerar D5 de visita `PLANNED` → `422 DOCUMENT_PRECONDITION_FAILED`                                                                  | Integração |
+| O agricultor não acessa nenhuma rota de `/visits`, `/documents`, `/collaborators`, `/committee-members`, `/member-conflicts` (403) | Segurança  |
 
 ### 1.16 OpenAPI e geração de tipos
+
 - Em `OpenApiConfig`, defina o título, a versão e o esquema de segurança `bearerAuth`.
 - Anote os controllers com `@Tag`, e os enums e uniões com `@Schema`.
 - O front roda `pnpm gen:api` ([doc 3 §B.3](3-guia-front-end.md#b3-tipos-gerados-da-api-agrofacilapi-types)), que lê `http://localhost:8080/api/v1/openapi.json`. **Depois de mudar um DTO, rode o script e versione o `openapi.json` atualizado no mesmo PR.**
@@ -1002,11 +1028,11 @@ Regras dos templates:
 
 ### 1.17 Testes
 
-| Tipo | Ferramenta | O que cobre |
-|---|---|---|
-| Unitário | JUnit 5 + AssertJ | Funções puras: `Cpf`, `UnitConversion`, `missingRecommendedFields`, `CertificationStatusCalculator`, `AlertPlanner`, validação de datas e as do SPG ([§1.15.7](#1157-testes-do-spg)) |
-| Integração | `@SpringBootTest` + `@AutoConfigureMockMvc` + **Testcontainers** (Postgres real com `@ServiceConnection`) | Endpoints de ponta a ponta, migrações, triggers, segurança e escopo |
-| Sincronização | Integração | Os 13 casos do [doc 1 §4.9](1-arquitetura-e-contrato.md#49-casos-de-teste-obrigatórios) |
+| Tipo          | Ferramenta                                                                                                | O que cobre                                                                                                                                                                          |
+| ------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unitário      | JUnit 5 + AssertJ                                                                                         | Funções puras: `Cpf`, `UnitConversion`, `missingRecommendedFields`, `CertificationStatusCalculator`, `AlertPlanner`, validação de datas e as do SPG ([§1.15.7](#1157-testes-do-spg)) |
+| Integração    | `@SpringBootTest` + `@AutoConfigureMockMvc` + **Testcontainers** (Postgres real com `@ServiceConnection`) | Endpoints de ponta a ponta, migrações, triggers, segurança e escopo                                                                                                                  |
+| Sincronização | Integração                                                                                                | Os 13 casos do [doc 1 §4.9](1-arquitetura-e-contrato.md#49-casos-de-teste-obrigatórios)                                                                                              |
 
 ```java
 // Base dos testes de integração: Postgres real em container, compartilhado entre as classes de teste.
@@ -1021,6 +1047,7 @@ public abstract class IntegrationTest {
 ```
 
 Testes obrigatórios de segurança:
+
 - o agricultor A não lê, edita nem exclui um registro do agricultor B (espera **404**);
 - o agricultor não acessa nenhuma rota de coordenador (espera 403);
 - o 6º código errado bloqueia;
@@ -1033,22 +1060,23 @@ Nomeie os testes pelo comportamento, citando a RN: `harvestBeforePlanting_isReje
 
 Cada marco termina com testes passando e o contrato atualizado. O front pode começar em paralelo com dados falsos (MSW), porque o contrato já existe.
 
-| Marco | Entrega |
-|---|---|
-| M0 | Projeto criado, Spotless, Docker Compose (Postgres + Mailpit), `/actuator/health`, CI rodando `./mvnw verify` |
-| M1 | Migrações V1–V5, entidades, Envers, `SyncableEntity`, testes de mapeamento (`ddl-auto: validate` sobe sem erro) |
-| M2 | Erros (Problem Details), `TraceIdFilter`, segurança JWT, bootstrap do coordenador, convite, login com 2FA, refresh/logout no web, redefinição de senha |
-| M3 | Associação, coordenadores, grupos, agricultores, códigos de acesso, ativação do aparelho, refresh rotativo, aparelhos, `/me` |
-| M4 | Propriedades (com a área principal), áreas, trabalhadores, municípios, catálogos (leitura) |
-| M5 | Registros no painel: CRUD, completude, conversões, plantio e colheita final, histórico |
-| M6 | Sincronização: push, pull, lápides, arquivos. Os 10 testes do [doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline) |
-| M7 | Certificações, status, renovação, rotina de alertas, notificações, push (Expo) e e-mail |
-| M8 | Comunicados, pedidos de correção, gestão de catálogos, itens sem catálogo |
-| M9 | Painel inicial (dashboard), relatórios PDF e CSV |
-| M10 | SPG: colaboradores, Comissão e impedimentos; roteiro (catálogo); situação das visitas; sugestão de visitadores; visitas (painel e mutação do app); rotina de avisos; documentos D1–D8 ([§1.15](#115-visitas-e-documentos-do-spg)) |
-| M11 | Endurecimento: limites de tentativa revisados, cabeçalhos, revisão de logs (sem dados pessoais), rotina de retenção/anonimização ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)), backup testado ([Parte 3](#parte-3-ambiente-e-implantação)) |
+| Marco | Entrega                                                                                                                                                                                                                                                                |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0    | Projeto criado, Spotless, Docker Compose (Postgres + Mailpit), `/actuator/health`, CI rodando `./mvnw verify`                                                                                                                                                          |
+| M1    | Migrações V1–V5, entidades, Envers, `SyncableEntity`, testes de mapeamento (`ddl-auto: validate` sobe sem erro)                                                                                                                                                        |
+| M2    | Erros (Problem Details), `TraceIdFilter`, segurança JWT, bootstrap do coordenador, convite, login com 2FA, refresh/logout no web, redefinição de senha                                                                                                                 |
+| M3    | Associação, coordenadores, grupos, agricultores, códigos de acesso, ativação do aparelho, refresh rotativo, aparelhos, `/me`                                                                                                                                           |
+| M4    | Propriedades (com a área principal), áreas, trabalhadores, municípios, catálogos (leitura)                                                                                                                                                                             |
+| M5    | Registros no painel: CRUD, completude, conversões, plantio e colheita final, histórico                                                                                                                                                                                 |
+| M6    | Sincronização: push, pull, lápides, arquivos. Os 10 testes do [doc 1, Parte 4](1-arquitetura-e-contrato.md#parte-4-sincronização-offline)                                                                                                                              |
+| M7    | Certificações, status, renovação, rotina de alertas, notificações, push (Expo) e e-mail                                                                                                                                                                                |
+| M8    | Comunicados, pedidos de correção, gestão de catálogos, itens sem catálogo                                                                                                                                                                                              |
+| M9    | Painel inicial (dashboard), relatórios PDF e CSV                                                                                                                                                                                                                       |
+| M10   | SPG: colaboradores, Comissão e impedimentos; roteiro (catálogo); situação das visitas; sugestão de visitadores; visitas (painel e mutação do app); rotina de avisos; documentos D1–D8 ([§1.15](#115-visitas-e-documentos-do-spg))                                      |
+| M11   | Endurecimento: limites de tentativa revisados, cabeçalhos, revisão de logs (sem dados pessoais), rotina de retenção/anonimização ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)), backup testado ([Parte 3](#parte-3-ambiente-e-implantação)) |
 
 ### 1.19 Checklist antes de cada PR
+
 - [ ] `./mvnw verify` passa (Spotless + testes).
 - [ ] Todo arquivo novo começa com o comentário de uma frase. Métodos públicos de serviço têm Javadoc.
 - [ ] Nenhum valor de configuração ou segredo no código (tudo em `AppProperties` ou variáveis de ambiente).
@@ -1724,10 +1752,10 @@ Por enquanto o sistema roda **num computador da equipe**, para testes e apresent
 
 ### 3.1 Visão dos ambientes
 
-| Ambiente | Onde | API | Painel | App |
-|---|---|---|---|---|
-| **Desenvolvimento** | Máquina de cada membro | `./mvnw spring-boot:run` (perfil `dev`) | `pnpm --filter @agrofacil/web dev` (Vite, porta 5173, com proxy `/api`) | Development build apontando para o **IP da máquina na rede local** (`http://192.168.x.x:8080`) |
-| **Demonstração / testes de campo** | O computador "servidor" da equipe, via Docker Compose | Container `api` | Container `web` (nginx) | APK `preview` apontando para a **URL HTTPS do túnel** |
+| Ambiente                           | Onde                                                  | API                                     | Painel                                                                  | App                                                                                            |
+| ---------------------------------- | ----------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Desenvolvimento**                | Máquina de cada membro                                | `./mvnw spring-boot:run` (perfil `dev`) | `pnpm --filter @agrofacil/web dev` (Vite, porta 5173, com proxy `/api`) | Development build apontando para o **IP da máquina na rede local** (`http://192.168.x.x:8080`) |
+| **Demonstração / testes de campo** | O computador "servidor" da equipe, via Docker Compose | Container `api`                         | Container `web` (nginx)                                                 | APK `preview` apontando para a **URL HTTPS do túnel**                                          |
 
 ### 3.2 Desenvolvimento local
 
@@ -1741,7 +1769,7 @@ services:
     environment:
       POSTGRES_DB: agrofacil
       POSTGRES_USER: agrofacil
-      POSTGRES_PASSWORD: agrofacil   # só desenvolvimento; a porta fica presa ao localhost
+      POSTGRES_PASSWORD: agrofacil # só desenvolvimento; a porta fica presa ao localhost
     ports: ["127.0.0.1:5432:5432"]
     volumes: [pgdata-dev:/var/lib/postgresql/data]
   mailpit:
@@ -1752,6 +1780,7 @@ volumes:
 ```
 
 Primeiro uso:
+
 1. `cp api/.env.example api/.env` e preencha o `JWT_SECRET` (`openssl rand -base64 48`) e o `BOOTSTRAP_COORDINATOR_EMAIL`.
 2. `cd api && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. O suporte a Docker Compose do Spring Boot sobe o Postgres e o Mailpit sozinho (o `docker compose -f infra/docker-compose.dev.yml up -d` continua valendo para subir à mão). O Flyway cria o banco, e o convite do primeiro coordenador aparece no Mailpit.
 3. `corepack pnpm install` na raiz (ou `corepack enable` uma vez e depois só `pnpm`), depois `pnpm gen:api` e `pnpm --filter @agrofacil/web dev`.
@@ -1775,7 +1804,7 @@ apps/web/Dockerfile
 
 ```yaml
 # Pilha completa para demonstração: banco, API e painel (nginx), mais o túnel HTTPS.
-name: agrofacil                  # fixa o prefixo dos volumes (agrofacil_files, usado no backup)
+name: agrofacil # fixa o prefixo dos volumes (agrofacil_files, usado no backup)
 services:
   postgres:
     image: postgres:17-alpine
@@ -1812,7 +1841,8 @@ services:
       TZ: America/Bahia
     volumes: [files:/data/files]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/actuator/health/readiness || exit 1"]
+      test:
+        ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/actuator/health/readiness || exit 1"]
       interval: 15s
 
   web:
@@ -1821,10 +1851,10 @@ services:
       dockerfile: apps/web/Dockerfile
     restart: unless-stopped
     depends_on: [api]
-    ports: ["8080:80"]                 # só a porta do nginx fica exposta
+    ports: ["8080:80"] # só a porta do nginx fica exposta
 
   tunnel:
-    image: cloudflare/cloudflared:latest   # fixe uma versão
+    image: cloudflare/cloudflared:latest # fixe uma versão
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
@@ -1909,72 +1939,47 @@ server {
 
 O app no celular precisa alcançar a API pela internet e **com HTTPS**. Sem abrir portas no roteador, há duas opções:
 
-| Opção | Endereço | Prós | Contras |
-|---|---|---|---|
-| **Cloudflare Tunnel com nome** (recomendado) | `https://agrofacil.<seu-dominio>` | Endereço fixo, HTTPS automático, gratuito | Precisa de um domínio na Cloudflare (alguns reais por ano) |
-| **ngrok com domínio estático gratuito** | `https://<nome>.ngrok-free.app` | Sem domínio próprio, endereço fixo | Limites do plano gratuito; o painel do ngrok mostra um aviso no navegador na primeira visita |
+| Opção                                        | Endereço                          | Prós                                      | Contras                                                                                      |
+| -------------------------------------------- | --------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Cloudflare Tunnel com nome** (recomendado) | `https://agrofacil.<seu-dominio>` | Endereço fixo, HTTPS automático, gratuito | Precisa de um domínio na Cloudflare (alguns reais por ano)                                   |
+| **ngrok com domínio estático gratuito**      | `https://<nome>.ngrok-free.app`   | Sem domínio próprio, endereço fixo        | Limites do plano gratuito; o painel do ngrok mostra um aviso no navegador na primeira visita |
 
 **O endereço precisa ser fixo:** ele vai "embutido" no APK (`EXPO_PUBLIC_API_URL`). Um túnel com endereço aleatório (como o "quick tunnel") obriga a gerar um APK novo a cada reinício. Evite.
 
 Para configurar a Cloudflare:
+
 1. crie o túnel no painel Zero Trust, que gera o `TUNNEL_TOKEN`;
 2. aponte o hostname público para `http://web:80`;
 3. coloque o token no `infra/.env`.
 
 ### 3.6 Backup e restauração
 
-`infra/backup/backup.sh`, agendado no cron do computador servidor, todo dia às 02:00:
+Execute em uma janela de manutenção com as escritas da API e tarefas agendadas suspensas. Assim o dump e o arquivo de anexos representam o mesmo estado. Configure o acesso do cliente PostgreSQL por `PGHOST`, `PGPORT`, `PGUSER` e `PGPASSFILE`. Use um destino físico separado do diretório de arquivos da aplicação.
 
 ```bash
-#!/usr/bin/env bash
-# Faz backup diário do banco e dos anexos, mantém 30 diários e 12 mensais, e copia para fora da máquina.
-set -euo pipefail
-STAMP=$(date +%F)
-DEST=/var/backups/agrofacil
-mkdir -p "$DEST/daily" "$DEST/monthly"
-
-docker compose -f /opt/agrofacil/infra/docker-compose.yml exec -T postgres \
-  pg_dump -U agrofacil -Fc agrofacil > "$DEST/daily/db-$STAMP.dump"
-docker run --rm -v agrofacil_files:/files -v "$DEST/daily":/out alpine \
-  tar czf "/out/files-$STAMP.tar.gz" -C /files .
-
-if [ "$(date +%d)" = "01" ]; then cp "$DEST/daily/"*"$STAMP"* "$DEST/monthly/"; fi
-find "$DEST/daily" -type f -mtime +30 -delete
-ls -1t "$DEST/monthly"/db-*.dump | tail -n +13 | xargs -r rm --
-
-# Cópia para fora do computador (HD externo, outro computador ou nuvem com rclone).
-rclone copy "$DEST" remoto:agrofacil-backups --max-age 48h
+infra/backup/backup.sh agrofacil /srv/agrofacil/files /srv/backups/agrofacil
+infra/backup/restore.sh /srv/backups/agrofacil/agrofacil-AAAAMMDDTHHMMSSZ agrofacil_teste /srv/restore/files
+infra/backup/verify.sh agrofacil_teste /srv/restore/files
 ```
 
-**Teste de restauração (obrigatório, uma vez por mês):**
-1. `docker run -d --name pg-restore -e POSTGRES_PASSWORD=x postgres:17-alpine`
-2. `docker exec -i pg-restore createdb -U postgres agrofacil`
-3. `docker exec -i pg-restore pg_restore -U postgres -d agrofacil < db-AAAA-MM-DD.dump`
-4. Confira a contagem de registros e abra um caderno de campo.
-5. Anote a data do teste no README de `infra/`.
+A restauração cria um banco e um diretório novos. A verificação compara os hashes dos anexos e documentos com os valores no banco restaurado. O CI exercita esse procedimento com os dados de seu teste de navegador. Programe a rotação, a proteção e a cópia fora do servidor no ambiente da associação. Registre quando a restauração foi exercitada com o ambiente de destino.
 
-> Os backups contêm dados pessoais. Proteja-os: disco criptografado ou `rclone crypt` ([doc 1 §5.2](1-arquitetura-e-contrato.md#52-ameaças-e-controles)).
+### 3.7 Distribuição da PWA
 
-### 3.7 Distribuição do app (APK)
-
-1. `eas build --profile preview --platform android`, com `EXPO_PUBLIC_API_URL=https://agrofacil.<dominio>`.
-2. O EAS devolve um link de download do APK. Gere um QR Code para o coordenador instalar nos celulares durante a ativação.
-3. No celular, permita "Instalar apps desconhecidos" para o navegador e instale.
-4. **Versão nova:** gere outro APK e instale por cima. Os dados locais são mantidos. Se a mudança quebrar o contrato, suba `APP_MIN_MOBILE_VERSION` na API **depois** que todos tiverem a versão nova, ou deixe a tela "Atualize o app" orientar.
+Publique o diretório `apps/mobile/dist` em HTTPS. Configure o servidor para devolver o HTML da aplicação nas rotas navegáveis e encaminhar `/api/v1` à API. Abra o endereço no celular e use a opção de instalar ou adicionar à tela inicial no navegador. Os arquivos estáticos da versão são carregados pelo service worker.
 
 ### 3.8 Caminho para produção real
 
 O computador próprio serve para testes e apresentações. Antes de a associação depender do sistema no dia a dia:
 
-| Item | Por quê |
-|---|---|
-| Servidor sempre ligado: VPS pequena (2 vCPU, 2–4 GB de RAM) ou um servidor do IFBA | RNF07: disponibilidade. O mesmo `docker-compose.yml` funciona lá |
-| Domínio próprio + HTTPS (Let's Encrypt via Caddy ou o próprio túnel) | URL fixa para o APK |
-| Backup fora do servidor, com restauração testada | Os registros são prova da certificação |
-| Monitoramento simples: UptimeRobot no `/actuator/health` | Saber da queda antes dos agricultores |
-| E-mail transacional com domínio próprio (SPF/DKIM) | Os e-mails de 2FA e de alertas não podem cair no spam |
-| Publicação na Play Store (opcional) | Atualização automática e instalação mais fácil |
-| Revisão jurídica e termo controladora/operadora ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)) | LGPD |
+| Item                                                                                                                     | Por quê                                                          |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Servidor sempre ligado: VPS pequena (2 vCPU, 2–4 GB de RAM) ou um servidor do IFBA                                       | RNF07: disponibilidade. O mesmo `docker-compose.yml` funciona lá |
+| Domínio próprio + HTTPS (Let's Encrypt via Caddy ou o próprio túnel)                                                     | URL fixa para a PWA                                              |
+| Backup fora do servidor, com restauração testada                                                                         | Os registros são prova da certificação                           |
+| Monitoramento simples: UptimeRobot no `/actuator/health`                                                                 | Saber da queda antes dos agricultores                            |
+| E-mail transacional com domínio próprio (SPF/DKIM)                                                                       | Os e-mails de 2FA e de alertas não podem cair no spam            |
+| Revisão jurídica e termo controladora/operadora ([doc 1, Parte 5](1-arquitetura-e-contrato.md#parte-5-segurança-e-lgpd)) | LGPD                                                             |
 
 ### 3.9 Variáveis de ambiente (`infra/.env.example`)
 

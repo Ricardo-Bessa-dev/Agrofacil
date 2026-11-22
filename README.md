@@ -46,23 +46,21 @@ docs/                 # arquitetura, contrato API-front, guias da API e do front
 
 ## Estado da API
 
-A API cobre os marcos **M0 a M10** do [doc 2 §1.18](documentacao/2-guia-api.md#118-ordem-de-implementação-sugerida) e parte do M11:
+A API cobre os marcos **M0 a M10** do [doc 2 §1.18](docs/2-guia-api.md#118-ordem-de-implementação-sugerida) e inclui funções de manutenção do M11:
 
 - **M0–M6:** banco (migrações Flyway + auditoria com Envers), autenticação (2FA do coordenador, ativação do agricultor, refresh rotativo), associação, coordenadores, grupos, agricultores, aparelhos, `/me`, propriedades/áreas/trabalhadores, registros de manejo com completude e histórico, pedidos de correção, notificações, anexos e sincronização (`/sync/push` e `/sync/pull`).
 - **M7:** cadastro, renovação, suspensão e cancelamento de certificações; rotina diária de alertas de vencimento (07:00) com notificação, push e e-mail.
 - **M8:** comunicados (todos ou um grupo, também no pull), gestão de culturas, insumos e unidades, e "itens sem catálogo".
 - **M9:** painel inicial (`/dashboard/summary`) e relatórios em PDF/CSV (caderno de campo, agricultores, certificações e exportação de registros).
 - **M10:** colaboradores, Comissão de Avaliação e impedimentos; roteiro da visita; situação das visitas (RN29); sugestão de visitadores; visitas pelo painel e resultado pelo app (mutação `visit`); rotina de avisos (07:05); documentos D1–D8 com código de verificação e cópia assinada.
-- **M11 (parcial):** rotina mensal de retenção (apaga códigos, tokens e mutações de sync vencidos), revisão dos logs e teste dos cabeçalhos de segurança.
-
-Ainda falta no M11: a anonimização dos agricultores desligados (precisa da data de desligamento e de um relatório de simulação para o coordenador conferir, doc 1 §5.7) e o teste do backup (doc 2, Parte 3).
+- **M11:** rotina mensal de credenciais vencidas, simulação e confirmação de anonimização pelo painel, exclusão de arquivos vinculados em fila e scripts de backup e restauração com conferência de arquivos. Consulte o [procedimento de retenção](docs/1-arquitetura-e-contrato.md#57-retenção-eliminação-e-anonimização) e o [guia de backup e restauração](docs/2-guia-api.md#36-backup-e-restauração).
 
 ## Estado do front
 
-O painel (`apps/web`) e o app mobile-first do agricultor (`apps/mobile`) estão completos e integrados à API:
+O painel (`apps/web`) e o app mobile-first do agricultor (`apps/mobile`) estão integrados à API:
 
 - **Painel da Coordenação (`apps/web`)**: Login em duas etapas (2FA), Dashboard com KPIs, gestão de agricultores e geração de códigos de 6 dígitos, propriedades e talhões, caderno de campo e pedidos de correção, certificações, grupos, visitas do SPG, documentos D1–D8, comunicados, catálogos, relatórios PDF/CSV e configurações.
-- **App do Agricultor (`apps/mobile`)**: Ativação por CPF + código de 6 dígitos, tela inicial, propriedades e edição de dados de produção/acesso, listagem e filtro do caderno de campo, criação e edição de manejos com vínculo de plantio ativo, atendimento a pedidos de correção, captura/upload de fotos da câmera (`SHA-256`), aceite de termos LGPD e suporte PWA offline-first.
+- **App do Agricultor (`apps/mobile`)**: Ativação por CPF + código de 6 dígitos, tela inicial, propriedades e edição de dados de produção/acesso, listagem e filtro do caderno de campo, criação e edição de manejos com vínculo de plantio ativo, atendimento a pedidos de correção, fila de fotos com verificação por `SHA-256`, visitas do SPG, aceite de termos e suporte offline após a primeira carga conectada.
 
 Consulte o detalhamento em [`docs/CONTINUIDADE-DO-PROJETO.md`](docs/CONTINUIDADE-DO-PROJETO.md) e no [doc 3, Parte E](docs/3-guia-front-end.md#parte-e-ordem-de-implementação-do-front).
 
@@ -85,12 +83,12 @@ As rotinas de alerta só rodam no horário (07:00 e 07:05, horário da Bahia); c
 
 ```bash
 cd api && ./mvnw verify               # formatação (Spotless) + testes com Testcontainers
-pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
+pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm -r build
 ```
 
 Para rodar só uma classe de teste: `./mvnw test -Dtest=CertificationTest` (aceita várias, separadas por vírgula). Os testes de integração precisam do Docker aberto.
 
-`./mvnw spotless:apply` e `pnpm format` corrigem a formatação.
+`./mvnw spotless:apply` e `pnpm format` corrigem a formatação. O [fluxo do navegador no CI](.github/workflows/ci.yml) usa os builds de produção em um ambiente descartável e testa a restauração com uma foto e os dados do próprio cenário.
 
 ## Como trabalhar
 

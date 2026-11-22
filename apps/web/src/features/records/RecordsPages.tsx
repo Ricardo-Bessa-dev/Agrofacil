@@ -311,7 +311,7 @@ export function RecordCreatePage() {
     "FERTILIZATION" | "PEST_DISEASE_CONTROL" | "SOIL_CORRECTION" | "OTHER"
   >("FERTILIZATION");
   const [qtyValue, setQtyValue] = useState("");
-  const [qtyUnit, setQtyUnit] = useState("KG");
+  const [qtyUnit, setQtyUnit] = useState("KILOGRAM");
   const [isFinal, setIsFinal] = useState(false);
   const [supplier, setSupplier] = useState("");
   const [destination, setDestination] = useState<
@@ -398,6 +398,13 @@ export function RecordCreatePage() {
     queryFn: () => unwrap(api.GET("/catalog/units")),
   });
 
+  const quantityUnits = (unitsQuery.data ?? []).filter(
+    (unit) => unit.active && unit.kind !== "AREA",
+  );
+  const linkedPlanting = plantingsQuery.data?.content?.find(
+    (planting) => planting.id === plantingId,
+  );
+
   const draftCompletenessMissing = missingFields({
     type,
     plantedArea: areaValue ? { value: Number(areaValue), unit: areaUnit } : null,
@@ -416,6 +423,10 @@ export function RecordCreatePage() {
       return;
     }
     setError(null);
+    if (type !== "PLANTING" && qtyValue && !quantityUnits.some((unit) => unit.code === qtyUnit)) {
+      setError("Escolha uma unidade válida no catálogo.");
+      return;
+    }
     setSaving(true);
 
     try {
@@ -480,8 +491,8 @@ export function RecordCreatePage() {
           plotId: plotId || undefined,
           performedOn,
           notes: notes.trim() || undefined,
-          cropId: cropId || undefined,
-          productOtherName: !cropId && cropOtherName.trim() ? cropOtherName.trim() : undefined,
+          cropId: plantingId ? undefined : cropId || undefined,
+          productOtherName: !plantingId && !cropId ? cropOtherName.trim() || undefined : undefined,
           plantingId: plantingId || undefined,
           quantity: qtyValue ? { value: Number(qtyValue), unit: qtyUnit } : undefined,
           destination,
@@ -551,6 +562,7 @@ export function RecordCreatePage() {
                 value={farmerId}
                 onChange={(e) => {
                   setFarmerId(e.target.value);
+                  setPlantingId("");
                   setPropertyId("");
                   setPlotId("");
                 }}
@@ -573,6 +585,7 @@ export function RecordCreatePage() {
                 onChange={(e) => {
                   setPropertyId(e.target.value);
                   setPlotId("");
+                  setPlantingId("");
                 }}
                 required
                 disabled={!farmerId}
@@ -639,7 +652,10 @@ export function RecordCreatePage() {
             )}
           </div>
 
-          {(type === "PLANTING" || type === "OUTFLOW") && (
+          {type === "OUTFLOW" && plantingId && (
+            <p>Cultura do plantio: {linkedPlanting?.subject ?? "plantio vinculado"}</p>
+          )}
+          {(type === "PLANTING" || (type === "OUTFLOW" && !plantingId)) && (
             <div className="af-form-row">
               <div className="af-field">
                 <label className="af-label">Cultura / Produto do catálogo</label>
@@ -751,14 +767,12 @@ export function RecordCreatePage() {
                   value={qtyUnit}
                   onChange={(e) => setQtyUnit(e.target.value)}
                 >
-                  {(unitsQuery.data ?? []).map((u) => (
+                  <option value="">Selecione a unidade</option>
+                  {quantityUnits.map((u) => (
                     <option key={u.code} value={u.code}>
                       {u.namePlural} ({u.code})
                     </option>
                   ))}
-                  {(unitsQuery.data ?? []).length === 0 && (
-                    <option value="KG">Quilogramas (KG)</option>
-                  )}
                 </select>
               </div>
             </div>

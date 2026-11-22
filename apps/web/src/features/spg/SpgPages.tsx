@@ -15,7 +15,7 @@ import {
   VISIT_STATUS_LABELS,
   VISIT_TYPE_LABELS,
 } from "@agrofacil/domain";
-import type { GenerateDocumentRequest, ParticipantWrite } from "@agrofacil/api-types";
+import type { GenerateDocumentRequest, ParticipantWrite, ResultWrite } from "@agrofacil/api-types";
 import { api, ApiProblemError, downloadFile, normalizePhoneE164, unwrap } from "../../api/client";
 
 export function VisitsPage() {
@@ -548,6 +548,10 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [attended, setAttended] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<Record<string, ResultWrite["answers"][number]["answer"]>>(
+    {},
+  );
 
   const visitQuery = useQuery({
     queryKey: ["visits", visitId],
@@ -559,35 +563,34 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
     queryFn: () => unwrap(api.GET("/catalog/visit-checklist")),
   });
 
+  const applicable = (checklistQuery.data ?? []).filter(
+    (item) => item.code && (item.appliesTo === "BOTH" || item.appliesTo === visitQuery.data?.type),
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const visit = visitQuery.data;
-    if (!visit) return;
+    if (!visit || !checklistQuery.isSuccess) return;
     setError(null);
+    if (
+      !visit.participants?.some(
+        (item) => item.id && item.role === "VISITOR" && attended.includes(item.id),
+      )
+    ) {
+      setError("Marque pelo menos um visitador presente.");
+      return;
+    }
     setSaving(true);
     try {
-      const attendedParticipantIds = (visit.participants ?? [])
-        .map((p) => p.id)
-        .filter((id): id is string => Boolean(id));
-
-      const checklistItems = (checklistQuery.data ?? []) as unknown as {
-        code?: string;
-        appliesTo?: string;
-      }[];
-      const applicable = checklistItems.filter(
-        (item) => item.appliesTo === "BOTH" || item.appliesTo === visit.type,
-      );
-
       await unwrap(
         api.PUT("/visits/{id}/result", {
           params: { path: { id: visitId } },
           body: {
             doneOn,
-            attendedParticipantIds,
-            answers: applicable.map((it) => ({
-              itemCode: it.code ?? "",
-              answer: "YES" as const,
-            })),
+            attendedParticipantIds: attended,
+            answers: applicable.flatMap(({ code }) =>
+              code && answers[code] ? [{ itemCode: code, answer: answers[code] }] : [],
+            ),
             issuesFound,
             improvementPoints: issuesFound ? improvementPoints.trim() : undefined,
             recommendations: recommendations.trim() || undefined,
@@ -632,6 +635,60 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
                 required
               />
             </div>
+
+            <fieldset>
+              <legend>Quem participou</legend>
+              {visitQuery.data?.participants?.map((participant) => {
+                const id = participant.id;
+                if (!id) return null;
+                return (
+                  <label className="af-label" key={id}>
+                    <input
+                      type="checkbox"
+                      checked={attended.includes(id)}
+                      onChange={(event) =>
+                        setAttended((selected) =>
+                          event.target.checked
+                            ? [...selected, id]
+                            : selected.filter((value) => value !== id),
+                        )
+                      }
+                    />{" "}
+                    {participant.person?.name ?? "Participante"}
+                    {participant.role === "VISITOR" && " (visitador)"}
+                  </label>
+                );
+              })}
+            </fieldset>
+            <fieldset>
+              <legend>Roteiro da visita</legend>
+              {checklistQuery.isError && <p role="alert">Não foi possível carregar o roteiro.</p>}
+              {applicable.map((item) => {
+                const code = item.code!;
+                return (
+                  <label className="af-label" key={code}>
+                    {item.question}
+                    <select
+                      className="af-select"
+                      value={answers[code] ?? ""}
+                      required
+                      onChange={(event) =>
+                        setAnswers((previous) => ({
+                          ...previous,
+                          [code]: event.target.value as ResultWrite["answers"][number]["answer"],
+                        }))
+                      }
+                    >
+                      <option value="">Escolha uma resposta</option>
+                      <option value="YES">Sim</option>
+                      <option value="NO">Não</option>
+                      <option value="NOT_APPLICABLE">Não se aplica</option>
+                      <option value="NOT_CHECKED">Não verificado</option>
+                    </select>
+                  </label>
+                );
+              })}
+            </fieldset>
 
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
               <input
@@ -678,7 +735,11 @@ function RecordVisitResultModal({ visitId, onClose }: { visitId: string; onClose
               <button type="button" className="af-btn af-btn--outline af-btn--sm" onClick={onClose}>
                 Cancelar
               </button>
-              <button type="submit" className="af-btn af-btn--primary af-btn--sm" disabled={saving}>
+              <button
+                type="submit"
+                className="af-btn af-btn--primary af-btn--sm"
+                disabled={saving || !visitQuery.isSuccess || !checklistQuery.isSuccess}
+              >
                 {saving ? "Salvando..." : "Concluir visita"}
               </button>
             </div>

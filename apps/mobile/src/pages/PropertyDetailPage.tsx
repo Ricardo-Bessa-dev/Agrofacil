@@ -69,7 +69,7 @@ export function PropertyDetailPage() {
     setSaving(true);
     setSaveFeedback(null);
     try {
-      await upsertFarmerProperty(property.id, {
+      const status = await upsertFarmerProperty(property.id, {
         id: property.id,
         name: property.name,
         totalArea: areaVal ? { value: Number(areaVal), unit: areaUnit } : property.totalArea,
@@ -82,7 +82,11 @@ export function PropertyDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ["farmer-properties"] });
       await queryClient.invalidateQueries({ queryKey: ["farmer-properties-list"] });
       setEditing(false);
-      setSaveFeedback("Dados da propriedade atualizados com sucesso!");
+      setSaveFeedback(
+        status === "queued"
+          ? "Dados salvos no celular. Envio pendente."
+          : "Dados da propriedade atualizados.",
+      );
     } catch (err) {
       setSaveFeedback(err instanceof Error ? err.message : "Não foi possível atualizar os dados.");
     } finally {
