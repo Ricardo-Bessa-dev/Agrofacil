@@ -47,7 +47,8 @@ jobs:
 
   e2e:
     name: Fluxo principal e restauração
-    runs-on: ubuntu-latest
+    # O Playwright fixado abaixo não instala o navegador no Ubuntu 26.04 (o atual ubuntu-latest).
+    runs-on: ubuntu-24.04
     env:
       BOOTSTRAP_COORDINATOR_EMAIL: coordenacao@example.test
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
